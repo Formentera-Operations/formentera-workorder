@@ -44,9 +44,9 @@ export default function MyTicketsPage() {
       setTickets(json.data || [])
 
       // Build filter options from results
-      const uniqueAssets = [...new Set((json.data || []).map((t: Record<string, unknown>) => t.Asset as string))].sort()
-      const uniqueDepts = [...new Set((json.data || []).map((t: Record<string, unknown>) => t.Department as string))].sort()
-      const uniqueEquip = [...new Set((json.data || []).map((t: Record<string, unknown>) => t.Equipment as string))].sort()
+      const uniqueAssets = [...new Set((json.data || []).map((t: Record<string, unknown>) => t.Asset as string))].sort() as string[]
+      const uniqueDepts = [...new Set((json.data || []).map((t: Record<string, unknown>) => t.Department as string))].sort() as string[]
+      const uniqueEquip = [...new Set((json.data || []).map((t: Record<string, unknown>) => t.Equipment as string))].sort() as string[]
       setAssets(uniqueAssets)
       setDepartments(uniqueDepts)
       setEquipments(uniqueEquip)

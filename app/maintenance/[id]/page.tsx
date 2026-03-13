@@ -25,11 +25,11 @@ export default function MaintenanceTicketPage() {
   const [equipment, setEquipment] = useState<{ id: number; equip_name: string }[]>([])
 
   // Initial Report form state
-  const [irForm, setIrForm] = useState<Record<string, unknown>>({})
+  const [irForm, setIrForm] = useState<Record<string, string | boolean>>({})
   // Dispatch form state
-  const [dispForm, setDispForm] = useState<Record<string, unknown>>({})
+  const [dispForm, setDispForm] = useState<Record<string, string | boolean>>({})
   // Repairs form state
-  const [repForm, setRepForm] = useState<Record<string, unknown>>({})
+  const [repForm, setRepForm] = useState<Record<string, string | boolean>>({})
   const [vendorRows, setVendorRows] = useState<{ vendor: string; cost: string }[]>([{ vendor: '', cost: '' }])
   // Comments
   const [comment, setComment] = useState('')
@@ -122,9 +122,9 @@ export default function MaintenanceTicketPage() {
     ? `Well: ${ticket.Well || '—'}`
     : `Facility: ${ticket.Facility || '—'}`
 
-  const setIr = (k: string, v: unknown) => setIrForm(f => ({ ...f, [k]: v }))
-  const setDisp = (k: string, v: unknown) => setDispForm(f => ({ ...f, [k]: v }))
-  const setRep = (k: string, v: unknown) => setRepForm(f => ({ ...f, [k]: v }))
+  const setIr = (k: string, v: string | boolean) => setIrForm(f => ({ ...f, [k]: v }))
+  const setDisp = (k: string, v: string | boolean) => setDispForm(f => ({ ...f, [k]: v }))
+  const setRep = (k: string, v: string | boolean) => setRepForm(f => ({ ...f, [k]: v }))
 
   async function saveInitialReport() {
     setSaving(true)
