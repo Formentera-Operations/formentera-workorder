@@ -9,8 +9,10 @@ const nextConfig = {
       },
     ],
   },
-  // Required for snowflake-sdk in API routes
-  serverExternalPackages: ['snowflake-sdk'],
+  experimental: {
+    // Required for snowflake-sdk in API routes
+    serverComponentsExternalPackages: ['snowflake-sdk'],
+  },
 }
 
 module.exports = nextConfig
