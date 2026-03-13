@@ -9,11 +9,15 @@ function getConnection(): Promise<snowflake.Connection> {
       return
     }
 
+    const privateKey = process.env.SNOWFLAKE_PRIVATE_KEY!.replace(/\\n/g, '\n')
+
     const connection = snowflake.createConnection({
       account: process.env.SNOWFLAKE_ACCOUNT!,
       username: process.env.SNOWFLAKE_USERNAME!,
-      password: process.env.SNOWFLAKE_PASSWORD!,
+      authenticator: 'SNOWFLAKE_JWT',
+      privateKey,
       database: process.env.SNOWFLAKE_DATABASE || 'FO_STAGE_DB',
+      schema: process.env.SNOWFLAKE_SCHEMA,
       warehouse: process.env.SNOWFLAKE_WAREHOUSE!,
       role: process.env.SNOWFLAKE_ROLE,
     })
