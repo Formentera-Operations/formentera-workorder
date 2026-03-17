@@ -13,6 +13,9 @@ export default function MaintenancePage() {
   const [loading, setLoading] = useState(true)
   const [filtersOpen, setFiltersOpen] = useState(false)
 
+  const [page, setPage] = useState(1)
+  const PAGE_SIZE = 20
+
   const [search, setSearch] = useState('')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
@@ -58,12 +61,17 @@ export default function MaintenancePage() {
 
   useEffect(() => { fetchTickets() }, [fetchTickets])
 
+  useEffect(() => { setPage(1) }, [search, startDate, endDate, assetFilter, deptFilter, equipFilter, statusFilter, foremanFilter, submittedByFilter, finalCostPending])
+
   function resetFilters() {
     setSearch(''); setStartDate(''); setEndDate('')
     setAssetFilter('All'); setDeptFilter('All'); setEquipFilter('All')
     setForemanFilter('All'); setSubmittedByFilter('All')
     setStatusFilter('All'); setFinalCostPending(false)
   }
+
+  const totalPages = Math.ceil(tickets.length / PAGE_SIZE)
+  const visibleTickets = tickets.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   const SelectFilter = ({ label, value, onChange, options }: {
     label: string; value: string; onChange: (v: string) => void; options: string[]
@@ -177,7 +185,7 @@ export default function MaintenancePage() {
           ) : tickets.length === 0 ? (
             <div className="py-8 text-center text-sm text-gray-400">No tickets found.</div>
           ) : (
-            tickets.map((t) => {
+            visibleTickets.map((t) => {
               const ticket = t as Record<string, unknown>
               const locationLabel = ticket.Facility
                 ? `Facility: ${ticket.Facility}`
@@ -197,6 +205,26 @@ export default function MaintenancePage() {
                 />
               )
             })
+          )}
+
+          {!loading && totalPages > 1 && (
+            <div className="flex items-center justify-between pt-2 pb-2">
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="px-3 py-1.5 text-xs font-medium rounded-md bg-gray-100 text-gray-600 disabled:opacity-40"
+              >
+                Previous
+              </button>
+              <span className="text-xs text-gray-500">Page {page} of {totalPages}</span>
+              <button
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                className="px-3 py-1.5 text-xs font-medium rounded-md bg-gray-100 text-gray-600 disabled:opacity-40"
+              >
+                Next
+              </button>
+            </div>
           )}
         </div>
       </div>
