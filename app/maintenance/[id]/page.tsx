@@ -323,7 +323,7 @@ export default function MaintenanceTicketPage() {
 
             <Accordion title="Repairs / Closeout Details">
               <div>
-                {repairs.repair_images && (repairs.repair_images as string[]).length > 0 && (
+                {!!(repairs.repair_images && (repairs.repair_images as string[]).length > 0) && (
                   <div className="mb-3">
                     <p className="text-xs text-gray-400 text-center mb-1">Click to view</p>
                     <div
