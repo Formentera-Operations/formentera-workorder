@@ -323,7 +323,7 @@ export default function MaintenanceTicketPage() {
 
             <Accordion title="Repairs / Closeout Details">
               <div>
-                {repairs.repair_images && (repairs.repair_images as string[]).length > 0 ? (
+                {repairs.repair_images && (repairs.repair_images as string[]).length > 0 && (
                   <div className="mb-3">
                     <p className="text-xs text-gray-400 text-center mb-1">Click to view</p>
                     <div
@@ -332,13 +332,6 @@ export default function MaintenanceTicketPage() {
                     >
                       <img src={(repairs.repair_images as string[])[0]} alt="Repair" className="w-full h-full object-cover" />
                     </div>
-                  </div>
-                ) : (
-                  <div
-                    className="w-full h-48 rounded-xl bg-gray-100 flex items-center justify-center cursor-pointer mb-3"
-                    onClick={() => router.push(`/maintenance/${id}/repair-images`)}
-                  >
-                    <p className="text-xs text-gray-400 text-center">Click to view</p>
                   </div>
                 )}
                 {[
