@@ -2,6 +2,14 @@ import { ImageIcon } from 'lucide-react'
 import StatusBadge from './StatusBadge'
 import type { TicketStatus } from '@/types'
 
+const STATUS_BG: Record<string, string> = {
+  'Open':           'bg-green-50  border-green-100',
+  'In Progress':    'bg-purple-50 border-purple-100',
+  'Backlogged':     'bg-yellow-50 border-yellow-100',
+  'Awaiting Cost':  'bg-gray-50   border-gray-200',
+  'Closed':         'bg-red-50    border-red-100',
+}
+
 interface TicketCardProps {
   id: number
   Asset: string
@@ -21,9 +29,10 @@ export default function TicketCard({
   onClick,
 }: TicketCardProps) {
   const hasPhoto = Issue_Photos && Issue_Photos.length > 0
+  const bgClass = STATUS_BG[Ticket_Status] ?? 'bg-white border-gray-100'
 
   return (
-    <div className="ticket-card" onClick={onClick}>
+    <div className={`ticket-card ${bgClass}`} onClick={onClick}>
       {/* Thumbnail */}
       <div className="w-14 h-14 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0 overflow-hidden">
         {hasPhoto ? (

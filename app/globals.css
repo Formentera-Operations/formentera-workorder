@@ -81,7 +81,7 @@ select {
   }
 
   .ticket-card {
-    @apply flex items-start gap-3 p-4 border border-gray-200 rounded-xl bg-white active:bg-gray-50 transition-colors cursor-pointer;
+    @apply flex items-start gap-3 p-4 border rounded-xl transition-colors cursor-pointer;
   }
 
   .status-pill {
