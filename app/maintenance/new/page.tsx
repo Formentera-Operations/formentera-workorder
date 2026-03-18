@@ -132,14 +132,12 @@ export default function MaintenanceFormPage() {
         </div>
 
         {/* Cascading location dropdowns */}
-        {form.Location_Type && (
-          <LocationDropdowns
-            locationType={form.Location_Type as LocationType}
-            onChange={({ asset, field, well, facility, area, route }) => {
-              setForm(f => ({ ...f, Asset: asset, Field: field, Well: well, Facility: facility, Area: area, Route: route }))
-            }}
-          />
-        )}
+        <LocationDropdowns
+          locationType={form.Location_Type as LocationType}
+          onChange={({ asset, field, well, facility, area, route }) => {
+            setForm(f => ({ ...f, Asset: asset, Field: field, Well: well, Facility: facility, Area: area, Route: route }))
+          }}
+        />
 
         {/* Problem Equipment section */}
         <div className="pt-2">

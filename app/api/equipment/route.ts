@@ -41,7 +41,9 @@ export async function GET(req: NextRequest) {
 
       const { data, error } = await query
       if (error) throw error
-      return NextResponse.json(data)
+
+      const unique = [...new Set((data || []).map(r => r.equip_name).filter(Boolean))].sort() as string[]
+      return NextResponse.json(unique.map((name, i) => ({ id: i, equip_name: name })))
     }
 
     return NextResponse.json({ error: 'Missing type param' }, { status: 400 })
