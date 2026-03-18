@@ -40,12 +40,10 @@ export default function MaintenanceTicketPage() {
       fetch(`/api/tickets/${id}`).then(r => r.json()),
       fetch('/api/employees').then(r => r.json()),
       fetch('/api/vendors').then(r => r.json()),
-      fetch('/api/equipment?type=types').then(r => r.json()),
-    ]).then(([ticketData, emps, vends, eqTypes]) => {
+    ]).then(([ticketData, emps, vends]) => {
       setData(ticketData)
       setEmployees(emps || [])
       setVendors(vends || [])
-      setEquipmentTypes(eqTypes || [])
 
       const t = ticketData.ticket || {}
       setIrForm({
@@ -98,6 +96,14 @@ export default function MaintenanceTicketPage() {
       setLoading(false)
     })
   }, [id])
+
+  useEffect(() => {
+    const locType = irForm.Location_Type as string
+    if (locType) {
+      fetch(`/api/equipment?type=types&locationMatch=${encodeURIComponent(locType)}`)
+        .then(r => r.json()).then(setEquipmentTypes)
+    }
+  }, [irForm.Location_Type])
 
   useEffect(() => {
     const eqType = irForm.Equipment_Type as string

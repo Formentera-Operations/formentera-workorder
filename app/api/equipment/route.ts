@@ -11,12 +11,19 @@ export async function GET(req: NextRequest) {
     const db = supabaseAdmin()
 
     if (type === 'types') {
-      const { data, error } = await db
-        .from('equipment_Type')
-        .select('id, equipment_type, department_owner_id')
-        .order('equipment_type')
+      let query = db
+        .from('equipment_library')
+        .select('type, match_type')
+
+      if (locationMatch) {
+        query = query.eq('match_type', locationMatch)
+      }
+
+      const { data, error } = await query
       if (error) throw error
-      return NextResponse.json(data)
+
+      const unique = [...new Set((data || []).map(r => r.type).filter(Boolean))].sort() as string[]
+      return NextResponse.json(unique.map((t, i) => ({ id: String(i), equipment_type: t })))
     }
 
     if (type === 'equipment') {

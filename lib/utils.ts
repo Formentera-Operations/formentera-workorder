@@ -55,10 +55,8 @@ export const TICKET_STATUSES: TicketStatus[] = [
 
 export const WORK_ORDER_DECISIONS = [
   'Proceed with Repair',
-  'Monitor',
-  'No Action Required',
-  'Parts on Order',
-  'Waiting on Vendor',
+  'Backlog - Uneconomic / Awaiting Part',
+  'Close Ticket - No Action Required',
 ]
 
 export const FINAL_STATUSES = [

@@ -29,9 +29,17 @@ export default function MaintenanceFormPage() {
   })
 
   useEffect(() => {
-    fetch('/api/equipment?type=types').then(r => r.json()).then(setEquipmentTypes)
     fetch('/api/employees').then(r => r.json()).then(setEmployees)
   }, [])
+
+  useEffect(() => {
+    if (form.Location_Type) {
+      setEquipmentTypes([])
+      setEquipment([])
+      fetch(`/api/equipment?type=types&locationMatch=${encodeURIComponent(form.Location_Type)}`)
+        .then(r => r.json()).then(setEquipmentTypes)
+    }
+  }, [form.Location_Type])
 
   useEffect(() => {
     if (form.Equipment_Type && form.Location_Type) {
@@ -43,7 +51,16 @@ export default function MaintenanceFormPage() {
   const set = (key: string, val: unknown) => setForm(f => ({ ...f, [key]: val }))
 
   async function handleSubmit() {
-    if (!form.Department || !form.Location_Type || !form.Asset || !form.Equipment_Type || !form.Equipment || !form.Issue_Description) {
+    const missingWellOrFacility = !(form.Well || form.Facility)
+    if (
+      !form.Department ||
+      !form.Location_Type ||
+      !form.Asset ||
+      missingWellOrFacility ||
+      !form.Equipment_Type ||
+      !form.Equipment ||
+      !form.Issue_Description
+    ) {
       alert('Please fill in all required fields.')
       return
     }
@@ -104,6 +121,7 @@ export default function MaintenanceFormPage() {
               onChange={e => {
                 set('Location_Type', e.target.value)
                 set('Well', ''); set('Facility', '')
+                set('Equipment_Type', ''); set('Equipment', '')
               }}
             >
               <option value="">Select a location type</option>
