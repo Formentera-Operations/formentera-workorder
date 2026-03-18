@@ -114,7 +114,7 @@ export default function MyTicketsPage() {
               <div className="p-4 space-y-3">
                 <div>
                   <label className="form-label">Ticket ID</label>
-                  <input type="number" className="form-input" placeholder="e.g. 1042" value={ticketId} onChange={e => setTicketId(e.target.value)} />
+                  <input type="text" inputMode="numeric" pattern="[0-9]*" className="form-input" placeholder="e.g. 1042" value={ticketId} onChange={e => setTicketId(e.target.value.replace(/\D/g, ''))} />
                 </div>
 
                 <div className="relative">
