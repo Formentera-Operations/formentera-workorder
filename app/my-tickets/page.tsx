@@ -5,7 +5,7 @@ import { ChevronDown, ChevronUp, Search, Calendar, SlidersHorizontal } from 'luc
 import TicketCard from '@/components/ui/TicketCard'
 import BottomNav from '@/components/layout/BottomNav'
 import { useAuth } from '@/components/AuthProvider'
-import { TICKET_STATUSES } from '@/lib/utils'
+import { TICKET_STATUSES, STATUS_EMOJI } from '@/lib/utils'
 import type { TicketStatus } from '@/types'
 
 const PAGE_SIZE = 20
@@ -194,7 +194,7 @@ export default function MyTicketsPage() {
                           statusFilter === s ? 'bg-[#1B2E6B] text-white' : 'bg-gray-100 text-gray-600'
                         }`}
                       >
-                        {s}
+                        {s}{s !== 'All' ? ` ${STATUS_EMOJI[s] ?? '⚪'}` : ''}
                       </button>
                     ))}
                   </div>

@@ -19,6 +19,14 @@ export function formatDateShort(dateStr: string | null | undefined): string {
   return formatDate(dateStr, 'MM/dd/yyyy hh:mm a')
 }
 
+export const STATUS_EMOJI: Record<string, string> = {
+  'Open':           '🟢',
+  'Backlogged':     '🟡',
+  'In Progress':    '🟣',
+  'Awaiting Cost':  '⚫',
+  'Closed':         '🔴',
+}
+
 export const STATUS_COLORS: Record<TicketStatus, { dot: string; label: string }> = {
   Open:           { dot: 'bg-green-500',  label: 'text-gray-700' },
   Closed:         { dot: 'bg-red-500',    label: 'text-gray-700' },

@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import { ChevronDown, ChevronUp, Search, Calendar, Wrench, SlidersHorizontal } from 'lucide-react'
 import TicketCard from '@/components/ui/TicketCard'
 import BottomNav from '@/components/layout/BottomNav'
-import { TICKET_STATUSES } from '@/lib/utils'
+import { TICKET_STATUSES, STATUS_EMOJI } from '@/lib/utils'
 import type { TicketStatus } from '@/types'
 
 const PAGE_SIZE = 20
@@ -185,7 +185,7 @@ export default function MaintenancePage() {
                         onClick={() => setStatusFilter(s)}
                         className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${statusFilter === s ? 'bg-[#1B2E6B] text-white' : 'bg-gray-100 text-gray-600'}`}
                       >
-                        {s}
+                        {s}{s !== 'All' ? ` ${STATUS_EMOJI[s] ?? '⚪'}` : ''}
                       </button>
                     ))}
                   </div>
