@@ -7,6 +7,7 @@ export async function GET(req: NextRequest) {
   const userEmail = searchParams.get('userEmail') || ''
   const userName = searchParams.get('userName') || ''
   const search = searchParams.get('search') || ''
+  const ticketId = searchParams.get('ticketId') || ''
   const startDate = searchParams.get('startDate') || ''
   const endDate = searchParams.get('endDate') || ''
   const asset = searchParams.get('asset') || ''
@@ -40,6 +41,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Filters
+    if (ticketId) query = query.eq('id', parseInt(ticketId))
     if (search) {
       query = query.or(
         `id::text.ilike.%${search}%,Route.ilike.%${search}%,Equipment.ilike.%${search}%,Issue_Description.ilike.%${search}%,Facility.ilike.%${search}%,Field.ilike.%${search}%,Well.ilike.%${search}%,Created_by_Name.ilike.%${search}%,assigned_foreman.ilike.%${search}%`

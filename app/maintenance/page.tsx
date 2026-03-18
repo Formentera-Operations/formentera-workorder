@@ -17,6 +17,7 @@ export default function MaintenancePage() {
   const [page, setPage] = useState(0)
   const [totalCount, setTotalCount] = useState(0)
 
+  const [ticketId, setTicketId] = useState('')
   const [search, setSearch] = useState('')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
@@ -50,6 +51,7 @@ export default function MaintenancePage() {
     setLoading(true)
     const params = new URLSearchParams({
       mode: 'all',
+      ticketId,
       search, startDate, endDate,
       asset: assetFilter, department: deptFilter,
       equipment: equipFilter, status: statusFilter,
@@ -66,14 +68,14 @@ export default function MaintenancePage() {
     } finally {
       setLoading(false)
     }
-  }, [page, search, startDate, endDate, assetFilter, deptFilter, equipFilter, statusFilter, foremanFilter, submittedByFilter, finalCostPending])
+  }, [page, ticketId, search, startDate, endDate, assetFilter, deptFilter, equipFilter, statusFilter, foremanFilter, submittedByFilter, finalCostPending])
 
   useEffect(() => { fetchTickets() }, [fetchTickets])
 
-  useEffect(() => { setPage(0) }, [search, startDate, endDate, assetFilter, deptFilter, equipFilter, statusFilter, foremanFilter, submittedByFilter, finalCostPending])
+  useEffect(() => { setPage(0) }, [ticketId, search, startDate, endDate, assetFilter, deptFilter, equipFilter, statusFilter, foremanFilter, submittedByFilter, finalCostPending])
 
   function resetFilters() {
-    setSearch(''); setStartDate(''); setEndDate('')
+    setTicketId(''); setSearch(''); setStartDate(''); setEndDate('')
     setAssetFilter('All'); setDeptFilter('All'); setEquipFilter('All')
     setForemanFilter('All'); setSubmittedByFilter('All')
     setStatusFilter('All'); setFinalCostPending(false)
@@ -136,9 +138,14 @@ export default function MaintenancePage() {
             {/* Panel */}
             <div className="absolute left-4 right-4 top-full z-40 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-[70vh] overflow-y-auto">
               <div className="p-4 space-y-3">
+                <div>
+                  <label className="form-label">Ticket ID</label>
+                  <input type="number" className="form-input" placeholder="e.g. 1042" value={ticketId} onChange={e => setTicketId(e.target.value)} />
+                </div>
+
                 <div className="relative">
                   <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input type="text" className="form-input pl-9" placeholder="Search ID, Well, Facility, Route, Foreman, Submitted by..." value={search} onChange={e => setSearch(e.target.value)} />
+                  <input type="text" className="form-input pl-9" placeholder="Search Well, Facility, Route, Foreman, Submitted by..." value={search} onChange={e => setSearch(e.target.value)} />
                 </div>
 
                 <button className="btn-primary" onClick={() => { resetFilters(); setFiltersOpen(false) }}>Reset Filters</button>
