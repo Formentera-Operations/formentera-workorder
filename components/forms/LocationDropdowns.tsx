@@ -84,13 +84,7 @@ export default function LocationDropdowns({ locationType, onChange, initialValue
     const candAsset    = uniq(idx.map(i => AssetArr[i]))
     const candField    = uniq(idx.map(i => FieldArr[i]))
     const candWell     = uniq(idx.map(i => WellArr[i]))
-
-    // Facilities don't have FIELD — filter only by asset
-    const facIdx = AssetArr.reduce<number[]>((acc, a, i) => {
-      if ((!asset || a === asset) && (!facility || FacilityArr[i] === facility)) acc.push(i)
-      return acc
-    }, [])
-    const candFacility = uniq(facIdx.map(i => FacilityArr[i]))
+    const candFacility = uniq(idx.map(i => FacilityArr[i]))
     const newAsset    = !asset    && candAsset.length    === 1 ? candAsset[0]    : asset
     const newField    = !field    && candField.length    === 1 ? candField[0]    : field
     const newWell     = !well     && candWell.length     === 1 ? candWell[0]     : well
@@ -110,7 +104,7 @@ export default function LocationDropdowns({ locationType, onChange, initialValue
   const assets = filterOptions(wfData, 'Asset', {})
   const fields = filterOptions(wfData, 'FIELD', { Asset: asset || null })
   const wells = filterOptions(wfData, 'WELLNAME', { Asset: asset || null, FIELD: field || null })
-  const facilities = filterOptions(wfData, 'Facility_Name', { Asset: asset || null })
+  const facilities = filterOptions(wfData, 'Facility_Name', { Asset: asset || null, FIELD: field || null })
 
   if (loading) return <div className="text-sm text-gray-400 py-2">Loading locations…</div>
 
