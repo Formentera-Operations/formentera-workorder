@@ -1,13 +1,13 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
-import { ArrowLeft, ImageIcon, ChevronDown } from 'lucide-react'
+import { ArrowLeft, ChevronDown } from 'lucide-react'
 import Accordion from '@/components/ui/Accordion'
 import BottomNav from '@/components/layout/BottomNav'
 import LocationDropdowns from '@/components/forms/LocationDropdowns'
 import { useAuth } from '@/components/AuthProvider'
 import { formatDate, formatDateShort, DEPARTMENTS, LOCATION_TYPES, WORK_ORDER_DECISIONS, FINAL_STATUSES, PRIORITY_OPTIONS } from '@/lib/utils'
-import type { LocationType, TicketStatus } from '@/types'
+import type { LocationType } from '@/types'
 
 type Tab = 'Summary' | 'Initial Report' | 'Dispatch' | 'Repairs / Closeout'
 
@@ -119,9 +119,6 @@ export default function MaintenanceTicketPage() {
   const comments = (data?.comments || []) as Record<string, unknown>[]
 
 
-  const locationLine = ticket.Location_Type === 'Well'
-    ? `Well: ${ticket.Well || '—'}`
-    : `Facility: ${ticket.Facility || '—'}`
 
   const setIr = (k: string, v: string | boolean) => setIrForm(f => ({ ...f, [k]: v }))
   const setDisp = (k: string, v: string | boolean) => setDispForm(f => ({ ...f, [k]: v }))
@@ -168,7 +165,7 @@ export default function MaintenanceTicketPage() {
     } finally { setSaving(false) }
   }
 
-  async function postComment(tab_name: string) {
+  async function postComment(_tab_name: string) {
     if (!comment.trim()) return
     await fetch('/api/comments', {
       method: 'POST',
@@ -245,7 +242,7 @@ export default function MaintenanceTicketPage() {
             </div>
 
             {/* Issue photo */}
-            {Array.isArray(ticket.Issue_Photos) && ticket.Issue_Photos.length > 0 ? (
+            {Array.isArray(ticket.Issue_Photos) && ticket.Issue_Photos.length > 0 && (
               <div>
                 <p className="text-xs text-gray-400 text-center mb-1">Click to view</p>
                 <div
@@ -253,16 +250,6 @@ export default function MaintenanceTicketPage() {
                   onClick={() => router.push(`/maintenance/${id}/issue-photos`)}
                 >
                   <img src={(ticket.Issue_Photos as string[])[0]} alt="Issue" className="w-full h-full object-cover" />
-                </div>
-              </div>
-            ) : (
-              <div>
-                <p className="text-xs text-gray-400 text-center mb-1">Click to view</p>
-                <div
-                  className="w-full h-52 rounded-xl bg-gray-100 flex items-center justify-center cursor-pointer"
-                  onClick={() => router.push(`/maintenance/${id}/issue-photos`)}
-                >
-                  <ImageIcon size={48} className="text-gray-300" />
                 </div>
               </div>
             )}
