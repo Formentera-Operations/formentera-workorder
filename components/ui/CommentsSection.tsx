@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { formatDate } from '@/lib/utils'
-import { CornerDownRight } from 'lucide-react'
+import { CornerDownRight, Trash2 } from 'lucide-react'
 
 type Comment = {
   id: number
@@ -24,6 +24,7 @@ export default function CommentsSection({ comments, ticketId, userName, userEmai
   const [replyToId, setReplyToId] = useState<number | null>(null)
   const [replyText, setReplyText] = useState('')
   const [posting, setPosting] = useState(false)
+  const [deleteId, setDeleteId] = useState<number | null>(null)
 
   const topLevel = comments.filter(c => !c.parent_id)
   const replies = (parentId: number) => comments.filter(c => c.parent_id === parentId)
@@ -55,6 +56,45 @@ export default function CommentsSection({ comments, ticketId, userName, userEmai
     }
   }
 
+  async function deleteComment(id: number) {
+    await fetch('/api/comments', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id }),
+    })
+    setDeleteId(null)
+    onRefresh()
+  }
+
+  function CommentBubble({ c, indented = false }: { c: Comment; indented?: boolean }) {
+    const isOwner = c.author_name === userName
+    return (
+      <div className={`bg-gray-50 rounded-lg p-3 ${indented ? 'flex-1' : ''}`}>
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-xs text-gray-500">{c.author_name} · {formatDate(c.created_at)}</p>
+          {isOwner && (
+            <button
+              type="button"
+              onClick={() => setDeleteId(c.id)}
+              className="text-gray-400 hover:text-red-500 flex-shrink-0"
+            >
+              <Trash2 size={13} />
+            </button>
+          )}
+        </div>
+        <p className="text-sm text-gray-800 mt-1">{c.body}</p>
+        {!indented && (
+          <button
+            className="text-xs text-[#1B2E6B] font-medium mt-2"
+            onClick={() => setReplyToId(replyToId === c.id ? null : c.id)}
+          >
+            {replyToId === c.id ? 'Cancel' : 'Reply'}
+          </button>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div className="border-t border-gray-200 pt-4">
       <h3 className="text-lg font-bold text-gray-900 mb-3">Comments</h3>
@@ -62,26 +102,13 @@ export default function CommentsSection({ comments, ticketId, userName, userEmai
       <div className="space-y-4">
         {topLevel.map(c => (
           <div key={c.id}>
-            {/* Top-level comment */}
-            <div className="bg-gray-50 rounded-lg p-3">
-              <p className="text-xs text-gray-500">{c.author_name} · {formatDate(c.created_at)}</p>
-              <p className="text-sm text-gray-800 mt-1">{c.body}</p>
-              <button
-                className="text-xs text-[#1B2E6B] font-medium mt-2"
-                onClick={() => setReplyToId(replyToId === c.id ? null : c.id)}
-              >
-                {replyToId === c.id ? 'Cancel' : 'Reply'}
-              </button>
-            </div>
+            <CommentBubble c={c} />
 
             {/* Replies */}
             {replies(c.id).map(r => (
               <div key={r.id} className="flex gap-2 mt-2 ml-4">
                 <CornerDownRight size={14} className="text-gray-300 mt-1 flex-shrink-0" />
-                <div className="bg-gray-50 rounded-lg p-3 flex-1">
-                  <p className="text-xs text-gray-500">{r.author_name} · {formatDate(r.created_at)}</p>
-                  <p className="text-sm text-gray-800 mt-1">{r.body}</p>
-                </div>
+                <CommentBubble c={r} indented />
               </div>
             ))}
 
@@ -127,6 +154,30 @@ export default function CommentsSection({ comments, ticketId, userName, userEmai
           {posting ? 'Posting…' : 'Post'}
         </button>
       </div>
+
+      {/* Delete confirmation modal */}
+      {deleteId !== null && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-end justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm p-6 space-y-3">
+            <h3 className="text-lg font-bold text-gray-900">Delete Comment?</h3>
+            <p className="text-sm text-gray-500">This action cannot be undone.</p>
+            <button
+              type="button"
+              className="w-full py-3 rounded-xl bg-gray-900 text-white font-semibold"
+              onClick={() => deleteComment(deleteId)}
+            >
+              Delete
+            </button>
+            <button
+              type="button"
+              className="w-full py-3 rounded-xl border border-gray-200 text-gray-700 font-semibold"
+              onClick={() => setDeleteId(null)}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
