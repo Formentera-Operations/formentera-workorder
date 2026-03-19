@@ -44,7 +44,7 @@ select {
   }
 
   .btn-submit {
-    @apply w-full bg-[#6b7db5] text-white font-semibold py-3 px-4 rounded-lg flex items-center justify-center gap-2 active:opacity-90 transition-opacity;
+    @apply w-full bg-[#1B2E6B] text-white font-semibold py-3 px-4 rounded-lg flex items-center justify-center gap-2 active:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed;
   }
 
   .form-label {

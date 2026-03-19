@@ -301,7 +301,11 @@ export default function MaintenanceFormPage() {
         </div>
 
         {/* Submit */}
-        <button className="btn-submit" onClick={handleSubmit} disabled={submitting}>
+        <button
+          className="btn-submit"
+          onClick={handleSubmit}
+          disabled={submitting || uploadingPhotos || !form.Department || !form.Location_Type || !form.Asset || !(form.Well || form.Facility) || !form.Equipment_Type || !form.Equipment || !form.Issue_Description}
+        >
           {submitting ? 'Submitting…' : 'Submit'}
         </button>
       </div>
