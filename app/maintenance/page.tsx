@@ -84,21 +84,6 @@ export default function MaintenancePage() {
 
   const totalPages = Math.ceil(totalCount / PAGE_SIZE)
 
-  const SelectFilter = ({ label, value, onChange, options }: {
-    label: string; value: string; onChange: (v: string) => void; options: string[]
-  }) => (
-    <div>
-      <label className="form-label">{label}</label>
-      <div className="relative">
-        <select className="form-select" value={value} onChange={e => onChange(e.target.value)}>
-          <option value="All">All</option>
-          {options.map(o => <option key={o} value={o}>{o}</option>)}
-        </select>
-        <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-      </div>
-    </div>
-  )
-
   const SearchableSelectFilter = ({ label, value, onChange, options }: {
     label: string; value: string; onChange: (v: string) => void; options: string[]
   }) => {
@@ -235,8 +220,8 @@ export default function MaintenancePage() {
                   </div>
                 </div>
 
-                <SelectFilter label="Asset" value={assetFilter} onChange={setAssetFilter} options={assets} />
-                <SelectFilter label="Department" value={deptFilter} onChange={setDeptFilter} options={departments} />
+                <SearchableSelectFilter label="Asset" value={assetFilter} onChange={setAssetFilter} options={assets} />
+                <SearchableSelectFilter label="Department" value={deptFilter} onChange={setDeptFilter} options={departments} />
                 <SearchableSelectFilter label="Equipment" value={equipFilter} onChange={setEquipFilter} options={equipments} />
                 <SearchableSelectFilter label="Assigned Foreman" value={foremanFilter} onChange={setForemanFilter} options={foremans} />
                 <SearchableSelectFilter label="Submitted By" value={submittedByFilter} onChange={setSubmittedByFilter} options={submitters} />
