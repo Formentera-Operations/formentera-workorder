@@ -636,7 +636,7 @@ export default function MaintenanceTicketPage() {
                   <label className="form-label form-label-required">Estimated Cost</label>
                   <div className="relative">
                     <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 text-sm">$</span>
-                    <input type="number" className="form-input pl-8" placeholder="0" value={dispForm.Estimate_Cost as string} onChange={e => setDisp('Estimate_Cost', e.target.value)} />
+                    <input type="text" inputMode="decimal" className="form-input pl-8" placeholder="0" value={dispForm.Estimate_Cost as string} onChange={e => { const v = e.target.value; if (v === '' || /^\d*\.?\d*$/.test(v)) setDisp('Estimate_Cost', v) }} />
                   </div>
                 </div>
 
