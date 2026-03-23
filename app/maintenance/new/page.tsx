@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft, ChevronDown, Camera, X } from 'lucide-react'
 import LocationDropdowns from '@/components/forms/LocationDropdowns'
@@ -12,6 +12,7 @@ export default function MaintenanceFormPage() {
   const router = useRouter()
   const { userEmail, userName } = useAuth()
   const [submitting, setSubmitting] = useState(false)
+  const submitLock = useRef(false)
   const [uploadingPhotos, setUploadingPhotos] = useState(false)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [equipmentTypes, setEquipmentTypes] = useState<{ id: string; equipment_type: string }[]>([])
@@ -29,6 +30,7 @@ export default function MaintenanceFormPage() {
     Issue_Photos: [] as string[],
     assigned_foreman: '',
     Self_Dispatch: false,
+    Estimate_Cost: '',
   })
 
   useEffect(() => {
@@ -54,6 +56,8 @@ export default function MaintenanceFormPage() {
   const set = (key: string, val: unknown) => setForm(f => ({ ...f, [key]: val }))
 
   async function handleSubmit() {
+    if (submitLock.current) return
+    submitLock.current = true
     const missingWellOrFacility = !(form.Well || form.Facility)
     if (
       !form.Department ||
@@ -62,7 +66,9 @@ export default function MaintenanceFormPage() {
       missingWellOrFacility ||
       !form.Equipment_Type ||
       !form.Equipment ||
-      !form.Issue_Description
+      !form.Issue_Description ||
+      (form.Self_Dispatch && !form.Estimate_Cost) ||
+      (form.Estimate_Cost && isNaN(Number(form.Estimate_Cost)))
     ) {
       alert('Please fill in all required fields.')
       return
@@ -78,6 +84,7 @@ export default function MaintenanceFormPage() {
           Created_by_Email: userEmail,
           Created_by_Name: userName,
           Self_Dispatch_Assignee: form.Self_Dispatch ? userName : null,
+          Estimate_Cost: form.Estimate_Cost ? parseFloat(form.Estimate_Cost) : null,
         }),
       })
       if (!res.ok) throw new Error('Submit failed')
@@ -86,6 +93,7 @@ export default function MaintenanceFormPage() {
       alert('Failed to submit ticket. Please try again.')
     } finally {
       setSubmitting(false)
+      submitLock.current = false
     }
   }
 
@@ -275,28 +283,54 @@ export default function MaintenanceFormPage() {
               )}
             </div>
 
-            {/* Assigned Foreman */}
-            <div>
-              <label className="form-label">Assigned Foreman</label>
-              <SearchableSelect
-                value={form.assigned_foreman}
-                options={employees.map(e => e.name)}
-                placeholder="Select Foreman"
-                onChange={v => set('assigned_foreman', v)}
-              />
-            </div>
+            {/* Assigned Foreman — hidden when self dispatching */}
+            {!form.Self_Dispatch && (
+              <div>
+                <label className="form-label">Assigned Foreman</label>
+                <SearchableSelect
+                  value={form.assigned_foreman}
+                  options={employees.map(e => e.name)}
+                  placeholder="Select Foreman"
+                  onChange={v => set('assigned_foreman', v)}
+                />
+              </div>
+            )}
 
             {/* Self Dispatch */}
             <div className="flex items-center justify-between">
               <label className="form-label mb-0">Self Dispatch?</label>
               <button
                 type="button"
-                onClick={() => set('Self_Dispatch', !form.Self_Dispatch)}
+                onClick={() => {
+                  const next = !form.Self_Dispatch
+                  setForm(f => ({ ...f, Self_Dispatch: next, assigned_foreman: next ? '' : f.assigned_foreman }))
+                }}
                 className={`w-12 h-6 rounded-full transition-colors ${form.Self_Dispatch ? 'bg-[#1B2E6B]' : 'bg-gray-300'}`}
               >
                 <span className={`block w-5 h-5 bg-white rounded-full shadow transition-transform mx-0.5 ${form.Self_Dispatch ? 'translate-x-6' : 'translate-x-0'}`} />
               </button>
             </div>
+
+            {/* Estimated Cost — only shown when Self Dispatch is on */}
+            {form.Self_Dispatch && (
+              <div>
+                <label className="form-label form-label-required">Estimated Cost</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">$</span>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    className="form-input pl-7"
+                    placeholder="Enter Value"
+                    value={form.Estimate_Cost}
+                    onChange={e => {
+                      const val = e.target.value
+                      if (val === '' || /^\d*\.?\d*$/.test(val)) set('Estimate_Cost', val)
+                    }}
+                  />
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -304,7 +338,7 @@ export default function MaintenanceFormPage() {
         <button
           className="btn-submit"
           onClick={handleSubmit}
-          disabled={submitting || uploadingPhotos || !form.Department || !form.Location_Type || !form.Asset || !(form.Well || form.Facility) || !form.Equipment_Type || !form.Equipment || !form.Issue_Description}
+          disabled={submitting || uploadingPhotos || !form.Department || !form.Location_Type || !form.Asset || !(form.Well || form.Facility) || !form.Equipment_Type || !form.Equipment || !form.Issue_Description || (form.Self_Dispatch && !form.Estimate_Cost)}
         >
           {submitting ? 'Submitting…' : 'Submit'}
         </button>

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
+import { sendMail } from '@/lib/mailer'
+import { newTicketEmail } from '@/lib/email-templates'
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
@@ -105,7 +107,7 @@ export async function POST(req: NextRequest) {
         Well: body.Well || null,
         Created_by_Email: body.Created_by_Email,
         Created_by_Name: body.Created_by_Name,
-        Ticket_Status: 'Open',
+        Ticket_Status: (body.assigned_foreman || body.Self_Dispatch_Assignee) ? 'In Progress' : 'Open',
         Asset: body.Asset,
         Area: body.Area,
         Self_Dispatch_Assignee: body.Self_Dispatch_Assignee || null,
@@ -115,6 +117,27 @@ export async function POST(req: NextRequest) {
       .single()
 
     if (error) throw error
+
+    // Scenario 1: no foreman, no self-dispatch — send new ticket email
+    if (!body.assigned_foreman && !body.Self_Dispatch_Assignee) {
+      const { subject, html } = newTicketEmail(data)
+      await sendMail({ to: body.Created_by_Email, subject, html }).catch(err =>
+        console.error('NewTicket email failed:', err)
+      )
+    }
+
+    // Scenario 2: foreman assigned — insert dispatch row
+    if (body.assigned_foreman) {
+      await db.from('Dispatch').insert([{
+        ticket_id: data.id,
+        date_assigned: new Date().toISOString(),
+        created_at: new Date().toISOString(),
+        work_order_decision: 'Proceed with Repair',
+        maintenance_foreman: body.assigned_foreman,
+        ticket_status: 'In Progress',
+      }])
+    }
+
     return NextResponse.json(data, { status: 201 })
   } catch (error) {
     console.error('Ticket create error:', error)
