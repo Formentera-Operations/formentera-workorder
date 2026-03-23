@@ -88,7 +88,7 @@ function buildEmailParts(r: TicketRow) {
     `Submitted by: ${submittedBy}`,
   ]
 
-  const locHtml      = section('Maintenance Location Details', locLines)
+  const locHtml      = section('Maintenance Details', locLines)
   const eqpHtml      = section('Equipment Details', [`Equipment Type: ${equipmentType}`, `Equipment: ${equipment}`])
   const issueHtml    = section('Issue Details', [`Department: ${department}`, `Issue Description: ${issueDesc}`, `Troubleshooting Conducted: ${troubleshoot}`])
 
@@ -111,11 +111,30 @@ export function newTicketEmail(r: TicketRow) {
   }
 }
 
-export function newTicketDispatchEmail(r: TicketRow) {
+export function newTicketDispatchEmail(r: TicketRow, dispatch: DispatchExtras & { maintenance_foreman?: string }) {
   const { id, wfValue, bodyHtml } = buildEmailParts(r)
+
+  const hasVal = (v?: string) => v != null && v.trim() !== '' && v !== '—'
+
+  const estimatedCost = (() => {
+    const n = Number(r.Estimate_Cost)
+    return Number.isFinite(n) && r.Estimate_Cost != null
+      ? n.toLocaleString(undefined, { style: 'currency', currency: 'USD' })
+      : '—'
+  })()
+
+  const dispatchLines = [
+    `Work Order Decision: ${dispatch.work_order_decision ?? 'Proceed with Repair'}`,
+    ...(hasVal(estimatedCost) && estimatedCost !== '—' ? [`Estimated Cost: ${estimatedCost}`] : []),
+    ...(hasVal(dispatch.maintenance_foreman) ? [`Assigned Foreman: ${dispatch.maintenance_foreman}`] : []),
+    `Date Assigned: ${fmtDate(dispatch.date_assigned)}`,
+  ]
+
+  const dispatchHtml = section('Dispatch Details', dispatchLines)
+
   return {
-    subject: `New ticket #${id} Dispatched — ${wfValue}`,
-    html: bodyHtml,
+    subject: `Ticket #${id} Dispatched — ${wfValue}`,
+    html: dispatchHtml + bodyHtml,
   }
 }
 

@@ -137,7 +137,11 @@ export async function POST(req: NextRequest) {
         ticket_status: 'In Progress',
       }])
 
-      const { subject, html } = newTicketDispatchEmail(data)
+      const { subject, html } = newTicketDispatchEmail(data, {
+        maintenance_foreman: body.assigned_foreman,
+        date_assigned: new Date().toISOString(),
+        work_order_decision: 'Proceed with Repair',
+      })
       const { data: emp } = await db
         .from('employees')
         .select('work_email')
