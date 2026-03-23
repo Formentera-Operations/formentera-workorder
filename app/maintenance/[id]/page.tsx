@@ -71,9 +71,9 @@ export default function MaintenanceTicketPage() {
       const d = (ticketData.dispatch || [])[0] || {}
       setDispForm({
         work_order_decision: d.work_order_decision || '',
-        Estimate_Cost: d.Estimate_Cost || '',
-        assigned_foreman: d.production_foreman || d.maintenance_foreman || '',
-        additional_assignee: '',
+        Estimate_Cost: t.Estimate_Cost != null ? String(t.Estimate_Cost) : (d.Estimate_Cost != null ? String(d.Estimate_Cost) : ''),
+        assigned_foreman: d.maintenance_foreman || '',
+        additional_assignee: d.production_foreman || '',
         date_assigned: d.date_assigned || new Date().toISOString(),
       })
 
@@ -173,6 +173,7 @@ export default function MaintenanceTicketPage() {
           Estimate_Cost: dispForm.Estimate_Cost,
           production_foreman: dispForm.assigned_foreman,
           date_assigned: dispForm.date_assigned,
+          current_user_email: userEmail,
         }),
       })
       alert('Dispatched successfully.')
@@ -639,41 +640,63 @@ export default function MaintenanceTicketPage() {
                   </div>
                 </div>
 
-                <div>
-                  <label className="form-label">Assigned Foreman</label>
-                  <div className="relative">
-                    <select className="form-select" value={dispForm.assigned_foreman as string} onChange={e => setDisp('assigned_foreman', e.target.value)}>
-                      <option value="">Select Foreman</option>
-                      {employees.map(emp => <option key={emp.id} value={emp.name}>{emp.name}</option>)}
-                    </select>
-                    <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="form-label">Additional Assignee</label>
-                  <div className="relative">
-                    <select className="form-select" value={dispForm.additional_assignee as string} onChange={e => setDisp('additional_assignee', e.target.value)}>
-                      <option value="">Select Employee</option>
-                      {employees.map(emp => <option key={emp.id} value={emp.name}>{emp.name}</option>)}
-                    </select>
-                    <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="form-label">Date Assigned</label>
-                  <div className="relative">
+                {!!ticket.Self_Dispatch_Assignee && (
+                  <div>
+                    <label className="form-label">Self Dispatch Assignee</label>
                     <input
-                      type="datetime-local"
-                      className="form-input"
-                      value={dispForm.date_assigned ? (dispForm.date_assigned as string).slice(0, 16) : ''}
-                      onChange={e => setDisp('date_assigned', e.target.value)}
+                      type="text"
+                      className="form-input opacity-60 cursor-not-allowed"
+                      disabled
+                      value={String(ticket.Self_Dispatch_Assignee).trim().split(/\s+/).map((s: string) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase()).join(' ')}
                     />
                   </div>
-                </div>
+                )}
 
-                <button className="btn-primary" onClick={saveDispatch} disabled={saving}>
+                {dispForm.work_order_decision !== 'Backlog - Uneconomic / Awaiting Part' && !ticket.Self_Dispatch_Assignee && (
+                  <>
+                    <div>
+                      <label className="form-label">Assigned Foreman</label>
+                      <div className="relative">
+                        <select className="form-select" value={dispForm.assigned_foreman as string} onChange={e => setDisp('assigned_foreman', e.target.value)}>
+                          <option value="">Select Foreman</option>
+                          {employees.map(emp => <option key={emp.id} value={emp.name}>{emp.name}</option>)}
+                        </select>
+                        <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="form-label">Additional Assignee</label>
+                      <div className="relative">
+                        <select className="form-select" value={dispForm.additional_assignee as string} onChange={e => setDisp('additional_assignee', e.target.value)}>
+                          <option value="">Select Employee</option>
+                          {employees.map(emp => <option key={emp.id} value={emp.name}>{emp.name}</option>)}
+                        </select>
+                        <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {dispForm.work_order_decision !== 'Backlog - Uneconomic / Awaiting Part' && (
+                  <div>
+                    <label className="form-label">Date Assigned</label>
+                    <div className="relative">
+                      <input
+                        type="datetime-local"
+                        className="form-input"
+                        value={dispForm.date_assigned ? (dispForm.date_assigned as string).slice(0, 16) : ''}
+                        onChange={e => setDisp('date_assigned', e.target.value)}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <button
+                  className="btn-primary"
+                  onClick={saveDispatch}
+                  disabled={saving || !dispForm.work_order_decision || dispForm.Estimate_Cost === ''}
+                >
                   {saving ? 'Dispatching…' : 'Dispatch'}
                 </button>
               </div>
