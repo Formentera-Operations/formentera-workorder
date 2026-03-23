@@ -137,7 +137,7 @@ export default function MaintenancePage() {
                   />
                 </div>
               </div>
-              <ul className="max-h-48 overflow-y-auto py-1">
+              <ul className="max-h-64 overflow-y-auto py-1">
                 <li
                   className={`px-4 py-2 text-sm cursor-pointer hover:bg-gray-50 ${value === 'All' ? 'font-medium text-[#1B2E6B]' : 'text-gray-700'}`}
                   onClick={() => { onChange('All'); setOpen(false); setQ('') }}
