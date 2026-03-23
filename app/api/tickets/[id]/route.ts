@@ -11,7 +11,7 @@ export async function GET(
 
     const [ticketRes, dispatchRes, repairsRes, vendorRes, commentsRes] = await Promise.all([
       db.from('Maintenance_Form_Submission').select('*').eq('id', id).single(),
-      db.from('Dispatch').select('*').eq('ticket_id', id).order('date_assigned', { ascending: false }),
+      db.from('Dispatch').select('*').eq('ticket_id', id).order('created_at', { ascending: false }),
       db.from('Repairs_Closeout').select('*').eq('ticket_id', id).order('created_at', { ascending: false }),
       db.from('vendor_payment_details').select('*').eq('ticket_id', id).maybeSingle(),
       db.from('comments').select('*').eq('ticket_id', id).order('created_at', { ascending: true }),
