@@ -99,6 +99,29 @@ export default function MaintenancePage() {
     </div>
   )
 
+  const SearchableSelectFilter = ({ label, value, onChange, options }: {
+    label: string; value: string; onChange: (v: string) => void; options: string[]
+  }) => {
+    const [q, setQ] = useState('')
+    const filtered = q ? options.filter(o => o.toLowerCase().includes(q.toLowerCase())) : options
+    return (
+      <div>
+        <label className="form-label">{label}</label>
+        <div className="relative mb-1">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input type="text" className="form-input pl-8 text-sm py-1.5" placeholder={`Search ${label.toLowerCase()}…`} value={q} onChange={e => setQ(e.target.value)} />
+        </div>
+        <div className="relative">
+          <select className="form-select" value={value} onChange={e => onChange(e.target.value)}>
+            <option value="All">All</option>
+            {filtered.map(o => <option key={o} value={o}>{o}</option>)}
+          </select>
+          <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col min-h-screen pb-16">
       {/* Header */}
@@ -172,9 +195,9 @@ export default function MaintenancePage() {
 
                 <SelectFilter label="Asset" value={assetFilter} onChange={setAssetFilter} options={assets} />
                 <SelectFilter label="Department" value={deptFilter} onChange={setDeptFilter} options={departments} />
-                <SelectFilter label="Equipment" value={equipFilter} onChange={setEquipFilter} options={equipments} />
-                <SelectFilter label="Assigned Foreman" value={foremanFilter} onChange={setForemanFilter} options={foremans} />
-                <SelectFilter label="Submitted By" value={submittedByFilter} onChange={setSubmittedByFilter} options={submitters} />
+                <SearchableSelectFilter label="Equipment" value={equipFilter} onChange={setEquipFilter} options={equipments} />
+                <SearchableSelectFilter label="Assigned Foreman" value={foremanFilter} onChange={setForemanFilter} options={foremans} />
+                <SearchableSelectFilter label="Submitted By" value={submittedByFilter} onChange={setSubmittedByFilter} options={submitters} />
 
                 <div>
                   <label className="form-label">Ticket Status</label>
