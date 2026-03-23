@@ -65,6 +65,7 @@ export default function MaintenanceTicketPage() {
         Troubleshooting_Conducted: t.Troubleshooting_Conducted || '',
         assigned_foreman: t.assigned_foreman || '',
         Self_Dispatch: !!t.Self_Dispatch_Assignee,
+        Estimate_Cost: t.Estimate_Cost != null ? String(t.Estimate_Cost) : '',
       })
 
       const d = (ticketData.dispatch || [])[0] || {}
@@ -152,6 +153,7 @@ export default function MaintenanceTicketPage() {
           Issue_Description: irForm.Issue_Description,
           Troubleshooting_Conducted: irForm.Troubleshooting_Conducted,
           assigned_foreman: irForm.assigned_foreman,
+          Estimate_Cost: irForm.Estimate_Cost ? parseFloat(irForm.Estimate_Cost as string) : null,
           Issue_Photos: irPhotos,
         }),
       })
@@ -451,7 +453,7 @@ export default function MaintenanceTicketPage() {
                 <div>
                   <label className="form-label">Initial Assigned Foreman</label>
                   <div className="relative">
-                    <select className="form-select" value={irForm.assigned_foreman as string} onChange={e => setIr('assigned_foreman', e.target.value)}>
+                    <select className="form-select" value={irForm.assigned_foreman as string} disabled>
                       <option value="">Select Foreman</option>
                       {employees.map(emp => <option key={emp.id} value={emp.name}>{emp.name}</option>)}
                     </select>
@@ -523,11 +525,29 @@ export default function MaintenanceTicketPage() {
                   <label className="form-label mb-0">Self Dispatch?</label>
                   <button
                     type="button"
-                    onClick={() => setIr('Self_Dispatch', !irForm.Self_Dispatch)}
-                    className={`w-12 h-6 rounded-full transition-colors ${irForm.Self_Dispatch ? 'bg-[#1B2E6B]' : 'bg-gray-300'}`}
+                    disabled
+                    className={`w-12 h-6 rounded-full transition-colors opacity-60 cursor-not-allowed ${irForm.Self_Dispatch ? 'bg-[#1B2E6B]' : 'bg-gray-300'}`}
                   >
                     <span className={`block w-5 h-5 bg-white rounded-full shadow transition-transform mx-0.5 ${irForm.Self_Dispatch ? 'translate-x-6' : 'translate-x-0'}`} />
                   </button>
+                </div>
+
+                <div>
+                  <label className="form-label">Estimated Cost</label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">$</span>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      className="form-input pl-7"
+                      placeholder="Enter Value"
+                      value={irForm.Estimate_Cost as string}
+                      onChange={e => {
+                        const val = e.target.value
+                        if (val === '' || /^\d*\.?\d*$/.test(val)) setIr('Estimate_Cost', val)
+                      }}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
