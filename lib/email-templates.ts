@@ -18,6 +18,13 @@ type TicketRow = {
   Created_by_Name?: string
   Asset?: string
   assigned_foreman?: string
+  Estimate_Cost?: number | null
+}
+
+type DispatchExtras = {
+  self_dispatch_assignee?: string
+  date_assigned?: string
+  work_order_decision?: string
 }
 
 const clean = (v: unknown): string =>
@@ -112,10 +119,28 @@ export function newTicketDispatchEmail(r: TicketRow) {
   }
 }
 
-export function selfDispatchEmail(r: TicketRow) {
+export function selfDispatchEmail(r: TicketRow, dispatch: DispatchExtras) {
   const { id, wfValue, bodyHtml } = buildEmailParts(r)
+
+  const toTitleCase = (s?: string) =>
+    s ? s.toLowerCase().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : '—'
+
+  const estimatedCost = (() => {
+    const n = Number(r.Estimate_Cost)
+    return Number.isFinite(n)
+      ? n.toLocaleString(undefined, { style: 'currency', currency: 'USD' })
+      : '—'
+  })()
+
+  const dispatchHtml = section('Dispatch Details', [
+    `Work Order Decision: ${dispatch.work_order_decision ?? 'Proceed with Repair'}`,
+    `Estimated Cost: ${estimatedCost}`,
+    `Self Dispatch Assignee: ${toTitleCase(dispatch.self_dispatch_assignee)}`,
+    `Date Assigned: ${fmtDate(dispatch.date_assigned)}`,
+  ])
+
   return {
     subject: `Ticket #${id} Self Dispatched — ${wfValue}`,
-    html: bodyHtml,
+    html: dispatchHtml + bodyHtml,
   }
 }

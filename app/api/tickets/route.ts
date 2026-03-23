@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { sendMail } from '@/lib/mailer'
-import { newTicketEmail } from '@/lib/email-templates'
+import { newTicketEmail, newTicketDispatchEmail, selfDispatchEmail } from '@/lib/email-templates'
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
@@ -126,7 +126,7 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Scenario 2: foreman assigned — insert dispatch row
+    // Scenario 2: foreman assigned — insert dispatch row + send emails
     if (body.assigned_foreman) {
       await db.from('Dispatch').insert([{
         ticket_id: data.id,
@@ -136,6 +136,39 @@ export async function POST(req: NextRequest) {
         maintenance_foreman: body.assigned_foreman,
         ticket_status: 'In Progress',
       }])
+
+      const { subject, html } = newTicketDispatchEmail(data)
+      const { data: emp } = await db
+        .from('employees')
+        .select('work_email')
+        .ilike('name', body.assigned_foreman)
+        .single()
+      const foremanEmail = emp?.work_email
+      const recipients = [body.Created_by_Email, foremanEmail].filter(Boolean).join(',')
+      await sendMail({ to: recipients, subject, html }).catch(err =>
+        console.error('NewTicketDispatch email failed:', err)
+      )
+    }
+
+    // Scenario 3: self-dispatch — insert dispatch row + send email to submitter
+    if (body.Self_Dispatch_Assignee) {
+      await db.from('Dispatch').insert([{
+        ticket_id: data.id,
+        date_assigned: new Date().toISOString(),
+        created_at: new Date().toISOString(),
+        work_order_decision: 'Proceed with Repair',
+        self_dispatch_assignee: body.Self_Dispatch_Assignee,
+        ticket_status: 'In Progress',
+      }])
+
+      const { subject, html } = selfDispatchEmail(data, {
+        self_dispatch_assignee: body.Self_Dispatch_Assignee,
+        date_assigned: new Date().toISOString(),
+        work_order_decision: 'Proceed with Repair',
+      })
+      await sendMail({ to: body.Created_by_Email, subject, html }).catch(err =>
+        console.error('SelfDispatch email failed:', err)
+      )
     }
 
     return NextResponse.json(data, { status: 201 })
