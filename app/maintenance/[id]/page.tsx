@@ -905,6 +905,9 @@ export default function MaintenanceTicketPage() {
                         }}
                       >
                         <option value="">Select Vendor</option>
+                        {row.vendor && !vendors.includes(row.vendor) && (
+                          <option key={row.vendor} value={row.vendor}>{row.vendor}</option>
+                        )}
                         {vendors.map(v => <option key={v} value={v}>{v}</option>)}
                       </select>
                       <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
