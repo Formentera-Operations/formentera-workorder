@@ -576,9 +576,21 @@ export default function MaintenanceTicketPage() {
               <button
                 type="button"
                 className="w-full py-3 rounded-xl bg-gray-900 text-white font-semibold"
-                onClick={() => {
-                  setIrPhotos(irPhotos.filter((_, j) => j !== deletePhotoIdx))
+                onClick={async () => {
+                  const url = irPhotos[deletePhotoIdx!]
+                  const updated = irPhotos.filter((_, j) => j !== deletePhotoIdx)
+                  setIrPhotos(updated)
                   setDeletePhotoIdx(null)
+                  await fetch('/api/upload', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url }),
+                  }).catch(err => console.error('Storage delete failed:', err))
+                  await fetch(`/api/tickets/${id}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ Issue_Photos: updated }),
+                  }).catch(err => console.error('Issue photos update failed:', err))
                 }}
               >
                 Delete
