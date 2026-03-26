@@ -41,6 +41,59 @@ export default function MaintenanceTicketPage() {
   const [uploadingRepairPhotos, setUploadingRepairPhotos] = useState(false)
   const [deleteRepairPhotoIdx, setDeleteRepairPhotoIdx] = useState<number | null>(null)
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function initForms(td: any) {
+    const t = td.ticket || {} as any
+    setIrPhotos(Array.isArray(t.Issue_Photos) ? t.Issue_Photos : [])
+    setIrForm({
+      Department: t.Department || '',
+      Location_Type: t.Location_Type || '',
+      Asset: t.Asset || '',
+      Field: t.Field || '',
+      Well: t.Well || '',
+      Facility: t.Facility || '',
+      Area: t.Area || '',
+      Route: t.Route || '',
+      Equipment_Type: t.Equipment_Type || '',
+      Equipment: t.Equipment || '',
+      Issue_Description: t.Issue_Description || '',
+      Troubleshooting_Conducted: t.Troubleshooting_Conducted || '',
+      assigned_foreman: t.assigned_foreman || '',
+      Self_Dispatch: !!t.Self_Dispatch_Assignee,
+      Estimate_Cost: t.Estimate_Cost != null ? String(t.Estimate_Cost) : '',
+    })
+
+    const d = (td.dispatch || [])[0] || {}
+    setDispForm({
+      work_order_decision: d.work_order_decision || '',
+      Estimate_Cost: t.Estimate_Cost != null ? String(t.Estimate_Cost) : (d.Estimate_Cost != null ? String(d.Estimate_Cost) : ''),
+      assigned_foreman: d.maintenance_foreman || '',
+      additional_assignee: d.production_foreman || '',
+      date_assigned: d.date_assigned || new Date().toISOString(),
+    })
+
+    const rc = td.repairs || {}
+    setRepairPhotos(Array.isArray(rc.repair_images) ? rc.repair_images : [])
+    const vd = td.vendors || {}
+    setRepForm({
+      final_status: rc.final_status || '',
+      start_date: rc.start_date || new Date().toISOString(),
+      Work_Order_Type: rc.Work_Order_Type || '',
+      Priority_of_Issue: rc.Priority_of_Issue || 'Low',
+      repair_details: rc.repair_details || '',
+      date_completed: rc.date_completed || '',
+    })
+
+    const rows: { vendor: string; cost: string }[] = []
+    for (let i = 1; i <= 7; i++) {
+      const vKey = i === 1 ? 'vendor' : `vendor_${i}`
+      const cKey = i === 1 ? 'vendor_cost' : `vendor_cost_${i}`
+      if (vd[vKey]) rows.push({ vendor: vd[vKey] as string, cost: String(vd[cKey] || '') })
+    }
+    if (rows.length === 0) rows.push({ vendor: '', cost: '' })
+    setVendorRows(rows)
+  }
+
   useEffect(() => {
     Promise.all([
       fetch(`/api/tickets/${id}`).then(r => r.json()),
@@ -50,58 +103,7 @@ export default function MaintenanceTicketPage() {
       setData(ticketData)
       setEmployees(emps || [])
       setVendors(vends || [])
-
-      const t = ticketData.ticket || {}
-      setIrPhotos(Array.isArray(t.Issue_Photos) ? t.Issue_Photos : [])
-      setIrForm({
-        Department: t.Department || '',
-        Location_Type: t.Location_Type || '',
-        Asset: t.Asset || '',
-        Field: t.Field || '',
-        Well: t.Well || '',
-        Facility: t.Facility || '',
-        Area: t.Area || '',
-        Route: t.Route || '',
-        Equipment_Type: t.Equipment_Type || '',
-        Equipment: t.Equipment || '',
-        Issue_Description: t.Issue_Description || '',
-        Troubleshooting_Conducted: t.Troubleshooting_Conducted || '',
-        assigned_foreman: t.assigned_foreman || '',
-        Self_Dispatch: !!t.Self_Dispatch_Assignee,
-        Estimate_Cost: t.Estimate_Cost != null ? String(t.Estimate_Cost) : '',
-      })
-
-      const d = (ticketData.dispatch || [])[0] || {}
-      setDispForm({
-        work_order_decision: d.work_order_decision || '',
-        Estimate_Cost: t.Estimate_Cost != null ? String(t.Estimate_Cost) : (d.Estimate_Cost != null ? String(d.Estimate_Cost) : ''),
-        assigned_foreman: d.maintenance_foreman || '',
-        additional_assignee: d.production_foreman || '',
-        date_assigned: d.date_assigned || new Date().toISOString(),
-      })
-
-      const rc = ticketData.repairs || {}
-      setRepairPhotos(Array.isArray(rc.repair_images) ? rc.repair_images : [])
-      const vd = ticketData.vendors || {}
-      setRepForm({
-        final_status: rc.final_status || '',
-        start_date: rc.start_date || new Date().toISOString(),
-        Work_Order_Type: rc.Work_Order_Type || '',
-        Priority_of_Issue: rc.Priority_of_Issue || 'Low',
-        repair_details: rc.repair_details || '',
-        date_completed: rc.date_completed || '',
-      })
-
-      // Build vendor rows from vendor_payment_details
-      const rows: { vendor: string; cost: string }[] = []
-      for (let i = 1; i <= 7; i++) {
-        const vKey = i === 1 ? 'vendor' : `vendor_${i}`
-        const cKey = i === 1 ? 'vendor_cost' : `vendor_cost_${i}`
-        if (vd[vKey]) rows.push({ vendor: vd[vKey] as string, cost: String(vd[cKey] || '') })
-      }
-      if (rows.length === 0) rows.push({ vendor: '', cost: '' })
-      setVendorRows(rows)
-
+      initForms(ticketData)
       setLoading(false)
     })
   }, [id])
@@ -161,6 +163,7 @@ export default function MaintenanceTicketPage() {
           Issue_Photos: irPhotos,
         }),
       })
+      await refreshData()
       alert('Updated successfully.')
     } finally { setSaving(false) }
   }
@@ -180,6 +183,7 @@ export default function MaintenanceTicketPage() {
           current_user_email: userEmail,
         }),
       })
+      await refreshData()
       alert('Dispatched successfully.')
     } finally { setSaving(false) }
   }
@@ -188,6 +192,7 @@ export default function MaintenanceTicketPage() {
     const res = await fetch(`/api/tickets/${id}`)
     const updated = await res.json()
     setData(updated)
+    initForms(updated)
   }
 
   async function saveRepairs() {
@@ -207,6 +212,7 @@ export default function MaintenanceTicketPage() {
           production_foreman: dispatch.production_foreman || null,
         }),
       })
+      await refreshData()
       alert('Repairs saved. Original sender notified.')
     } finally { setSaving(false) }
   }
@@ -230,7 +236,11 @@ export default function MaintenanceTicketPage() {
           {TABS.map(t => (
             <button
               key={t}
-              onClick={() => setTab(t)}
+              onClick={() => {
+                if (t === tab) return
+                if (data) initForms(data)
+                setTab(t)
+              }}
               className={`workflow-tab ${tab === t ? 'active' : ''}`}
             >
               {t}
