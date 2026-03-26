@@ -396,12 +396,16 @@ export default function MaintenanceTicketPage() {
                     </div>
                   )
                   return rows.map(([vk, ck], i) => (
-                    <div key={vk} className="detail-row">
-                      <span className="detail-label">{i === 0 ? 'Vendor' : `Vendor ${i + 1}`}</span>
-                      <span className="detail-value">
-                        {vendorData[vk] as string}
-                        {rows.length > 1 && vendorData[ck] ? ` — $${vendorData[ck]}` : ''}
-                      </span>
+                    <div key={vk} className="flex items-start py-2.5 border-b border-gray-100 last:border-0">
+                      <span className="text-sm text-gray-500 min-w-[60px]">{i === 0 ? 'Vendor' : `Vendor ${i + 1}`}</span>
+                      <span className="text-sm text-gray-900 flex-1 ml-2">{vendorData[vk] as string}</span>
+                      {!!vendorData[ck] && (
+                        <>
+                          <span className="text-sm text-gray-300 mx-2">|</span>
+                          <span className="text-sm text-gray-500 whitespace-nowrap">Vendor Cost</span>
+                          <span className="text-sm text-gray-900 ml-2 whitespace-nowrap">${vendorData[ck] as string}</span>
+                        </>
+                      )}
                     </div>
                   ))
                 })()}
