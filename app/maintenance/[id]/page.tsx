@@ -339,9 +339,10 @@ export default function MaintenanceTicketPage() {
               <div>
                 {[
                   ['Work Order Decision', dispatch.work_order_decision],
-                  ['Estimated Cost', dispatch.Estimate_Cost ? `$${dispatch.Estimate_Cost}` : '—'],
-                  ['Current Foreman', dispatch.production_foreman || dispatch.maintenance_foreman],
-                  ['Additional Assignee', '—'],
+                  ['Estimated Cost', (dispatch.Estimate_Cost ?? ticket.Estimate_Cost) != null ? `$${dispatch.Estimate_Cost ?? ticket.Estimate_Cost}` : null],
+                  ...(dispatch.self_dispatch_assignee ? [['Self Dispatch Assignee', dispatch.self_dispatch_assignee]] : []),
+                  ...(!dispatch.self_dispatch_assignee ? [['Assigned Foreman', dispatch.maintenance_foreman || dispatch.production_foreman]] : []),
+                  ...(!dispatch.self_dispatch_assignee && dispatch.production_foreman && dispatch.maintenance_foreman ? [['Additional Assignee', dispatch.production_foreman]] : []),
                   ['Date Assigned', formatDate(dispatch.date_assigned as string)],
                 ].map(([label, value]) => (
                   <div key={label as string} className="detail-row">
