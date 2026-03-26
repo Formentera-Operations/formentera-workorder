@@ -405,7 +405,7 @@ export default function MaintenanceTicketPage() {
                   ))
                 })()}
                 {[
-                  ['Repair Cost', vendorData.total_cost ? `$${vendorData.total_cost}` : repairs.total_repair_cost ? `$${repairs.total_repair_cost}` : '—'],
+                  ['Total Repair Cost', vendorData.total_cost ? `$${vendorData.total_cost}` : repairs.total_repair_cost ? `$${repairs.total_repair_cost}` : '—'],
                   ['Date Completed', repairs.date_completed ? formatDateShort(repairs.date_completed as string) : '—'],
                 ].map(([label, value]) => (
                   <div key={label as string} className="detail-row">
