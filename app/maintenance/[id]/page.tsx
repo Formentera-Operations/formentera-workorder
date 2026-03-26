@@ -253,6 +253,17 @@ export default function MaintenanceTicketPage() {
             </button>
           ))}
         </div>
+        {(() => {
+          const status = (ticket.Ticket_Status as string ?? '').toLowerCase()
+          const eligibleStatus = ['in progress', 'closed', 'backlogged', 'awaiting cost'].includes(status)
+          const hasEstCost = ticket.Estimate_Cost != null && ticket.Estimate_Cost !== ''
+          if (eligibleStatus && !hasEstCost) return (
+            <p className="text-xs text-amber-600 mt-2">
+              Add an Estimated Cost in the Dispatch tab to unlock the Repairs / Closeout tab.
+            </p>
+          )
+          return null
+        })()}
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-4">
