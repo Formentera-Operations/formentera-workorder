@@ -341,7 +341,7 @@ export default function MaintenanceTicketPage() {
                   ['Work Order Decision', dispatch.work_order_decision],
                   ['Estimated Cost', (dispatch.Estimate_Cost ?? ticket.Estimate_Cost) != null ? `$${dispatch.Estimate_Cost ?? ticket.Estimate_Cost}` : null],
                   ...(dispatch.self_dispatch_assignee ? [['Self Dispatch Assignee', dispatch.self_dispatch_assignee]] : []),
-                  ...(!dispatch.self_dispatch_assignee ? [['Current Foreman', dispatch.maintenance_foreman]] : []),
+                  ...(!dispatch.self_dispatch_assignee ? [['Assigned Foreman', dispatch.maintenance_foreman]] : []),
                   ...(!dispatch.self_dispatch_assignee && dispatch.production_foreman && dispatch.maintenance_foreman ? [['Additional Assignee', dispatch.production_foreman]] : []),
                   ['Date Assigned', formatDate(dispatch.date_assigned as string)],
                 ].map(([label, value]) => (
