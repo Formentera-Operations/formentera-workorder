@@ -196,8 +196,19 @@ export default function MaintenanceTicketPage() {
     initForms(updated)
   }
 
+  const AUTO_COMPLETE_STATUSES = [
+    'Repaired - Returned to Service',
+    'No Action - Returned to Service',
+    'Repaired - Awaiting Final Cost',
+    'Decommissioned / Retired',
+  ]
+
   async function saveRepairs() {
     setSaving(true)
+    const autoDateCompleted =
+      AUTO_COMPLETE_STATUSES.includes(repForm.final_status as string) && !repForm.date_completed
+        ? new Date().toISOString()
+        : repForm.date_completed || null
     try {
       await fetch('/api/repairs', {
         method: 'POST',
@@ -205,6 +216,7 @@ export default function MaintenanceTicketPage() {
         body: JSON.stringify({
           ticket_id: id,
           ...repForm,
+          date_completed: autoDateCompleted,
           repair_images: repairPhotos,
           vendors: vendorRows.filter(r => r.vendor).map(r => ({ vendor: r.vendor, cost: parseFloat(r.cost) || 0 })),
           created_by: userName,
