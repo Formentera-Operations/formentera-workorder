@@ -10,7 +10,7 @@ import type { LocationType } from '@/types'
 
 export default function MaintenanceFormPage() {
   const router = useRouter()
-  const { userEmail, userName } = useAuth()
+  const { userEmail, userName, assets: userAssets } = useAuth()
   const [submitting, setSubmitting] = useState(false)
   const submitLock = useRef(false)
   const [uploadingPhotos, setUploadingPhotos] = useState(false)
@@ -145,6 +145,7 @@ export default function MaintenanceFormPage() {
         {/* Cascading location dropdowns */}
         <LocationDropdowns
           locationType={form.Location_Type as LocationType}
+          userAssets={userAssets}
           onChange={({ asset, field, well, facility, area, route }) => {
             setForm(f => ({ ...f, Asset: asset, Field: field, Well: well, Facility: facility, Area: area, Route: route }))
           }}

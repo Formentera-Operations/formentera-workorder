@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ChevronDown, ChevronUp, Search, Calendar, Wrench, SlidersHorizontal } from 'lucide-react'
 import TicketCard from '@/components/ui/TicketCard'
@@ -51,7 +51,8 @@ export default function MaintenancePage() {
       })
   }, [userAssets])
 
-  const fetchTickets = useCallback(async () => {
+  useEffect(() => {
+    let cancelled = false
     setLoading(true)
     const params = new URLSearchParams({
       mode: 'all',
@@ -65,17 +66,18 @@ export default function MaintenancePage() {
       pageSize: String(PAGE_SIZE),
     })
     if (userAssets.length > 0) params.set('userAssets', userAssets.join(','))
-    try {
-      const res = await fetch(`/api/tickets?${params}`)
-      const json = await res.json()
-      setTickets(json.data || [])
-      setTotalCount(json.count ?? 0)
-    } finally {
-      setLoading(false)
-    }
-  }, [page, ticketId, search, startDate, endDate, assetFilter, deptFilter, equipFilter, statusFilter, foremanFilter, submittedByFilter, finalCostPending])
-
-  useEffect(() => { fetchTickets() }, [fetchTickets])
+    fetch(`/api/tickets?${params}`)
+      .then(res => res.json())
+      .then(json => {
+        if (!cancelled) {
+          setTickets(json.data || [])
+          setTotalCount(json.count ?? 0)
+        }
+      })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [page, ticketId, search, startDate, endDate, assetFilter, deptFilter, equipFilter, statusFilter, foremanFilter, submittedByFilter, finalCostPending, userAssets])
 
   useEffect(() => { setPage(0) }, [ticketId, search, startDate, endDate, assetFilter, deptFilter, equipFilter, statusFilter, foremanFilter, submittedByFilter, finalCostPending])
 

@@ -12,11 +12,12 @@ interface LocationDropdownsProps {
   initialValues?: {
     asset?: string; field?: string; well?: string; facility?: string;
   }
+  userAssets?: string[]
 }
 
 type WFData = Record<string, string[]>
 
-export default function LocationDropdowns({ locationType, onChange, initialValues }: LocationDropdownsProps) {
+export default function LocationDropdowns({ locationType, onChange, initialValues, userAssets = [] }: LocationDropdownsProps) {
   const [wfData, setWfData] = useState<WFData>({})
   const [loading, setLoading] = useState(true)
 
@@ -101,10 +102,22 @@ export default function LocationDropdowns({ locationType, onChange, initialValue
     emit(newAsset, newField, newWell, newFacility)
   }, [asset, field, well, facility, wfData, emit])
 
-  const assets = filterOptions(wfData, 'Asset', {})
+  const allAssets = filterOptions(wfData, 'Asset', {})
+  const assets = userAssets.length > 0 ? allAssets.filter(a => userAssets.includes(a)) : allAssets
   const fields = filterOptions(wfData, 'FIELD', { Asset: asset || null })
   const wells = filterOptions(wfData, 'WELLNAME', { Asset: asset || null, FIELD: field || null })
   const facilities = filterOptions(wfData, 'Facility_Name', { Asset: asset || null, FIELD: field || null })
+
+  const singleAsset = userAssets.length === 1
+
+  // Pre-populate when user has exactly one asset
+  useEffect(() => {
+    if (singleAsset && !asset && userAssets[0]) {
+      setAsset(userAssets[0])
+      emit(userAssets[0], '', '', '')
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [singleAsset, userAssets[0]])
 
   if (loading) return <div className="text-sm text-gray-400 py-2">Loading locations…</div>
 
@@ -117,6 +130,7 @@ export default function LocationDropdowns({ locationType, onChange, initialValue
           value={asset}
           options={assets}
           placeholder="Select an Asset"
+          disabled={singleAsset}
           onChange={v => { setAsset(v); setField(''); setWell(''); setFacility(''); emit(v, '', '', '') }}
         />
       </div>
