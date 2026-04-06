@@ -467,7 +467,7 @@ export default function MaintenanceTicketPage() {
             <div>
               <label className="form-label">Department</label>
               <div className="relative">
-                <select className="form-select" value={irForm.Department as string} onChange={e => setIr('Department', e.target.value)}>
+                <select className="form-select" value={irForm.Department as string} onChange={e => setIr('Department', e.target.value)} disabled={isReadOnly}>
                   {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
                 </select>
                 <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
@@ -482,6 +482,7 @@ export default function MaintenanceTicketPage() {
                   className="form-select"
                   value={irForm.Location_Type as string}
                   onChange={e => { setIr('Location_Type', e.target.value); setIr('Well', ''); setIr('Facility', '') }}
+                  disabled={isReadOnly}
                 >
                   {LOCATION_TYPES.map(l => <option key={l} value={l}>{l}</option>)}
                 </select>
@@ -511,7 +512,7 @@ export default function MaintenanceTicketPage() {
                 <div>
                   <label className="form-label">Select an Equipment Type</label>
                   <div className="relative">
-                    <select className="form-select" value={irForm.Equipment_Type as string} onChange={e => { setIr('Equipment_Type', e.target.value); setIr('Equipment', '') }}>
+                    <select className="form-select" value={irForm.Equipment_Type as string} onChange={e => { setIr('Equipment_Type', e.target.value); setIr('Equipment', '') }} disabled={isReadOnly}>
                       <option value="">Select Equipment Type</option>
                       {equipmentTypes.map(et => <option key={et.id} value={et.equipment_type}>{et.equipment_type}</option>)}
                     </select>
@@ -521,7 +522,7 @@ export default function MaintenanceTicketPage() {
                 <div>
                   <label className="form-label">Equipment</label>
                   <div className="relative">
-                    <select className="form-select" value={irForm.Equipment as string} onChange={e => setIr('Equipment', e.target.value)}>
+                    <select className="form-select" value={irForm.Equipment as string} onChange={e => setIr('Equipment', e.target.value)} disabled={isReadOnly}>
                       <option value="">Select Equipment</option>
                       {equipment.map(eq => <option key={eq.id} value={eq.equip_name}>{eq.equip_name}</option>)}
                     </select>
@@ -537,11 +538,11 @@ export default function MaintenanceTicketPage() {
               <div className="space-y-4">
                 <div>
                   <label className="form-label">Issue Description / Scope & Cost</label>
-                  <textarea className="form-textarea" value={irForm.Issue_Description as string} onChange={e => setIr('Issue_Description', e.target.value)} />
+                  <textarea className="form-textarea" value={irForm.Issue_Description as string} onChange={e => setIr('Issue_Description', e.target.value)} disabled={isReadOnly} />
                 </div>
                 <div>
                   <label className="form-label">Troubleshooting Conducted</label>
-                  <textarea className="form-textarea" placeholder="Detail anything you have done to repair or restart the equipment and if it was successful or not" value={irForm.Troubleshooting_Conducted as string} onChange={e => setIr('Troubleshooting_Conducted', e.target.value)} />
+                  <textarea className="form-textarea" placeholder="Detail anything you have done to repair or restart the equipment and if it was successful or not" value={irForm.Troubleshooting_Conducted as string} onChange={e => setIr('Troubleshooting_Conducted', e.target.value)} disabled={isReadOnly} />
                 </div>
                 {ticket.Self_Dispatch_Assignee ? (
                   <div>
@@ -569,8 +570,8 @@ export default function MaintenanceTicketPage() {
                 <div>
                   <label className="form-label">Issue Photos</label>
                   <div
-                    className={`form-input flex items-center justify-between cursor-pointer ${uploadingPhotos ? 'opacity-50 pointer-events-none' : ''}`}
-                    onClick={() => document.getElementById('ir-photo-input')?.click()}
+                    className={`form-input flex items-center justify-between ${isReadOnly ? 'opacity-50 cursor-not-allowed pointer-events-none' : `cursor-pointer ${uploadingPhotos ? 'opacity-50 pointer-events-none' : ''}`}`}
+                    onClick={() => !isReadOnly && document.getElementById('ir-photo-input')?.click()}
                   >
                     <span className="text-gray-400">{uploadingPhotos ? 'Uploading…' : 'Attach an image'}</span>
                     <Camera size={20} className="text-gray-400" />
@@ -615,7 +616,8 @@ export default function MaintenanceTicketPage() {
                           />
                           <button
                             type="button"
-                            onClick={() => setDeletePhotoIdx(i)}
+                            onClick={() => !isReadOnly && setDeletePhotoIdx(i)}
+                            disabled={isReadOnly}
                             className="absolute -top-1.5 -right-1.5 bg-gray-900 text-white rounded-full w-5 h-5 flex items-center justify-center shadow"
                           >
                             <X size={12} />
@@ -659,9 +661,11 @@ export default function MaintenanceTicketPage() {
               </div>
             </div>
 
-            <button className="btn-primary" onClick={saveInitialReport} disabled={saving}>
-              {saving ? 'Updating…' : 'Update'}
-            </button>
+            {!isReadOnly && (
+              <button className="btn-primary" onClick={saveInitialReport} disabled={saving}>
+                {saving ? 'Updating…' : 'Update'}
+              </button>
+            )}
           </div>
         )}
 
