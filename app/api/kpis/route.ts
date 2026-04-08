@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
     const db = supabaseAdmin()
     let query = db
       .from('Maintenance_Form_Submission')
-      .select('Ticket_Status, Department, Issue_Date')
+      .select('Ticket_Status, Department, Issue_Date, Equipment')
 
     if (userAssets.length > 0) query = query.in('Asset', userAssets)
 
@@ -40,6 +40,16 @@ export async function GET(req: NextRequest) {
       .slice(0, 6)
       .map(([dept, count]) => ({ dept, count }))
 
+    // Equipment counts (top 8 by volume)
+    const equipMap: Record<string, number> = {}
+    for (const r of rows) {
+      if (r.Equipment) equipMap[r.Equipment] = (equipMap[r.Equipment] || 0) + 1
+    }
+    const equipCounts = Object.entries(equipMap)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 8)
+      .map(([equip, count]) => ({ equip, count }))
+
     // Daily trend — last 7 days
     const today = new Date()
     const trend: { date: string; label: string; count: number }[] = []
@@ -59,6 +69,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       statusCounts,
       deptCounts,
+      equipCounts,
       dailyTrend: trend,
       total: rows.length,
     })

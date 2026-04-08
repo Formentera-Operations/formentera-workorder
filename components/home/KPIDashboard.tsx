@@ -2,17 +2,8 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/components/AuthProvider'
 import {
-  PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
-  BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
 } from 'recharts'
-
-const STATUS_COLORS: Record<string, string> = {
-  'Open': '#1B2E6B',
-  'In Progress': '#F59E0B',
-  'Awaiting Cost': '#F97316',
-  'Backlogged': '#9CA3AF',
-  'Closed': '#10B981',
-}
 
 const KPI_CARDS = [
   { key: 'Open',          label: 'Open',          bg: 'bg-blue-50',   text: 'text-[#1B2E6B]', dot: 'bg-[#1B2E6B]' },
@@ -24,6 +15,7 @@ const KPI_CARDS = [
 interface KPIData {
   statusCounts: Record<string, number>
   deptCounts: { dept: string; count: number }[]
+  equipCounts: { equip: string; count: number }[]
   dailyTrend: { date: string; label: string; count: number }[]
   total: number
 }
@@ -56,9 +48,9 @@ export default function KPIDashboard() {
     )
   }
 
-  const { statusCounts, deptCounts, dailyTrend, total } = data
+  const { statusCounts, deptCounts, equipCounts, dailyTrend } = data
   const maxDept = deptCounts[0]?.count || 1
-  const pieData = Object.entries(statusCounts).map(([name, value]) => ({ name, value }))
+  const maxEquip = equipCounts[0]?.count || 1
 
   return (
     <div className="space-y-4 mt-6">
@@ -75,46 +67,26 @@ export default function KPIDashboard() {
         ))}
       </div>
 
-      {/* Status distribution */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-        <h3 className="text-sm font-semibold text-gray-700 mb-3">Status Distribution</h3>
-        <div className="flex items-center gap-4">
-          <PieChart width={110} height={110}>
-            <Pie
-              data={pieData}
-              cx={55}
-              cy={55}
-              innerRadius={32}
-              outerRadius={52}
-              dataKey="value"
-              stroke="none"
-            >
-              {pieData.map((entry) => (
-                <Cell key={entry.name} fill={STATUS_COLORS[entry.name] ?? '#D1D5DB'} />
-              ))}
-            </Pie>
-            <Tooltip formatter={(v) => [v, '']} />
-          </PieChart>
-          <div className="flex-1 space-y-1.5">
-            {pieData.map(({ name, value }) => (
-              <div key={name} className="flex items-center justify-between text-xs">
-                <div className="flex items-center gap-1.5 min-w-0">
+      {/* Equipment breakdown */}
+      {equipCounts.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+          <h3 className="text-sm font-semibold text-gray-700 mb-3">Most Reported Equipment</h3>
+          <div className="space-y-2.5">
+            {equipCounts.map(({ equip, count }) => (
+              <div key={equip} className="flex items-center gap-2">
+                <span className="text-xs text-gray-600 w-32 truncate shrink-0">{equip}</span>
+                <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
                   <div
-                    className="w-2 h-2 rounded-full shrink-0"
-                    style={{ background: STATUS_COLORS[name] ?? '#D1D5DB' }}
+                    className="h-full bg-[#1B2E6B] rounded-full transition-all"
+                    style={{ width: `${Math.round((count / maxEquip) * 100)}%` }}
                   />
-                  <span className="text-gray-600 truncate">{name}</span>
                 </div>
-                <span className="font-semibold text-gray-800 ml-2">{value}</span>
+                <span className="text-xs font-semibold text-gray-800 w-6 text-right">{count}</span>
               </div>
             ))}
-            <div className="border-t border-gray-100 pt-1.5 flex justify-between text-xs">
-              <span className="text-gray-500">Total</span>
-              <span className="font-bold text-gray-800">{total}</span>
-            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* 7-day trend */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
