@@ -117,6 +117,7 @@ export async function POST(req: NextRequest) {
         Area: body.Area,
         Self_Dispatch_Assignee: body.Self_Dispatch_Assignee || null,
         assigned_foreman: body.assigned_foreman || null,
+        Estimate_Cost: body.Estimate_Cost != null ? body.Estimate_Cost : null,
       }])
       .select()
       .single()
@@ -168,6 +169,7 @@ export async function POST(req: NextRequest) {
         work_order_decision: 'Proceed with Repair',
         self_dispatch_assignee: body.Self_Dispatch_Assignee,
         ticket_status: 'In Progress',
+        Estimate_Cost: body.Estimate_Cost != null ? body.Estimate_Cost : null,
       }])
 
       const { subject, html } = selfDispatchEmail(data, {
