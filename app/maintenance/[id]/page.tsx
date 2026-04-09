@@ -200,8 +200,7 @@ export default function MaintenanceTicketPage() {
           current_user_email: userEmail,
         }),
       })
-      await refreshData()
-      alert('Dispatched successfully.')
+      router.push('/maintenance')
     } finally { setSaving(false) }
   }
 
