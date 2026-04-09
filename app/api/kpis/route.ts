@@ -15,14 +15,14 @@ export async function GET(req: NextRequest) {
 
     // Paginate to get all rows (Supabase defaults to 1000 row limit)
     const BATCH = 1000
-    const rows: { Ticket_Status: string; Department: string; Issue_Date: string; Equipment: string }[] = []
+    const rows: { ticket_status: string; department: string; issue_date: string; equipment_name: string }[] = []
     let from = 0
     while (true) {
       let q = db
-        .from('Maintenance_Form_Submission')
-        .select('Ticket_Status, Department, Issue_Date, Equipment')
+        .from('workorder_ticket_summary')
+        .select('ticket_status, department, issue_date, equipment_name')
         .range(from, from + BATCH - 1)
-      if (userAssets.length > 0) q = q.in('Asset', userAssets)
+      if (userAssets.length > 0) q = q.in('asset', userAssets)
       const { data, error } = await q
       if (error) throw error
       rows.push(...(data || []))
@@ -33,14 +33,14 @@ export async function GET(req: NextRequest) {
     // Status counts
     const statusCounts: Record<string, number> = {}
     for (const r of rows) {
-      const s = r.Ticket_Status || 'Open'
+      const s = r.ticket_status || 'Open'
       statusCounts[s] = (statusCounts[s] || 0) + 1
     }
 
     // Department counts (top 6 by volume)
     const deptMap: Record<string, number> = {}
     for (const r of rows) {
-      if (r.Department) deptMap[r.Department] = (deptMap[r.Department] || 0) + 1
+      if (r.department) deptMap[r.department] = (deptMap[r.department] || 0) + 1
     }
     const deptCounts = Object.entries(deptMap)
       .sort((a, b) => b[1] - a[1])
@@ -50,7 +50,7 @@ export async function GET(req: NextRequest) {
     // Equipment counts (top 8 by volume)
     const equipMap: Record<string, number> = {}
     for (const r of rows) {
-      if (r.Equipment) equipMap[r.Equipment] = (equipMap[r.Equipment] || 0) + 1
+      if (r.equipment_name) equipMap[r.equipment_name] = (equipMap[r.equipment_name] || 0) + 1
     }
     const equipCounts = Object.entries(equipMap)
       .sort((a, b) => b[1] - a[1])
@@ -68,7 +68,7 @@ export async function GET(req: NextRequest) {
       trend.push({ date: dateStr, label, count: 0 })
     }
     for (const r of rows) {
-      const date = (r.Issue_Date || '').slice(0, 10)
+      const date = (r.issue_date || '').slice(0, 10)
       const slot = trend.find(t => t.date === date)
       if (slot) slot.count++
     }
