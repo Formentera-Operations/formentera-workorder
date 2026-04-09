@@ -30,15 +30,17 @@ export async function POST(req: NextRequest) {
 
     if (repairError) throw repairError
 
-    // Upsert vendor payment details
-    if (body.vendors) {
+    // Upsert vendor payment details — only when vendors are actually provided
+    if (body.vendors && body.vendors.length > 0) {
+      // Only sum non-null costs (null = pending)
       const vendorTotal: number = body.vendors.reduce(
-        (sum: number, v: { cost?: number }) => sum + (Number(v.cost) || 0), 0
+        (sum: number, v: { cost?: number | null }) => sum + (v.cost != null ? Number(v.cost) : 0), 0
       )
+      const allPending = body.vendors.every((v: { cost?: number | null }) => v.cost == null)
 
-      // If vendor total is 0, fall back to the previous Repairs_Closeout.total_repair_cost
+      // If all costs are pending or total is 0, fall back to the previous total
       let totalCost = vendorTotal
-      if (vendorTotal === 0) {
+      if (allPending || vendorTotal === 0) {
         const { data: prevRepair } = await db
           .from('Repairs_Closeout')
           .select('total_repair_cost')
@@ -50,22 +52,23 @@ export async function POST(req: NextRequest) {
         totalCost = prevRepair?.total_repair_cost || 0
       }
 
+      const v = body.vendors
       const vendorPayload = {
         ticket_id: body.ticket_id,
-        vendor:       body.vendors[0]?.vendor || null,
-        vendor_cost:  body.vendors[0]?.cost   || null,
-        vendor_2:     body.vendors[1]?.vendor || null,
-        vendor_cost_2: body.vendors[1]?.cost  || null,
-        vendor_3:     body.vendors[2]?.vendor || null,
-        vendor_cost_3: body.vendors[2]?.cost  || null,
-        vendor_4:     body.vendors[3]?.vendor || null,
-        vendor_cost_4: body.vendors[3]?.cost  || null,
-        vendor_5:     body.vendors[4]?.vendor || null,
-        vendor_cost_5: body.vendors[4]?.cost  || null,
-        vendor_6:     body.vendors[5]?.vendor || null,
-        vendor_cost_6: body.vendors[5]?.cost  || null,
-        vendor_7:     body.vendors[6]?.vendor || null,
-        vendor_cost_7: body.vendors[6]?.cost  || null,
+        vendor:        v[0]?.vendor || null,
+        vendor_cost:   v[0]?.cost ?? null,
+        vendor_2:      v[1]?.vendor || null,
+        vendor_cost_2: v[1]?.cost ?? null,
+        vendor_3:      v[2]?.vendor || null,
+        vendor_cost_3: v[2]?.cost ?? null,
+        vendor_4:      v[3]?.vendor || null,
+        vendor_cost_4: v[3]?.cost ?? null,
+        vendor_5:      v[4]?.vendor || null,
+        vendor_cost_5: v[4]?.cost ?? null,
+        vendor_6:      v[5]?.vendor || null,
+        vendor_cost_6: v[5]?.cost ?? null,
+        vendor_7:      v[6]?.vendor || null,
+        vendor_cost_7: v[6]?.cost ?? null,
         total_cost: totalCost,
         updated_at: new Date().toISOString(),
       }

@@ -36,7 +36,7 @@ export default function MaintenanceTicketPage() {
   const [dispForm, setDispForm] = useState<Record<string, string | boolean>>({})
   // Repairs form state
   const [repForm, setRepForm] = useState<Record<string, string | boolean>>({})
-  const [vendorRows, setVendorRows] = useState<{ vendor: string; cost: string }[]>([{ vendor: '', cost: '' }])
+  const [vendorRows, setVendorRows] = useState<{ vendor: string; cost: string; pending: boolean }[]>([{ vendor: '', cost: '', pending: false }])
   const [repairPhotos, setRepairPhotos] = useState<string[]>([])
   const [uploadingRepairPhotos, setUploadingRepairPhotos] = useState(false)
   const [deleteRepairPhotoIdx, setDeleteRepairPhotoIdx] = useState<number | null>(null)
@@ -84,13 +84,17 @@ export default function MaintenanceTicketPage() {
       date_completed: rc.date_completed || '',
     })
 
-    const rows: { vendor: string; cost: string }[] = []
+    const rows: { vendor: string; cost: string; pending: boolean }[] = []
     for (let i = 1; i <= 7; i++) {
       const vKey = i === 1 ? 'vendor' : `vendor_${i}`
       const cKey = i === 1 ? 'vendor_cost' : `vendor_cost_${i}`
-      if (vd[vKey]) rows.push({ vendor: vd[vKey] as string, cost: String(vd[cKey] || '') })
+      if (vd[vKey]) {
+        const cost = vd[cKey]
+        const pending = cost === null || cost === undefined || cost === 0
+        rows.push({ vendor: vd[vKey] as string, cost: pending ? '' : String(cost), pending })
+      }
     }
-    if (rows.length === 0) rows.push({ vendor: '', cost: '' })
+    if (rows.length === 0) rows.push({ vendor: '', cost: '', pending: false })
     setVendorRows(rows)
   }
 
@@ -216,8 +220,14 @@ export default function MaintenanceTicketPage() {
 
   async function saveRepairs() {
     setSaving(true)
+    const filledVendors = vendorRows.filter(r => r.vendor)
+    const hasPendingCost = filledVendors.some(r => r.pending || !r.cost)
+    const effectiveFinalStatus = hasPendingCost ? 'Repaired - Awaiting Final Cost' : repForm.final_status as string
+    if (hasPendingCost && repForm.final_status !== 'Repaired - Awaiting Final Cost') {
+      setRepForm(f => ({ ...f, final_status: 'Repaired - Awaiting Final Cost' }))
+    }
     const autoDateCompleted =
-      AUTO_COMPLETE_STATUSES.includes(repForm.final_status as string) && !repForm.date_completed
+      AUTO_COMPLETE_STATUSES.includes(effectiveFinalStatus) && !repForm.date_completed
         ? new Date().toISOString()
         : repForm.date_completed || null
     try {
@@ -227,9 +237,10 @@ export default function MaintenanceTicketPage() {
         body: JSON.stringify({
           ticket_id: id,
           ...repForm,
+          final_status: effectiveFinalStatus,
           date_completed: autoDateCompleted,
           repair_images: repairPhotos,
-          vendors: vendorRows.filter(r => r.vendor).map(r => ({ vendor: r.vendor, cost: parseFloat(r.cost) || 0 })),
+          vendors: filledVendors.map(r => ({ vendor: r.vendor, cost: (r.pending || !r.cost) ? null : parseFloat(r.cost) })),
           created_by: userName,
           current_user_email: userEmail,
           assigned_foreman: dispatch.maintenance_foreman || dispatch.production_foreman || null,
@@ -1014,53 +1025,70 @@ export default function MaintenanceTicketPage() {
 
               {/* Vendor rows */}
               {vendorRows.map((row, i) => (
-                <div key={i} className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="form-label text-xs">
-                      {i === 0 ? 'Vendor (leave blank if not applicable)' : `Vendor ${i + 1}`}
-                    </label>
-                    <div className="relative">
-                      <select
-                        className="form-select text-sm"
-                        value={row.vendor}
-                        disabled={isReadOnly}
+                <div key={i} className="space-y-2">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="form-label text-xs">
+                        {i === 0 ? 'Vendor (leave blank if not applicable)' : `Vendor ${i + 1}`}
+                      </label>
+                      <div className="relative">
+                        <select
+                          className="form-select text-sm"
+                          value={row.vendor}
+                          disabled={isReadOnly}
+                          onChange={e => {
+                            const rows = [...vendorRows]
+                            rows[i] = { ...rows[i], vendor: e.target.value }
+                            setVendorRows(rows)
+                          }}
+                        >
+                          <option value="">Select Vendor</option>
+                          {row.vendor && !vendors.includes(row.vendor) && (
+                            <option key={row.vendor} value={row.vendor}>{row.vendor}</option>
+                          )}
+                          {vendors.map(v => <option key={v} value={v}>{v}</option>)}
+                        </select>
+                        <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="form-label text-xs">{i === 0 ? 'Repair Cost*' : 'Repair Cost'}</label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">$</span>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          className="form-input pl-7 text-sm"
+                          placeholder={row.pending ? 'Pending…' : 'Enter Value'}
+                          value={row.cost}
+                          disabled={isReadOnly || row.pending}
+                          onChange={e => {
+                            const val = e.target.value
+                            if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                              const rows = [...vendorRows]
+                              rows[i] = { ...rows[i], cost: val }
+                              setVendorRows(rows)
+                            }
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  {!isReadOnly && row.vendor && (
+                    <label className="flex items-center gap-2 cursor-pointer w-fit">
+                      <input
+                        type="checkbox"
+                        checked={row.pending}
+                        className="w-3.5 h-3.5 accent-[#1B2E6B]"
                         onChange={e => {
                           const rows = [...vendorRows]
-                          rows[i] = { ...rows[i], vendor: e.target.value }
+                          rows[i] = { ...rows[i], pending: e.target.checked, cost: e.target.checked ? '' : rows[i].cost }
                           setVendorRows(rows)
                         }}
-                      >
-                        <option value="">Select Vendor</option>
-                        {row.vendor && !vendors.includes(row.vendor) && (
-                          <option key={row.vendor} value={row.vendor}>{row.vendor}</option>
-                        )}
-                        {vendors.map(v => <option key={v} value={v}>{v}</option>)}
-                      </select>
-                      <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="form-label text-xs">{i === 0 ? 'Repair Cost*' : 'Repair Cost'}</label>
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">$</span>
-                      <input
-                        type="text"
-                        inputMode="decimal"
-                        className="form-input pl-7 text-sm"
-                        placeholder="Enter Value"
-                        value={row.cost}
-                        disabled={isReadOnly}
-                        onChange={e => {
-                          const val = e.target.value
-                          if (val === '' || /^\d*\.?\d*$/.test(val)) {
-                            const rows = [...vendorRows]
-                            rows[i] = { ...rows[i], cost: val }
-                            setVendorRows(rows)
-                          }
-                        }}
                       />
-                    </div>
-                  </div>
+                      <span className="text-xs text-amber-600">Cost pending</span>
+                    </label>
+                  )}
                 </div>
               ))}
 
@@ -1068,7 +1096,7 @@ export default function MaintenanceTicketPage() {
               {!isReadOnly && vendorRows.length < 7 && (
                 <button
                   className="btn-green"
-                  onClick={() => setVendorRows([...vendorRows, { vendor: '', cost: '' }])}
+                  onClick={() => setVendorRows([...vendorRows, { vendor: '', cost: '', pending: false }])}
                 >
                   Add Vendor
                 </button>
