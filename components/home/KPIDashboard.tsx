@@ -51,6 +51,12 @@ export default function KPIDashboard() {
     return () => document.removeEventListener('visibilitychange', onVisible)
   }, [fetchKPIs])
 
+  // Poll every 30 seconds as a fallback when Realtime isn't available
+  useEffect(() => {
+    const interval = setInterval(fetchKPIs, 30_000)
+    return () => clearInterval(interval)
+  }, [fetchKPIs])
+
   useEffect(() => {
     const supabase = createSupabaseBrowserClient()
     const channel = supabase
