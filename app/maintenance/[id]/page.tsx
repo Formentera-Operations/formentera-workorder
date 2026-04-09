@@ -181,7 +181,7 @@ export default function MaintenanceTicketPage() {
         }),
       })
       await refreshData()
-      alert('Updated successfully.')
+      toast.success('Initial report updated.', { duration: 5000 })
     } finally { setSaving(false) }
   }
 
@@ -256,7 +256,7 @@ export default function MaintenanceTicketPage() {
           production_foreman: dispatch.production_foreman || null,
         }),
       })
-      await refreshData()
+      toast.success('Repairs / Closeout saved.', { duration: 5000 })
       router.push('/maintenance')
     } finally { setSaving(false) }
   }
@@ -623,7 +623,7 @@ export default function MaintenanceTicketPage() {
                         }))
                         setIrPhotos(prev => [...prev, ...urls])
                       } catch {
-                        alert('Failed to upload photo. Please try again.')
+                        toast.error('Failed to upload photo. Please try again.')
                       } finally {
                         setUploadingPhotos(false)
                       }
@@ -1001,7 +1001,7 @@ export default function MaintenanceTicketPage() {
                       }))
                       setRepairPhotos(prev => [...prev, ...urls])
                     } catch {
-                      alert('Failed to upload photo. Please try again.')
+                      toast.error('Failed to upload photo. Please try again.')
                     } finally {
                       setUploadingRepairPhotos(false)
                     }
