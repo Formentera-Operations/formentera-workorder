@@ -28,12 +28,12 @@ export async function GET(req: NextRequest) {
     const db = supabaseAdmin()
 
     let query = db
-      .from('Maintenance_Form_Submission')
+      .from('workorder_ticket_list')
       .select(`
         id, Department, Issue_Date, Location_Type, Field, Route, Facility,
         Equipment_Type, Equipment, Issue_Description, Issue_Photos,
         Well, Created_by_Email, Created_by_Name, Ticket_Status,
-        Asset, Area, assigned_foreman, Estimate_Cost,
+        Asset, Area, assigned_foreman, Estimate_Cost, last_activity_ts,
         Dispatch(work_order_decision, production_foreman, maintenance_foreman, date_assigned, Estimate_Cost)
       `, { count: 'exact' })
 
@@ -64,7 +64,8 @@ export async function GET(req: NextRequest) {
     if (submittedBy && submittedBy !== 'All') query = query.eq('Created_by_Name', submittedBy)
 
     query = query
-      .order('Issue_Date', { ascending: false })
+      .order('last_activity_ts', { ascending: false })
+      .order('id', { ascending: false })
       .range(page * pageSize, (page + 1) * pageSize - 1)
 
     const { data, error, count } = await query
