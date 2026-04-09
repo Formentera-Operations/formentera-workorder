@@ -21,6 +21,7 @@ export async function GET(req: NextRequest) {
       let q = db
         .from('workorder_ticket_summary')
         .select('ticket_status, department, issue_date, equipment_name')
+        .order('ticket_id', { ascending: true })
         .range(from, from + BATCH - 1)
       if (userAssets.length > 0) q = q.in('asset', userAssets)
       const { data, error } = await q
