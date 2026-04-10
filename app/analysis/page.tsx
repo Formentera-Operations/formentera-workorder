@@ -77,9 +77,9 @@ export default function AnalysisPage() {
   const [tableDeptFilter, setTableDeptFilter] = useState('All')
   const [tableLoading, setTableLoading] = useState(false)
 
-  // Redirect non-analyst/admin
+  // Redirect field_user (analyst, admin, foreman all have access)
   useEffect(() => {
-    if (!loading && role !== 'analyst' && role !== 'admin') {
+    if (!loading && role === 'field_user') {
       router.replace('/')
     }
   }, [role, loading, router])
@@ -156,7 +156,7 @@ export default function AnalysisPage() {
     return { equipBreakdownData: data, topEquipTypes: topEquip }
   }, [aggData, deptFilter])
 
-  if (loading || (!aggData && role === 'analyst') || (!aggData && role === 'admin')) {
+  if (loading || !aggData) {
     return (
       <div className="flex flex-col min-h-screen pb-16">
         <div className="page-header"><h1 className="page-title">Analysis</h1></div>

@@ -29,7 +29,7 @@ const BASE_NAV_ITEMS = [
   { href: '/', label: 'Home', icon: Home, roles: null },
   { href: '/my-tickets', label: 'My Tickets', icon: Ticket, roles: ['field_user', 'foreman', 'admin'] },
   { href: '/maintenance', label: 'Maintenance', icon: Wrench, roles: null },
-  { href: '/analysis', label: 'Analysis', icon: BarChart2, roles: ['analyst', 'admin'] },
+  { href: '/analysis', label: 'Analysis', icon: BarChart2, roles: ['analyst', 'admin', 'foreman'] },
 ]
 
 export default function BottomNav() {
