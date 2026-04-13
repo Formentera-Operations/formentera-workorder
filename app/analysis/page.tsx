@@ -793,10 +793,10 @@ export default function AnalysisPage() {
               {/* Reset */}
               {(search || statusFilter !== 'All' || tableDeptFilter !== 'All' || workTypeFilter !== 'All') && (
                 <button
-                  className="w-full py-1.5 text-xs font-medium text-gray-500 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors border border-gray-200"
+                  className="w-full py-2 text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors border border-red-200"
                   onClick={() => { setSearch(''); setStatusFilter('All'); setTableDeptFilter('All'); setWorkTypeFilter('All') }}
                 >
-                  Reset Filters
+                  ✕ Reset Filters
                 </button>
               )}
             </div>
