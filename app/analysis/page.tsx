@@ -743,19 +743,16 @@ export default function AnalysisPage() {
               {/* Status */}
               <div>
                 <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Status</p>
-                <div className="relative">
-                  <div className="flex gap-1.5 overflow-x-auto pb-0.5" style={{ scrollbarWidth: 'none' }}>
-                    {['All', ...STATUSES].map(s => (
-                      <button
-                        key={s}
-                        className={`px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors shrink-0 ${statusFilter === s ? 'bg-[#1B2E6B] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-                        onClick={() => setStatusFilter(s)}
-                      >
-                        {s}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="absolute right-0 top-0 bottom-0.5 w-10 bg-gradient-to-l from-white to-transparent pointer-events-none z-10" />
+                <div className="flex gap-1.5 overflow-x-auto pb-2 scrollbar-thin-pills">
+                  {['All', ...STATUSES].map(s => (
+                    <button
+                      key={s}
+                      className={`px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors shrink-0 ${statusFilter === s ? 'bg-[#1B2E6B] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                      onClick={() => setStatusFilter(s)}
+                    >
+                      {s}
+                    </button>
+                  ))}
                 </div>
               </div>
 
@@ -763,19 +760,16 @@ export default function AnalysisPage() {
               {departments.length > 0 && (
                 <div>
                   <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Department</p>
-                  <div className="relative">
-                    <div className="flex gap-1.5 overflow-x-auto pb-0.5" style={{ scrollbarWidth: 'none' }}>
-                      {['All', ...departments].map(d => (
-                        <button
-                          key={d}
-                          className={`px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors shrink-0 ${tableDeptFilter === d ? 'bg-[#1B2E6B] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-                          onClick={() => setTableDeptFilter(d)}
-                        >
-                          {d}
-                        </button>
-                      ))}
-                    </div>
-                    <div className="absolute right-0 top-0 bottom-0.5 w-10 bg-gradient-to-l from-white to-transparent pointer-events-none z-10" />
+                  <div className="flex gap-1.5 overflow-x-auto pb-2 scrollbar-thin-pills">
+                    {['All', ...departments].map(d => (
+                      <button
+                        key={d}
+                        className={`px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors shrink-0 ${tableDeptFilter === d ? 'bg-[#1B2E6B] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                        onClick={() => setTableDeptFilter(d)}
+                      >
+                        {d}
+                      </button>
+                    ))}
                   </div>
                 </div>
               )}
@@ -783,19 +777,16 @@ export default function AnalysisPage() {
               {/* Work Type */}
               <div>
                 <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Work Type</p>
-                <div className="relative">
-                  <div className="flex gap-1.5 overflow-x-auto pb-0.5" style={{ scrollbarWidth: 'none' }}>
-                    {['All', ...WORK_TYPES].map(w => (
-                      <button
-                        key={w}
-                        className={`px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors shrink-0 ${workTypeFilter === w ? 'bg-[#1B2E6B] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-                        onClick={() => setWorkTypeFilter(w)}
-                      >
-                        {w}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="absolute right-0 top-0 bottom-0.5 w-10 bg-gradient-to-l from-white to-transparent pointer-events-none z-10" />
+                <div className="flex gap-1.5 overflow-x-auto pb-2 scrollbar-thin-pills">
+                  {['All', ...WORK_TYPES].map(w => (
+                    <button
+                      key={w}
+                      className={`px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors shrink-0 ${workTypeFilter === w ? 'bg-[#1B2E6B] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                      onClick={() => setWorkTypeFilter(w)}
+                    >
+                      {w}
+                    </button>
+                  ))}
                 </div>
               </div>
 

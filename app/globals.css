@@ -26,6 +26,12 @@ select {
 .scrollbar-hide::-webkit-scrollbar { display: none; }
 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
 
+/* Thin styled scrollbar for filter pill rows */
+.scrollbar-thin-pills { scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent; }
+.scrollbar-thin-pills::-webkit-scrollbar { height: 4px; }
+.scrollbar-thin-pills::-webkit-scrollbar-track { background: transparent; }
+.scrollbar-thin-pills::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 9999px; }
+
 @layer components {
   .btn-primary {
     @apply w-full bg-[#1B2E6B] text-white font-semibold py-3 px-4 rounded-lg flex items-center justify-center gap-2 active:opacity-90 transition-opacity;
