@@ -755,7 +755,7 @@ export default function AnalysisPage() {
                       </button>
                     ))}
                   </div>
-                  <div className="absolute right-0 top-0 bottom-0.5 w-8 bg-gradient-to-l from-white to-transparent pointer-events-none" />
+                  <div className="absolute right-0 top-0 bottom-0.5 w-10 bg-gradient-to-l from-white to-transparent pointer-events-none z-10" />
                 </div>
               </div>
 
@@ -775,7 +775,7 @@ export default function AnalysisPage() {
                         </button>
                       ))}
                     </div>
-                    <div className="absolute right-0 top-0 bottom-0.5 w-10 bg-gradient-to-l from-white to-transparent pointer-events-none" />
+                    <div className="absolute right-0 top-0 bottom-0.5 w-10 bg-gradient-to-l from-white to-transparent pointer-events-none z-10" />
                   </div>
                 </div>
               )}
@@ -795,7 +795,7 @@ export default function AnalysisPage() {
                       </button>
                     ))}
                   </div>
-                  <div className="absolute right-0 top-0 bottom-0.5 w-8 bg-gradient-to-l from-white to-transparent pointer-events-none" />
+                  <div className="absolute right-0 top-0 bottom-0.5 w-10 bg-gradient-to-l from-white to-transparent pointer-events-none z-10" />
                 </div>
               </div>
 
