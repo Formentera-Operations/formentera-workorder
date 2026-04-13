@@ -348,7 +348,7 @@ export default function AnalysisPage() {
                       interval={0}
                     />
                     <YAxis tick={{ fontSize: 10, fill: '#9CA3AF' }} axisLine={false} tickLine={false} allowDecimals={false} />
-                    <Tooltip cursor={{ fill: '#F3F4F6' }} />
+                    <Tooltip cursor={{ fill: '#F3F4F6' }} wrapperStyle={{ transform: 'translateY(-80px)' }} />
                     <Legend wrapperStyle={{ fontSize: 10, paddingTop: 24 }} />
                     {topEquipTypes.map((equip, i) => (
                       <Bar key={equip} dataKey={equip} stackId="a" fill={CHART_COLORS[i % CHART_COLORS.length]} />
