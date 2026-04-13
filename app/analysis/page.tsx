@@ -335,15 +335,15 @@ export default function AnalysisPage() {
                     </button>
                   ))}
                 </div>
-                <ResponsiveContainer width="100%" height={240}>
-                  <BarChart data={equipBreakdownData} margin={{ top: 4, right: 4, left: -24, bottom: 60 }}>
+                <ResponsiveContainer width="100%" height={260}>
+                  <BarChart data={equipBreakdownData} margin={{ top: 4, right: 4, left: -24, bottom: 80 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F3F4F6" />
                     <XAxis
                       dataKey="field"
                       tick={{ fontSize: 10, fill: '#9CA3AF' }}
                       axisLine={false}
                       tickLine={false}
-                      angle={-40}
+                      angle={-45}
                       textAnchor="end"
                       interval={0}
                     />
@@ -362,15 +362,15 @@ export default function AnalysisPage() {
             {costByDept.length > 0 && (
               <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
                 <h3 className="text-sm font-semibold text-gray-700 mb-3">Cost by Department</h3>
-                <ResponsiveContainer width="100%" height={240}>
-                  <BarChart data={costByDept} margin={{ top: 4, right: 4, left: -8, bottom: 60 }}>
+                <ResponsiveContainer width="100%" height={260}>
+                  <BarChart data={costByDept} margin={{ top: 4, right: 4, left: -8, bottom: 80 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F3F4F6" />
                     <XAxis
                       dataKey="dept"
                       tick={{ fontSize: 10, fill: '#9CA3AF' }}
                       axisLine={false}
                       tickLine={false}
-                      angle={-40}
+                      angle={-45}
                       textAnchor="end"
                       interval={0}
                     />
