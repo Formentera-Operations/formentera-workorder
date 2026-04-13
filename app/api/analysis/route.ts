@@ -11,6 +11,8 @@ export async function GET(req: NextRequest) {
   const userAssetsParam = searchParams.get('userAssets') || ''
   const userAssets = userAssetsParam ? userAssetsParam.split(',').map(a => a.trim()).filter(Boolean) : []
   const mode = searchParams.get('mode') || 'agg'
+  const startDate = searchParams.get('startDate') || ''
+  const endDate = searchParams.get('endDate') || ''
 
   const db = supabaseAdmin()
 
@@ -21,8 +23,6 @@ export async function GET(req: NextRequest) {
       const search = searchParams.get('search') || ''
       const statusFilter = searchParams.get('status') || ''
       const deptFilter = searchParams.get('department') || ''
-      const startDate = searchParams.get('startDate') || ''
-      const endDate = searchParams.get('endDate') || ''
 
       let query = db
         .from('workorder_ticket_summary')
@@ -52,6 +52,62 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ data: data || [], count })
     }
 
+    if (mode === 'export') {
+      const search = searchParams.get('search') || ''
+      const statusFilter = searchParams.get('status') || ''
+      const deptFilter = searchParams.get('department') || ''
+      const BATCH = 1000
+      const exportRows: Record<string, unknown>[] = []
+      let from = 0
+      while (true) {
+        let q = db
+          .from('workorder_ticket_summary')
+          .select('ticket_id, asset, field, department, work_order_type, location_type, well, facility, equipment_name, issue_description, ticket_status, issue_date, repair_date_closed, Estimate_Cost, repair_cost')
+          .order('issue_date', { ascending: false })
+          .order('ticket_id', { ascending: false })
+          .range(from, from + BATCH - 1)
+        if (userAssets.length > 0) q = q.in('asset', userAssets)
+        if (search) {
+          q = q.or(
+            `ticket_id::text.ilike.%${search}%,equipment_name.ilike.%${search}%,issue_description.ilike.%${search}%,field.ilike.%${search}%,well.ilike.%${search}%,facility.ilike.%${search}%,department.ilike.%${search}%`
+          )
+        }
+        if (statusFilter && statusFilter !== 'All') q = q.eq('ticket_status', statusFilter)
+        if (deptFilter && deptFilter !== 'All') q = q.eq('department', deptFilter)
+        if (startDate) q = q.gte('issue_date', startDate)
+        if (endDate) q = q.lte('issue_date', endDate + 'T23:59:59')
+        const { data, error } = await q
+        if (error) throw error
+        exportRows.push(...(data || []))
+        if (!data || data.length < BATCH) break
+        from += BATCH
+      }
+
+      const escape = (v: unknown) => {
+        const s = String(v ?? '')
+        return s.includes(',') || s.includes('"') || s.includes('\n')
+          ? `"${s.replace(/"/g, '""')}"` : s
+      }
+      const csvRows = exportRows.map(r =>
+        [
+          r.ticket_id, escape(r.asset), escape(r.field), escape(r.department),
+          escape(r.work_order_type), escape(r.location_type), escape(r.well),
+          escape(r.facility), escape(r.equipment_name), escape(r.issue_description),
+          escape(r.ticket_status), r.issue_date, r.repair_date_closed,
+          r.Estimate_Cost, r.repair_cost,
+        ].join(',')
+      )
+      const header = 'Ticket ID,Asset,Field,Department,Work Order Type,Location Type,Well,Facility,Equipment,Description,Status,Submitted,Closed,Est. Cost,Repair Cost'
+      const csv = [header, ...csvRows].join('\n')
+      const filename = `tickets-${new Date().toISOString().slice(0, 10)}.csv`
+      return new Response(csv, {
+        headers: {
+          'Content-Type': 'text/csv; charset=utf-8',
+          'Content-Disposition': `attachment; filename="${filename}"`,
+        },
+      })
+    }
+
     // Aggregation mode — batch-fetch all rows
     const BATCH = 1000
     const rows: {
@@ -75,6 +131,8 @@ export async function GET(req: NextRequest) {
         .order('ticket_id', { ascending: true })
         .range(from, from + BATCH - 1)
       if (userAssets.length > 0) q = q.in('asset', userAssets)
+      if (startDate) q = q.gte('issue_date', startDate)
+      if (endDate) q = q.lte('issue_date', endDate + 'T23:59:59')
       const { data, error } = await q
       if (error) throw error
       rows.push(...(data || []))
@@ -155,30 +213,53 @@ export async function GET(req: NextRequest) {
         : 0,
     }))
 
-    // 5. Monthly trend — last 12 months
-    const monthMap = new Map<string, number>()
-    const monthLabels = new Map<string, string>()
-    for (let i = 11; i >= 0; i--) {
-      const d = new Date()
-      d.setDate(1)
-      d.setMonth(d.getMonth() - i)
-      const key = d.toISOString().slice(0, 7)
-      const label = d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' })
-      monthMap.set(key, 0)
-      monthLabels.set(key, label)
-    }
+    // 5. Monthly trend — build from actual data
+    const monthCountMap = new Map<string, number>()
     for (const r of rows) {
       const month = (r.issue_date || '').slice(0, 7)
-      if (monthMap.has(month)) monthMap.set(month, (monthMap.get(month) || 0) + 1)
+      if (month) monthCountMap.set(month, (monthCountMap.get(month) || 0) + 1)
     }
-    const monthlyTrend = Array.from(monthMap.entries()).map(([month, count]) => ({
-      month,
-      label: monthLabels.get(month) || month,
-      count,
-    }))
+    const monthlyTrend = [...monthCountMap.keys()]
+      .sort()
+      .map(month => ({
+        month,
+        label: new Date(month + '-02').toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
+        count: monthCountMap.get(month) || 0,
+      }))
+
+    // 6. Top Repeat Equipment
+    const equipCountMap = new Map<string, number>()
+    for (const r of rows) {
+      const equip = r.equipment_name || 'Unknown'
+      equipCountMap.set(equip, (equipCountMap.get(equip) || 0) + 1)
+    }
+    const topEquipment = Array.from(equipCountMap.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([name, count]) => ({ name, count }))
+
+    // 7. Cost trend by month
+    const costTrendMap = new Map<string, { estCost: number; repairCost: number }>()
+    for (const r of rows) {
+      const month = (r.issue_date || '').slice(0, 7)
+      if (!month) continue
+      const existing = costTrendMap.get(month) || { estCost: 0, repairCost: 0 }
+      existing.estCost += r.Estimate_Cost || 0
+      existing.repairCost += r.repair_cost || 0
+      costTrendMap.set(month, existing)
+    }
+    const costTrend = [...costTrendMap.keys()]
+      .sort()
+      .map(month => ({
+        month,
+        label: new Date(month + '-02').toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
+        estCost: Math.round(costTrendMap.get(month)?.estCost || 0),
+        repairCost: Math.round(costTrendMap.get(month)?.repairCost || 0),
+      }))
+      .filter(m => m.estCost > 0 || m.repairCost > 0)
 
     return NextResponse.json(
-      { statusTables, fieldEquipChart, costByDept, backlogHealth, monthlyTrend, departments },
+      { statusTables, fieldEquipChart, costByDept, backlogHealth, monthlyTrend, departments, topEquipment, costTrend },
       { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate', 'Pragma': 'no-cache' } }
     )
   } catch (err) {

@@ -2,7 +2,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
-import { Search, ChevronDown, ChevronUp, X, BarChart2, Table2, List } from 'lucide-react'
+import { Search, ChevronDown, ChevronUp, X, BarChart2, Table2, List, Download } from 'lucide-react'
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from 'recharts'
@@ -38,6 +38,8 @@ interface AggData {
   backlogHealth: { status: string; count: number; avgDays: number }[]
   monthlyTrend: { month: string; label: string; count: number }[]
   departments: string[]
+  topEquipment: { name: string; count: number }[]
+  costTrend: { month: string; label: string; estCost: number; repairCost: number }[]
 }
 
 interface TableRow {
@@ -83,6 +85,32 @@ export default function AnalysisPage() {
   const [statusFilter, setStatusFilter] = useState('All')
   const [tableDeptFilter, setTableDeptFilter] = useState('All')
   const [tableLoading, setTableLoading] = useState(false)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+
+  // Date range filter
+  const [datePreset, setDatePreset] = useState<'all' | 'month' | '30d' | 'ytd' | 'custom'>('all')
+  const [customStart, setCustomStart] = useState('')
+  const [customEnd, setCustomEnd] = useState('')
+
+  const { effectiveStart, effectiveEnd } = useMemo(() => {
+    const today = new Date()
+    const todayStr = today.toISOString().slice(0, 10)
+    if (datePreset === 'month') {
+      const d = new Date(today.getFullYear(), today.getMonth(), 1)
+      return { effectiveStart: d.toISOString().slice(0, 10), effectiveEnd: todayStr }
+    }
+    if (datePreset === '30d') {
+      const d = new Date(today.getTime() - 30 * 86400000)
+      return { effectiveStart: d.toISOString().slice(0, 10), effectiveEnd: todayStr }
+    }
+    if (datePreset === 'ytd') {
+      return { effectiveStart: `${today.getFullYear()}-01-01`, effectiveEnd: todayStr }
+    }
+    if (datePreset === 'custom') {
+      return { effectiveStart: customStart, effectiveEnd: customEnd }
+    }
+    return { effectiveStart: '', effectiveEnd: '' }
+  }, [datePreset, customStart, customEnd])
 
   // Redirect field_user
   useEffect(() => {
@@ -94,12 +122,16 @@ export default function AnalysisPage() {
     if (loading) return
     const params = new URLSearchParams()
     if (assets.length > 0) params.set('userAssets', assets.join(','))
+    if (effectiveStart) params.set('startDate', effectiveStart)
+    if (effectiveEnd) params.set('endDate', effectiveEnd)
     params.set('_t', Date.now().toString())
+    setIsRefreshing(true)
     fetch(`/api/analysis?${params}`)
       .then(r => r.json())
       .then(d => { setAggData(d); setLastRefreshed(new Date()) })
       .catch(() => {})
-  }, [assets, loading])
+      .finally(() => setIsRefreshing(false))
+  }, [assets, loading, effectiveStart, effectiveEnd])
 
   // Debounce search
   useEffect(() => {
@@ -111,7 +143,7 @@ export default function AnalysisPage() {
   useEffect(() => {
     setTablePage(0)
     setTableRows([])
-  }, [debouncedSearch, statusFilter, tableDeptFilter])
+  }, [debouncedSearch, statusFilter, tableDeptFilter, effectiveStart, effectiveEnd])
 
   // Fetch ticket table
   useEffect(() => {
@@ -121,6 +153,8 @@ export default function AnalysisPage() {
     if (debouncedSearch) params.set('search', debouncedSearch)
     if (statusFilter !== 'All') params.set('status', statusFilter)
     if (tableDeptFilter !== 'All') params.set('department', tableDeptFilter)
+    if (effectiveStart) params.set('startDate', effectiveStart)
+    if (effectiveEnd) params.set('endDate', effectiveEnd)
     setTableLoading(true)
     fetch(`/api/analysis?${params}`)
       .then(r => r.json())
@@ -130,7 +164,7 @@ export default function AnalysisPage() {
       })
       .catch(() => {})
       .finally(() => setTableLoading(false))
-  }, [tab, tablePage, debouncedSearch, statusFilter, tableDeptFilter, assets, loading])
+  }, [tab, tablePage, debouncedSearch, statusFilter, tableDeptFilter, assets, loading, effectiveStart, effectiveEnd])
 
   // Pivot fieldEquipChart for stacked bar chart
   const { equipBreakdownData, topEquipTypes } = useMemo(() => {
@@ -190,13 +224,29 @@ export default function AnalysisPage() {
     })
   }
 
+  function handleExport() {
+    const params = new URLSearchParams({ mode: 'export' })
+    if (assets.length > 0) params.set('userAssets', assets.join(','))
+    if (debouncedSearch) params.set('search', debouncedSearch)
+    if (statusFilter !== 'All') params.set('status', statusFilter)
+    if (tableDeptFilter !== 'All') params.set('department', tableDeptFilter)
+    if (effectiveStart) params.set('startDate', effectiveStart)
+    if (effectiveEnd) params.set('endDate', effectiveEnd)
+    const a = document.createElement('a')
+    a.href = `/api/analysis?${params}`
+    a.download = `tickets-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+  }
+
   return (
     <div className="flex flex-col min-h-screen pb-16">
       {/* Header */}
       <div className="page-header">
         <h1 className="page-title">Analysis</h1>
         {lastRefreshed && (
-          <span className="text-xs text-gray-400 ml-auto">Updated {lastRefreshed.toLocaleTimeString()}</span>
+          <span className="text-xs text-gray-400 ml-auto">
+            {isRefreshing ? 'Refreshing…' : `Updated ${lastRefreshed.toLocaleTimeString()}`}
+          </span>
         )}
       </div>
 
@@ -217,6 +267,47 @@ export default function AnalysisPage() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+
+        {/* ── DATE RANGE FILTER ── */}
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3">
+          <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">Date Range</p>
+          <div className="flex gap-1.5 flex-wrap">
+            {(['all', 'month', '30d', 'ytd', 'custom'] as const).map(p => (
+              <button
+                key={p}
+                className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${datePreset === p ? 'bg-[#1B2E6B] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                onClick={() => setDatePreset(p)}
+              >
+                {p === 'all' ? 'All Time' : p === 'month' ? 'This Month' : p === '30d' ? 'Last 30d' : p === 'ytd' ? 'YTD' : 'Custom'}
+              </button>
+            ))}
+          </div>
+          {datePreset === 'custom' && (
+            <div className="flex gap-2 mt-2">
+              <div className="flex-1">
+                <label className="text-[10px] text-gray-400 block mb-0.5">From</label>
+                <input
+                  type="date"
+                  className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#1B2E6B]"
+                  value={customStart}
+                  onChange={e => setCustomStart(e.target.value)}
+                />
+              </div>
+              <div className="flex-1">
+                <label className="text-[10px] text-gray-400 block mb-0.5">To</label>
+                <input
+                  type="date"
+                  className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#1B2E6B]"
+                  value={customEnd}
+                  onChange={e => setCustomEnd(e.target.value)}
+                />
+              </div>
+            </div>
+          )}
+          {(effectiveStart || effectiveEnd) && datePreset !== 'custom' && (
+            <p className="text-[10px] text-gray-400 mt-1.5">{effectiveStart} – {effectiveEnd}</p>
+          )}
+        </div>
 
         {/* ── OVERVIEW TAB ── */}
         {tab === 'overview' && (
@@ -320,6 +411,32 @@ export default function AnalysisPage() {
               </ResponsiveContainer>
             </div>
 
+            {/* Cost Trend Over Time */}
+            {aggData.costTrend && aggData.costTrend.length > 0 && (
+              <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+                <h3 className="text-sm font-semibold text-gray-700 mb-3">Cost Trend</h3>
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={aggData.costTrend} margin={{ top: 4, right: 4, left: -8, bottom: 60 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F3F4F6" />
+                    <XAxis
+                      dataKey="label"
+                      tick={{ fontSize: 10, fill: '#9CA3AF' }}
+                      axisLine={false}
+                      tickLine={false}
+                      angle={-45}
+                      textAnchor="end"
+                      interval={0}
+                    />
+                    <YAxis tick={{ fontSize: 10, fill: '#9CA3AF' }} axisLine={false} tickLine={false} tickFormatter={fmt} />
+                    <Tooltip formatter={(v: unknown) => [fmt(v as number), '']} />
+                    <Legend wrapperStyle={{ fontSize: 10, paddingTop: 55 }} />
+                    <Bar dataKey="estCost" name="Est. Cost" fill="#1B2E6B" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="repairCost" name="Repair Cost" fill="#3B82F6" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+
             {/* Ticket Breakdown by Field + Equipment */}
             {equipBreakdownData.length > 0 && (
               <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
@@ -336,7 +453,7 @@ export default function AnalysisPage() {
                   ))}
                 </div>
                 <ResponsiveContainer width="100%" height={260}>
-                  <BarChart data={equipBreakdownData} margin={{ top: 4, right: 4, left: -24, bottom: 80 }}>
+                  <BarChart data={equipBreakdownData} margin={{ top: 4, right: 4, left: -24, bottom: 60 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F3F4F6" />
                     <XAxis
                       dataKey="field"
@@ -363,7 +480,7 @@ export default function AnalysisPage() {
               <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
                 <h3 className="text-sm font-semibold text-gray-700 mb-3">Cost by Department</h3>
                 <ResponsiveContainer width="100%" height={260}>
-                  <BarChart data={costByDept} margin={{ top: 4, right: 4, left: -8, bottom: 80 }}>
+                  <BarChart data={costByDept} margin={{ top: 4, right: 4, left: -8, bottom: 60 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F3F4F6" />
                     <XAxis
                       dataKey="dept"
@@ -381,6 +498,34 @@ export default function AnalysisPage() {
                     <Bar dataKey="repairCost" name="Repair Cost" fill="#3B82F6" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
+              </div>
+            )}
+            {/* Top Repeat Equipment */}
+            {aggData.topEquipment && aggData.topEquipment.length > 0 && (
+              <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+                <h3 className="text-sm font-semibold text-gray-700 mb-3">Top Repeat Equipment</h3>
+                <div className="space-y-2.5">
+                  {aggData.topEquipment.map((eq, i) => {
+                    const maxCount = aggData.topEquipment[0].count
+                    return (
+                      <div key={eq.name} className="flex items-center gap-2.5">
+                        <span className="text-xs text-gray-400 w-4 text-right shrink-0">{i + 1}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between mb-0.5">
+                            <span className="text-xs font-medium text-gray-700 truncate">{eq.name}</span>
+                            <span className="text-xs font-bold text-gray-800 shrink-0 ml-2">{eq.count}</span>
+                          </div>
+                          <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-[#1B2E6B] rounded-full"
+                              style={{ width: `${Math.round((eq.count / maxCount) * 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
             )}
           </>
@@ -515,7 +660,16 @@ export default function AnalysisPage() {
               </div>
             )}
 
-            <p className="text-xs text-gray-400">{tableCount.toLocaleString()} tickets</p>
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-gray-400">{tableCount.toLocaleString()} tickets</p>
+              <button
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#1B2E6B] bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
+                onClick={handleExport}
+              >
+                <Download size={13} />
+                Export CSV
+              </button>
+            </div>
 
             {/* Mobile: card list */}
             <div className="md:hidden space-y-2">
