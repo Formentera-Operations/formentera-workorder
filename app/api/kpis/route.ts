@@ -58,12 +58,14 @@ export async function GET(req: NextRequest) {
       .slice(0, 8)
       .map(([equip, count]) => ({ equip, count }))
 
-    // Daily trend — last 7 days
+    // Daily trend — Mon through Sun of current week
     const today = new Date()
+    const monday = new Date(today)
+    monday.setDate(today.getDate() - ((today.getDay() + 6) % 7)) // Mon = 0 offset
     const trend: { date: string; label: string; count: number }[] = []
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(today)
-      d.setDate(d.getDate() - i)
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(monday)
+      d.setDate(monday.getDate() + i)
       const dateStr = d.toISOString().slice(0, 10)
       const label = d.toLocaleDateString('en-US', { weekday: 'short' })
       trend.push({ date: dateStr, label, count: 0 })
