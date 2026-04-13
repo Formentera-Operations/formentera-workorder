@@ -376,7 +376,7 @@ export default function AnalysisPage() {
                     />
                     <YAxis tick={{ fontSize: 10, fill: '#9CA3AF' }} axisLine={false} tickLine={false} tickFormatter={fmt} />
                     <Tooltip formatter={(v: unknown) => [fmt(v as number), '']} />
-                    <Legend wrapperStyle={{ fontSize: 10, paddingTop: 32 }} />
+                    <Legend wrapperStyle={{ fontSize: 10, paddingTop: 50 }} />
                     <Bar dataKey="estCost" name="Est. Cost" fill="#1B2E6B" radius={[4, 4, 0, 0]} />
                     <Bar dataKey="repairCost" name="Repair Cost" fill="#3B82F6" radius={[4, 4, 0, 0]} />
                   </BarChart>
