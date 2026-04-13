@@ -2,7 +2,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
-import { Search, ChevronDown, ChevronUp, X, BarChart2, Table2, List, Download } from 'lucide-react'
+import { Search, ChevronDown, ChevronUp, X, BarChart2, Table2, List, Download, ChevronRight } from 'lucide-react'
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from 'recharts'
@@ -40,6 +40,8 @@ interface AggData {
   departments: string[]
   topEquipment: { name: string; count: number }[]
   costTrend: { month: string; label: string; estCost: number; repairCost: number }[]
+  agedTickets: { ticket_id: number; field: string; equipment: string; status: string; issue_date: string; days_open: number }[]
+  workTypeBreakdown: { type: string; count: number }[]
 }
 
 interface TableRow {
@@ -359,6 +361,48 @@ export default function AnalysisPage() {
               })()}
             </div>
 
+            {/* Needs Attention — Aged Tickets */}
+            {aggData.agedTickets && aggData.agedTickets.length > 0 && (
+              <div className="bg-white rounded-xl border border-red-100 shadow-sm p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold text-gray-700">Needs Attention</h3>
+                  <span className="text-[10px] font-medium bg-red-50 text-red-700 px-2 py-0.5 rounded-full">
+                    {aggData.agedTickets.length} oldest open
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  {aggData.agedTickets.map(t => {
+                    const daysColor = t.days_open > 30 ? 'bg-red-50 text-red-700' : t.days_open > 14 ? 'bg-amber-50 text-amber-700' : 'bg-gray-100 text-gray-600'
+                    const c = STATUS_STYLE[t.status] || STATUS_STYLE['Open']
+                    return (
+                      <div
+                        key={t.ticket_id}
+                        className="flex items-center gap-3 p-2.5 rounded-xl border border-gray-100 bg-gray-50/50 cursor-pointer hover:bg-blue-50/50 transition-colors active:scale-[0.99]"
+                        onClick={() => router.push(`/maintenance/${t.ticket_id}`)}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 mb-0.5">
+                            <span className="text-xs font-bold text-[#1B2E6B]">#{t.ticket_id}</span>
+                            <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-medium ${c.bg} ${c.text}`}>
+                              <span className={`w-1 h-1 rounded-full shrink-0 ${c.dot}`} />
+                              {t.status}
+                            </span>
+                          </div>
+                          <p className="text-xs font-medium text-gray-700 truncate">{t.equipment || '—'}</p>
+                          {t.field && <p className="text-[10px] text-gray-400 truncate">{t.field}</p>}
+                        </div>
+                        <div className={`shrink-0 px-2 py-1 rounded-lg text-center ${daysColor}`}>
+                          <p className="text-sm font-bold leading-tight">{t.days_open}</p>
+                          <p className="text-[9px] leading-tight">days</p>
+                        </div>
+                        <ChevronRight size={14} className="text-gray-300 shrink-0" />
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Backlog Health */}
             <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
               <h3 className="text-sm font-semibold text-gray-700 mb-3">Backlog Health</h3>
@@ -388,6 +432,46 @@ export default function AnalysisPage() {
                 })}
               </div>
             </div>
+
+            {/* Work Type Breakdown */}
+            {aggData.workTypeBreakdown && aggData.workTypeBreakdown.length > 0 && (() => {
+              const total = aggData.workTypeBreakdown.reduce((s, w) => s + w.count, 0)
+              const maxCount = aggData.workTypeBreakdown[0]?.count || 1
+              const WORK_TYPE_COLORS: Record<string, string> = {
+                'LOE': 'bg-[#1B2E6B]',
+                'AFE - Workover': 'bg-amber-500',
+                'AFE - Capital': 'bg-emerald-500',
+              }
+              return (
+                <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-sm font-semibold text-gray-700">Work Type</h3>
+                    <span className="text-xs text-gray-400">{total.toLocaleString()} total</span>
+                  </div>
+                  <div className="space-y-2.5">
+                    {aggData.workTypeBreakdown.map(w => {
+                      const barColor = WORK_TYPE_COLORS[w.type] || 'bg-gray-400'
+                      const pct = Math.round((w.count / total) * 100)
+                      return (
+                        <div key={w.type} className="flex items-center gap-3">
+                          <span className="text-xs text-gray-600 w-28 shrink-0 truncate">{w.type}</span>
+                          <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all ${barColor}`}
+                              style={{ width: `${Math.round((w.count / maxCount) * 100)}%` }}
+                            />
+                          </div>
+                          <div className="flex items-center justify-end gap-1.5 w-16 shrink-0">
+                            <span className="text-sm font-bold text-gray-800">{w.count}</span>
+                            <span className="text-[10px] text-gray-400">{pct}%</span>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })()}
 
             {/* Monthly Trend */}
             <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
@@ -503,12 +587,19 @@ export default function AnalysisPage() {
             {/* Top Repeat Equipment */}
             {aggData.topEquipment && aggData.topEquipment.length > 0 && (
               <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-                <h3 className="text-sm font-semibold text-gray-700 mb-3">Top Repeat Equipment</h3>
-                <div className="space-y-2.5">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold text-gray-700">Top Repeat Equipment</h3>
+                  <span className="text-[10px] text-gray-400">tap to filter</span>
+                </div>
+                <div className="space-y-1.5">
                   {aggData.topEquipment.map((eq, i) => {
                     const maxCount = aggData.topEquipment[0].count
                     return (
-                      <div key={eq.name} className="flex items-center gap-2.5">
+                      <div
+                        key={eq.name}
+                        className="flex items-center gap-2.5 -mx-1 px-1 py-1.5 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors active:scale-[0.99]"
+                        onClick={() => { setSearch(eq.name); setTab('tickets') }}
+                      >
                         <span className="text-xs text-gray-400 w-4 text-right shrink-0">{i + 1}</span>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between mb-0.5">
@@ -522,6 +613,7 @@ export default function AnalysisPage() {
                             />
                           </div>
                         </div>
+                        <ChevronRight size={12} className="text-gray-300 shrink-0" />
                       </div>
                     )
                   })}

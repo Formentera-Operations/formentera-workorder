@@ -116,6 +116,7 @@ export async function GET(req: NextRequest) {
       field: string
       department: string
       equipment_name: string
+      work_order_type: string | null
       ticket_status: string
       issue_date: string
       repair_date_closed: string | null
@@ -127,7 +128,7 @@ export async function GET(req: NextRequest) {
     while (true) {
       let q = db
         .from('workorder_ticket_summary')
-        .select('ticket_id, asset, field, department, equipment_name, ticket_status, issue_date, repair_date_closed, Estimate_Cost, repair_cost')
+        .select('ticket_id, asset, field, department, equipment_name, work_order_type, ticket_status, issue_date, repair_date_closed, Estimate_Cost, repair_cost')
         .order('ticket_id', { ascending: true })
         .range(from, from + BATCH - 1)
       if (userAssets.length > 0) q = q.in('asset', userAssets)
@@ -238,6 +239,31 @@ export async function GET(req: NextRequest) {
       .slice(0, 10)
       .map(([name, count]) => ({ name, count }))
 
+    // 8. Aged tickets — top 10 oldest unresolved
+    const OPEN_STATUSES = ['Open', 'In Progress', 'Backlogged', 'Awaiting Cost']
+    const agedTickets = rows
+      .filter(r => OPEN_STATUSES.includes(r.ticket_status))
+      .map(r => ({
+        ticket_id: r.ticket_id,
+        field: r.field || '',
+        equipment: r.equipment_name || 'Unknown',
+        status: r.ticket_status,
+        issue_date: r.issue_date,
+        days_open: Math.floor((now - new Date(r.issue_date).getTime()) / 86_400_000),
+      }))
+      .sort((a, b) => b.days_open - a.days_open)
+      .slice(0, 10)
+
+    // 9. Work type breakdown
+    const workTypeMap = new Map<string, number>()
+    for (const r of rows) {
+      const type = r.work_order_type || 'Unspecified'
+      workTypeMap.set(type, (workTypeMap.get(type) || 0) + 1)
+    }
+    const workTypeBreakdown = Array.from(workTypeMap.entries())
+      .map(([type, count]) => ({ type, count }))
+      .sort((a, b) => b.count - a.count)
+
     // 7. Cost trend by month
     const costTrendMap = new Map<string, { estCost: number; repairCost: number }>()
     for (const r of rows) {
@@ -259,7 +285,7 @@ export async function GET(req: NextRequest) {
       .filter(m => m.estCost > 0 || m.repairCost > 0)
 
     return NextResponse.json(
-      { statusTables, fieldEquipChart, costByDept, backlogHealth, monthlyTrend, departments, topEquipment, costTrend },
+      { statusTables, fieldEquipChart, costByDept, backlogHealth, monthlyTrend, departments, topEquipment, costTrend, agedTickets, workTypeBreakdown },
       { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate', 'Pragma': 'no-cache' } }
     )
   } catch (err) {
