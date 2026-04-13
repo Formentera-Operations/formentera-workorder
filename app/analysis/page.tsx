@@ -91,7 +91,7 @@ interface ChatMessage {
 
 export default function AnalysisPage() {
   const router = useRouter()
-  const { role, assets, loading } = useAuth()
+  const { role, assets, loading, userName } = useAuth()
 
   const [tab, setTab] = useState<'overview' | 'tables' | 'tickets' | 'chat'>('overview')
   const [aggData, setAggData] = useState<AggData | null>(null)
@@ -255,10 +255,12 @@ export default function AnalysisPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           question,
-          messages: history.slice(0, -1), // previous messages (current question sent separately)
+          messages: history.slice(0, -1),
           userAssets: assets,
           startDate: effectiveStart,
           endDate: effectiveEnd,
+          userName,
+          role,
         }),
       })
       const json = await res.json()
