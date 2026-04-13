@@ -466,7 +466,7 @@ export default function AnalysisPage() {
                         <div
                           key={w.type}
                           className="flex items-center gap-3 -mx-1 px-1 py-1.5 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors active:scale-[0.99]"
-                          onClick={() => { setWorkTypeFilter(w.type === 'Unspecified' ? 'Unspecified' : w.type); setTab('tickets') }}
+                          onClick={() => { setWorkTypeFilter(w.type === 'Unspecified' ? 'Unspecified' : w.type); setStatusFilter('Closed'); setTab('tickets') }}
                         >
                           <span className="text-xs text-gray-600 w-28 shrink-0 truncate">{w.type}</span>
                           <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
@@ -782,7 +782,7 @@ export default function AnalysisPage() {
                     <button
                       key={w}
                       className={`px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors shrink-0 ${workTypeFilter === w ? 'bg-[#1B2E6B] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-                      onClick={() => setWorkTypeFilter(w)}
+                      onClick={() => { setWorkTypeFilter(w); if (w !== 'All') setStatusFilter('Closed') }}
                     >
                       {w}
                     </button>
