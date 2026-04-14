@@ -18,7 +18,7 @@ export default function HomePage() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto px-4 pt-6 pb-4 lg:max-w-4xl lg:mx-auto">
+      <div className="flex-1 overflow-y-auto px-4 pt-6 pb-4 lg:px-12">
         {/* Logo Banner */}
         <div className="relative w-full rounded-lg overflow-hidden mb-6 aspect-[5/1] lg:hidden">
           <Image
