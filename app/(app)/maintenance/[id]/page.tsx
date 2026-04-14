@@ -284,7 +284,7 @@ export default function MaintenanceTicketPage() {
       </div>
 
       {/* Workflow tabs */}
-      <div className="px-4 pt-3 pb-2 border-b border-gray-100">
+      <div className="px-4 pt-3 pb-2 border-b border-gray-100 lg:px-32">
         <p className="text-xs text-gray-500 mb-2">Maintenance Workflow Selection</p>
         <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
           {TABS.filter(t => {
@@ -324,7 +324,7 @@ export default function MaintenanceTicketPage() {
         })()}
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 py-4">
+      <div className="flex-1 overflow-y-auto px-4 py-4 lg:px-32">
 
         {/* ======== SUMMARY TAB ======== */}
         {tab === 'Summary' && (
