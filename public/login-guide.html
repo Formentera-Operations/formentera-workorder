@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Work Order App — Login Guide</title>
+  <style>
+    @page { margin: 0.75in; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      color: #1a1a1a;
+      line-height: 1.6;
+      max-width: 700px;
+      margin: 0 auto;
+      padding: 40px 24px;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 36px;
+      padding-bottom: 24px;
+      border-bottom: 3px solid #1B2E6B;
+    }
+    .header h1 {
+      font-size: 28px;
+      color: #1B2E6B;
+      letter-spacing: 4px;
+      margin-bottom: 4px;
+    }
+    .header h2 {
+      font-size: 18px;
+      font-weight: 600;
+      color: #333;
+      margin-top: 8px;
+    }
+    .header p {
+      font-size: 13px;
+      color: #888;
+      margin-top: 4px;
+    }
+
+    .step {
+      margin-bottom: 28px;
+      page-break-inside: avoid;
+    }
+    .step-number {
+      display: inline-block;
+      width: 32px;
+      height: 32px;
+      background: #1B2E6B;
+      color: white;
+      font-weight: 700;
+      font-size: 16px;
+      text-align: center;
+      line-height: 32px;
+      border-radius: 50%;
+      margin-right: 10px;
+      vertical-align: middle;
+    }
+    .step-title {
+      display: inline;
+      font-size: 17px;
+      font-weight: 700;
+      color: #1B2E6B;
+      vertical-align: middle;
+    }
+    .step-body {
+      margin-top: 10px;
+      margin-left: 42px;
+      font-size: 14px;
+      color: #333;
+    }
+    .step-body p { margin-bottom: 8px; }
+
+    .url-box {
+      background: #f0f4ff;
+      border: 1px solid #c7d2fe;
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 14px;
+      font-weight: 600;
+      color: #1B2E6B;
+      text-align: center;
+      margin: 8px 0;
+      letter-spacing: 0;
+    }
+
+    .note {
+      background: #fefce8;
+      border-left: 4px solid #f59e0b;
+      padding: 12px 16px;
+      border-radius: 0 8px 8px 0;
+      font-size: 13px;
+      color: #92400e;
+      margin: 16px 0;
+    }
+    .note strong { color: #78350f; }
+
+    .tip {
+      background: #f0fdf4;
+      border-left: 4px solid #10b981;
+      padding: 12px 16px;
+      border-radius: 0 8px 8px 0;
+      font-size: 13px;
+      color: #065f46;
+      margin: 16px 0;
+    }
+
+    .help {
+      margin-top: 36px;
+      padding-top: 20px;
+      border-top: 1px solid #e5e7eb;
+      font-size: 13px;
+      color: #666;
+    }
+    .help strong { color: #333; }
+
+    ul { margin-left: 18px; margin-bottom: 8px; }
+    li { margin-bottom: 4px; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <h1>FORMENTERA</h1>
+    <h2>Work Order App — Login Guide</h2>
+    <p>For employees with a @formenteraops.com email</p>
+  </div>
+
+  <div class="step">
+    <span class="step-number">1</span>
+    <span class="step-title">Open the App</span>
+    <div class="step-body">
+      <p>Open your web browser (Chrome, Safari, or Edge) on your phone or computer and go to:</p>
+      <div class="url-box">formentera-workorder.vercel.app</div>
+      <div class="tip"><strong>Tip:</strong> On your phone, you can add this to your home screen for quick access. In Safari, tap the share icon and select "Add to Home Screen." In Chrome, tap the menu (three dots) and select "Add to Home Screen."</div>
+    </div>
+  </div>
+
+  <div class="step">
+    <span class="step-number">2</span>
+    <span class="step-title">Tap "Sign in with Microsoft"</span>
+    <div class="step-body">
+      <p>On the login screen, tap the <strong>"Sign in with Microsoft"</strong> button. You do <em>not</em> need to type in the email/password fields above it.</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <span class="step-number">3</span>
+    <span class="step-title">Enter Your Microsoft Credentials</span>
+    <div class="step-body">
+      <p>You will be redirected to the Microsoft login page. Enter your <strong>@formenteraops.com</strong> email address and your Microsoft password.</p>
+      <p>This is the same email and password you use for Outlook, Teams, and other Microsoft apps.</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <span class="step-number">4</span>
+    <span class="step-title">Approve the Sign-In Request</span>
+    <div class="step-body">
+      <p>Microsoft will send a verification request to your <strong>Outlook mobile app</strong>. You will see a screen with a number (e.g. <strong>49</strong>).</p>
+      <p>Open the <strong>Outlook app</strong> on your phone and enter the number shown on the screen to approve the sign-in.</p>
+      <div class="note"><strong>Don't see the notification?</strong> Swipe down to refresh the Outlook app. If you still don't receive it, tap "I can't use my Outlook mobile app right now" for alternative verification options.</div>
+    </div>
+  </div>
+
+  <div class="step">
+    <span class="step-number">5</span>
+    <span class="step-title">"Stay Signed In?" — Tap Yes</span>
+    <div class="step-body">
+      <p>After approval, Microsoft will ask <strong>"Stay signed in?"</strong>. Tap <strong>Yes</strong> so you don't have to repeat this process every time you open the app.</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <span class="step-number">6</span>
+    <span class="step-title">You're In</span>
+    <div class="step-body">
+      <p>You will be redirected to the Work Order App home screen. From here you can:</p>
+      <ul>
+        <li>Submit maintenance tickets</li>
+        <li>View and manage your tickets</li>
+        <li>See dashboards and analytics</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="help">
+    <strong>Having trouble?</strong><br>
+    If you're unable to log in or don't see your tickets after signing in, contact Alex Benavides for assistance.
+  </div>
+
+</body>
+</html>

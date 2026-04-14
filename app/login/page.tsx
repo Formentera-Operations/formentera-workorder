@@ -9,6 +9,7 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [msLoading, setMsLoading] = useState(false)
+  const [showHelp, setShowHelp] = useState(false)
   const supabase = createSupabaseBrowserClient()
 
   async function handleMicrosoftLogin() {
@@ -127,8 +128,72 @@ export default function LoginPage() {
             </svg>
             {msLoading ? 'Redirecting…' : 'Sign in with Microsoft'}
           </button>
+
+          <button
+            type="button"
+            onClick={() => setShowHelp(true)}
+            className="w-full mt-3 text-sm text-gray-400 hover:text-[#1B2E6B] transition-colors underline underline-offset-2"
+          >
+            Need help signing in?
+          </button>
         </div>
       </div>
+
+      {/* Help modal */}
+      {showHelp && (
+        <>
+          <div className="fixed inset-0 bg-black/40 z-40" onClick={() => setShowHelp(false)} />
+          <div className="fixed inset-4 z-50 bg-white rounded-2xl shadow-xl overflow-y-auto max-w-lg mx-auto my-auto max-h-[85vh]">
+            <div className="sticky top-0 bg-white border-b border-gray-100 px-5 py-4 flex items-center justify-between">
+              <h3 className="text-base font-bold text-[#1B2E6B]">How to Sign In</h3>
+              <button onClick={() => setShowHelp(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+            </div>
+            <div className="px-5 py-4 space-y-5">
+              <div className="flex gap-3">
+                <span className="w-7 h-7 bg-[#1B2E6B] text-white rounded-full flex items-center justify-center text-xs font-bold shrink-0">1</span>
+                <div>
+                  <p className="text-sm font-semibold text-gray-800">Tap &quot;Sign in with Microsoft&quot;</p>
+                  <p className="text-xs text-gray-500 mt-1">Tap the button on the login screen. You do not need to type in the email and password fields above it.</p>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <span className="w-7 h-7 bg-[#1B2E6B] text-white rounded-full flex items-center justify-center text-xs font-bold shrink-0">2</span>
+                <div>
+                  <p className="text-sm font-semibold text-gray-800">Enter Your Microsoft Credentials</p>
+                  <p className="text-xs text-gray-500 mt-1">Enter your <strong>@formenteraops.com</strong> email and password. This is the same one you use for Outlook, Teams, and other Microsoft apps.</p>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <span className="w-7 h-7 bg-[#1B2E6B] text-white rounded-full flex items-center justify-center text-xs font-bold shrink-0">3</span>
+                <div>
+                  <p className="text-sm font-semibold text-gray-800">Approve the Sign-In Request</p>
+                  <p className="text-xs text-gray-500 mt-1">Microsoft will show a number on screen and send a notification to your <strong>Outlook mobile app</strong>. Open the Outlook app and enter the number to approve.</p>
+                  <div className="bg-amber-50 border-l-2 border-amber-400 px-3 py-2 rounded-r-lg mt-2">
+                    <p className="text-xs text-amber-800"><strong>Don&apos;t see the notification?</strong> Swipe down to refresh your Outlook app. You can also tap &quot;I can&apos;t use my Outlook mobile app right now&quot; for other options.</p>
+                  </div>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <span className="w-7 h-7 bg-[#1B2E6B] text-white rounded-full flex items-center justify-center text-xs font-bold shrink-0">4</span>
+                <div>
+                  <p className="text-sm font-semibold text-gray-800">&quot;Stay Signed In?&quot; — Tap Yes</p>
+                  <p className="text-xs text-gray-500 mt-1">Tap <strong>Yes</strong> so you won&apos;t have to repeat this process every time you open the app.</p>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <span className="w-7 h-7 bg-[#10b981] text-white rounded-full flex items-center justify-center text-xs font-bold shrink-0">&#10003;</span>
+                <div>
+                  <p className="text-sm font-semibold text-gray-800">You&apos;re In!</p>
+                  <p className="text-xs text-gray-500 mt-1">You&apos;ll be redirected to the app. From here you can submit tickets, view your work orders, and see dashboards.</p>
+                </div>
+              </div>
+              <div className="bg-green-50 border-l-2 border-green-400 px-3 py-2 rounded-r-lg">
+                <p className="text-xs text-green-800"><strong>Tip:</strong> Add this app to your home screen for quick access. In Safari, tap the share icon → &quot;Add to Home Screen.&quot; In Chrome, tap the menu → &quot;Add to Home Screen.&quot;</p>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
 
       <div className="text-center pb-8 text-xs text-gray-300">
         © {new Date().getFullYear()} Formentera Operations
