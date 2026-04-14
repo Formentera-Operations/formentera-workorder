@@ -1,42 +1,17 @@
 'use client'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { Home, Ticket, Wrench, LogOut, BarChart2 } from 'lucide-react'
+import { LogOut } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/components/AuthProvider'
 import { useState } from 'react'
-
-const ROLE_PERMISSIONS: Record<string, { label: string; perms: string[] }> = {
-  field_user: {
-    label: 'Field User',
-    perms: ['Submit new tickets', 'View all tickets (read-only)'],
-  },
-  foreman: {
-    label: 'Foreman',
-    perms: ['Submit new tickets', 'Edit tickets in your asset', 'Dispatch and close tickets'],
-  },
-  admin: {
-    label: 'Admin',
-    perms: ['Full access to all tickets and settings'],
-  },
-  analyst: {
-    label: 'Analyst',
-    perms: ['View-only access', 'Access to Analytics dashboard'],
-  },
-}
-
-const BASE_NAV_ITEMS = [
-  { href: '/', label: 'Home', icon: Home, roles: null },
-  { href: '/my-tickets', label: 'My Tickets', icon: Ticket, roles: ['field_user', 'foreman', 'admin'] },
-  { href: '/maintenance', label: 'Maintenance', icon: Wrench, roles: null },
-  { href: '/analysis', label: 'Analysis', icon: BarChart2, roles: ['analyst', 'admin', 'foreman'] },
-]
+import { NAV_ITEMS, ROLE_PERMISSIONS } from '@/lib/nav-config'
 
 export default function BottomNav() {
   const pathname = usePathname()
   const { userName, role, signOut } = useAuth()
 
-  const NAV_ITEMS = BASE_NAV_ITEMS.filter(item => !item.roles || item.roles.includes(role))
+  const filteredItems = NAV_ITEMS.filter(item => !item.roles || item.roles.includes(role))
   const router = useRouter()
   const [showUserMenu, setShowUserMenu] = useState(false)
 
@@ -84,7 +59,7 @@ export default function BottomNav() {
       )}
 
       <nav className="nav-bar pb-safe">
-        {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+        {filteredItems.map(({ href, label, icon: Icon }) => {
           const isActive = href === '/' ? pathname === '/' : pathname.startsWith(href)
           return (
             <Link key={href} href={href} className={cn('nav-item', isActive && 'active')}>

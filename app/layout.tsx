@@ -33,9 +33,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className={`${inter.variable} font-sans bg-gray-50 text-gray-900 antialiased`}>
         <AuthProvider>
-          <div className="mx-auto max-w-lg min-h-screen relative bg-white shadow-sm">
-            {children}
-          </div>
+          {children}
         </AuthProvider>
         <Toaster position="top-center" richColors />
       </body>

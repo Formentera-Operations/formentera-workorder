@@ -2,7 +2,6 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { Wrench } from 'lucide-react'
-import BottomNav from '@/components/layout/BottomNav'
 import KPIDashboard from '@/components/home/KPIDashboard'
 import { useAuth } from '@/components/AuthProvider'
 
@@ -11,7 +10,7 @@ export default function HomePage() {
   const isAnalyst = role === 'analyst'
 
   return (
-    <div className="flex flex-col min-h-screen pb-16">
+    <div className="flex flex-col min-h-screen">
       {/* Header */}
       <div className="px-4 py-3 border-b border-gray-200">
         <h1 className="text-base font-semibold text-gray-900">Work Order App</h1>
@@ -46,7 +45,6 @@ export default function HomePage() {
         <KPIDashboard />
       </div>
 
-      <BottomNav />
     </div>
   )
 }

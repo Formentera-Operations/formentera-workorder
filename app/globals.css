@@ -95,7 +95,7 @@ select {
   }
 
   .nav-bar {
-    @apply fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-lg bg-white border-t border-gray-200 flex z-20;
+    @apply fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-lg bg-white border-t border-gray-200 flex z-20 lg:hidden;
   }
 
   .nav-item {

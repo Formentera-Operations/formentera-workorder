@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ChevronDown, ChevronUp, Search, Calendar, Wrench, SlidersHorizontal } from 'lucide-react'
 import TicketCard from '@/components/ui/TicketCard'
-import BottomNav from '@/components/layout/BottomNav'
 import { useAuth } from '@/components/AuthProvider'
 import { TICKET_STATUSES, STATUS_EMOJI } from '@/lib/utils'
 import type { TicketStatus } from '@/types'
@@ -156,7 +155,7 @@ function MaintenancePageContent() {
   }
 
   return (
-    <div className="flex flex-col min-h-screen pb-16">
+    <div className="flex flex-col min-h-screen">
       {/* Header */}
       <div className="px-4 py-3 border-b border-gray-200">
         <h1 className="text-base font-semibold text-gray-900">Maintenance</h1>
@@ -310,7 +309,6 @@ function MaintenancePageContent() {
         )}
       </div>
 
-      <BottomNav />
     </div>
   )
 }

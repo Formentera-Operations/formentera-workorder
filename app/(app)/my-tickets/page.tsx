@@ -3,7 +3,6 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ChevronDown, ChevronUp, Search, Calendar, SlidersHorizontal } from 'lucide-react'
 import TicketCard from '@/components/ui/TicketCard'
-import BottomNav from '@/components/layout/BottomNav'
 import { useAuth } from '@/components/AuthProvider'
 import { TICKET_STATUSES, STATUS_EMOJI } from '@/lib/utils'
 import type { TicketStatus } from '@/types'
@@ -89,7 +88,7 @@ export default function MyTicketsPage() {
   const totalPages = Math.ceil(totalCount / PAGE_SIZE)
 
   return (
-    <div className="flex flex-col min-h-screen pb-16">
+    <div className="flex flex-col min-h-screen">
       {/* Header */}
       <div className="px-4 py-3 border-b border-gray-200">
         <h1 className="text-base font-semibold text-gray-900">My Tickets</h1>
@@ -271,7 +270,6 @@ export default function MyTicketsPage() {
         )}
       </div>
 
-      <BottomNav />
     </div>
   )
 }

@@ -4,7 +4,6 @@ import { useRouter, useParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { ArrowLeft, ChevronDown, Camera, X } from 'lucide-react'
 import Accordion from '@/components/ui/Accordion'
-import BottomNav from '@/components/layout/BottomNav'
 import LocationDropdowns from '@/components/forms/LocationDropdowns'
 import { useAuth } from '@/components/AuthProvider'
 import { formatDate, formatDateShort, DEPARTMENTS, LOCATION_TYPES, WORK_ORDER_DECISIONS, FINAL_STATUSES, PRIORITY_OPTIONS } from '@/lib/utils'
@@ -275,7 +274,7 @@ export default function MaintenanceTicketPage() {
   const TABS: Tab[] = ['Summary', 'Initial Report', 'Dispatch', 'Repairs / Closeout']
 
   return (
-    <div className="flex flex-col min-h-screen pb-16">
+    <div className="flex flex-col min-h-screen">
       {/* Header */}
       <div className="page-header">
         <button onClick={() => router.back()} className="p-1 -ml-1">
@@ -1160,7 +1159,6 @@ export default function MaintenanceTicketPage() {
         )}
       </div>
 
-      <BottomNav />
     </div>
   )
 }

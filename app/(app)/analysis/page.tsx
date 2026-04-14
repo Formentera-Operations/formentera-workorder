@@ -7,7 +7,6 @@ import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   LineChart, Line, PieChart, Pie, Cell,
 } from 'recharts'
-import BottomNav from '@/components/layout/BottomNav'
 
 const STATUSES = ['Open', 'In Progress', 'Backlogged', 'Awaiting Cost', 'Closed']
 const WORK_TYPES = ['LOE', 'AFE - Workover', 'AFE - Capital', 'Unspecified']
@@ -282,12 +281,11 @@ export default function AnalysisPage() {
 
   if (loading || !aggData) {
     return (
-      <div className="flex flex-col min-h-screen pb-16">
+      <div className="flex flex-col min-h-screen">
         <div className="page-header"><h1 className="page-title">Analysis</h1></div>
         <div className="p-4 space-y-4">
           {[0, 1, 2, 3, 4].map(i => <div key={i} className="h-24 bg-gray-100 rounded-xl animate-pulse" />)}
         </div>
-        <BottomNav />
       </div>
     )
   }
@@ -325,7 +323,7 @@ export default function AnalysisPage() {
   }
 
   return (
-    <div className="flex flex-col min-h-screen pb-16">
+    <div className="flex flex-col min-h-screen">
       {/* Header */}
       <div className="page-header">
         <h1 className="page-title">Analysis</h1>
@@ -1140,7 +1138,6 @@ export default function AnalysisPage() {
 
       </div>
 
-      <BottomNav />
     </div>
   )
 }
