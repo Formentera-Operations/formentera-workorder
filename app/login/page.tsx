@@ -53,18 +53,15 @@ export default function LoginPage() {
         {/* Logo */}
         <div className="mb-10 text-center">
           <div className="flex items-center justify-center gap-3 mb-2">
-            <div className="w-12 h-12 bg-[#1B2E6B] flex items-center justify-center rounded">
-              <span className="text-white font-bold text-xl">F</span>
-            </div>
-            <span className="text-3xl font-bold tracking-widest text-[#1B2E6B]">FORMENTERA</span>
             <Image
               src="/formentera_logo.jpg"
-              alt="Formentera Operations"
+              alt="Formentera"
               width={48}
               height={48}
               className="rounded"
               priority
             />
+            <span className="text-3xl font-bold tracking-widest text-[#1B2E6B]">FORMENTERA</span>
           </div>
           <p className="text-sm text-gray-400 mt-1 flex items-center justify-center gap-1.5">
             <Wrench size={13} /> Work Order App
