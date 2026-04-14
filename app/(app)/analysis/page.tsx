@@ -885,8 +885,8 @@ export default function AnalysisPage() {
               </button>
             </div>
 
-            {/* Mobile: card list */}
-            <div className="md:hidden space-y-2">
+            {/* Mobile: card list — hidden, use table on all screens */}
+            <div className="hidden space-y-2">
               {tableRows.map(r => {
                 const location = r.location_type === 'Well' ? (r.well || '—') : (r.facility || '—')
                 const estCost = r.Estimate_Cost || 0
@@ -930,8 +930,8 @@ export default function AnalysisPage() {
               )}
             </div>
 
-            {/* Desktop: full table */}
-            <div className="hidden md:block bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+            {/* Full table — all screens */}
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead className="bg-gray-50 border-b border-gray-100">
