@@ -4,7 +4,7 @@ import BottomNav from './BottomNav'
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen overflow-x-hidden">
       {/* Sidebar — desktop only */}
       <Sidebar />
 
