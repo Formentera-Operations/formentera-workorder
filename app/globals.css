@@ -12,10 +12,6 @@
 
 * { box-sizing: border-box; }
 
-html, body {
-  overflow-x: hidden;
-}
-
 body {
   -webkit-tap-highlight-color: transparent;
 }
