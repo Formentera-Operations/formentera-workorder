@@ -34,7 +34,7 @@ export default function HomePage() {
         {!isAnalyst && (
           <>
             <h2 className="text-lg font-bold text-gray-900 text-center mb-4">Submit a Ticket</h2>
-            <Link href="/maintenance/new" className="btn-primary">
+            <Link href="/maintenance/new" className="btn-primary lg:max-w-xs">
               <Wrench size={18} />
               Maintenance Ticket
             </Link>
