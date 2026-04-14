@@ -217,7 +217,7 @@ export default function MyTicketsPage() {
       </div>
 
       {/* Ticket list */}
-      <div className="flex-1 overflow-y-auto px-4 pt-3 pb-4 space-y-3">
+      <div className="flex-1 overflow-y-auto px-4 pt-3 pb-4 space-y-3 lg:px-32">
         {loading ? (
           <div className="py-8 text-center text-sm text-gray-400">Loading tickets…</div>
         ) : tickets.length === 0 ? (
