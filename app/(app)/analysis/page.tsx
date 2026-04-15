@@ -350,7 +350,7 @@ export default function AnalysisPage() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 lg:px-32">
 
         {/* ── DATE RANGE FILTER ── */}
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3">
