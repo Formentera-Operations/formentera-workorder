@@ -2,12 +2,14 @@
 import { useState, useEffect, useCallback } from 'react'
 import { filterOptions } from '@/lib/utils'
 import SearchableSelect from '@/components/ui/SearchableSelect'
+import WellSearchPicker from '@/components/forms/WellSearchPicker'
 
 interface LocationDropdownsProps {
   locationType: 'Well' | 'Facility' | ''
   onChange: (vals: {
     asset: string; field: string; well: string; facility: string;
     area: string; route: string;
+    wellUnitId?: string;
   }) => void
   initialValues?: {
     asset?: string; field?: string; well?: string; facility?: string;
@@ -34,8 +36,8 @@ export default function LocationDropdowns({ locationType, onChange, initialValue
       .catch(() => setLoading(false))
   }, [])
 
-  // Derive hidden area/route from current selections
-  const getAreaRoute = useCallback((a: string, f: string, w: string, fac: string) => {
+  // Derive hidden area/route/unitId from current selections
+  const getDerived = useCallback((a: string, f: string, w: string, fac: string) => {
     const d = wfData
     const Asset = d.Asset ?? []
     const FIELD = d.FIELD ?? []
@@ -43,21 +45,34 @@ export default function LocationDropdowns({ locationType, onChange, initialValue
     const Facility_Name = d.Facility_Name ?? []
     const Area = d.Area ?? []
     const ROUTENAME = d.ROUTENAME ?? []
+    const UNITID = d.UNITID ?? []
     for (let i = 0; i < Asset.length; i++) {
       if ((!a || Asset[i] === a) &&
           (!f || FIELD[i] === f) &&
           (!w || WELLNAME[i] === w) &&
           (!fac || Facility_Name[i] === fac)) {
-        return { area: Area[i] || '', route: ROUTENAME[i] || '' }
+        return {
+          area: Area[i] || '',
+          route: ROUTENAME[i] || '',
+          unitId: w ? (UNITID[i] || '') : '',
+        }
       }
     }
-    return { area: '', route: '' }
+    return { area: '', route: '', unitId: '' }
   }, [wfData])
 
-  const emit = useCallback((a: string, f: string, w: string, fac: string) => {
-    const { area, route } = getAreaRoute(a, f, w, fac)
-    onChange({ asset: a, field: f, well: w, facility: fac, area, route })
-  }, [getAreaRoute, onChange])
+  const emit = useCallback((
+    a: string, f: string, w: string, fac: string,
+    overrides?: { unitId?: string; area?: string; route?: string },
+  ) => {
+    const derived = getDerived(a, f, w, fac)
+    onChange({
+      asset: a, field: f, well: w, facility: fac,
+      area: overrides?.area ?? derived.area,
+      route: overrides?.route ?? derived.route,
+      wellUnitId: overrides?.unitId ?? derived.unitId,
+    })
+  }, [getDerived, onChange])
 
   // Auto-fill: when a selection narrows to a single candidate, fill it automatically
   useEffect(() => {
@@ -106,7 +121,6 @@ export default function LocationDropdowns({ locationType, onChange, initialValue
   const allAssets = filterOptions(wfData, 'Asset', {})
   const assets = userAssets.length > 0 ? allAssets.filter(a => userAssets.includes(a)) : allAssets
   const fields = filterOptions(wfData, 'FIELD', { Asset: asset || null })
-  const wells = filterOptions(wfData, 'WELLNAME', { Asset: asset || null, FIELD: field || null })
   const facilities = filterOptions(wfData, 'Facility_Name', { Asset: asset || null, FIELD: field || null })
 
   const singleAsset = userAssets.length === 1
@@ -152,12 +166,22 @@ export default function LocationDropdowns({ locationType, onChange, initialValue
       {locationType === 'Well' && (
         <div>
           <label className="form-label form-label-required">Well</label>
-          <SearchableSelect
+          <WellSearchPicker
             value={well}
-            options={wells}
-            placeholder="Select a Well"
-            disabled={disabled}
-            onChange={v => { setWell(v); setFacility(''); emit(asset, field, v, '') }}
+            assetFilter={asset}
+            disabled={disabled || !asset}
+            placeholder={asset ? 'Search for a well…' : 'Select an Asset first'}
+            onChange={({ well: w, unitId, field: f, area, route }) => {
+              setWell(w)
+              setFacility('')
+              const nextField = f || field
+              if (f && f !== field) setField(f)
+              emit(asset, nextField, w, '', { unitId, area, route })
+            }}
+            onClear={() => {
+              setWell('')
+              emit(asset, field, '', '')
+            }}
           />
         </div>
       )}

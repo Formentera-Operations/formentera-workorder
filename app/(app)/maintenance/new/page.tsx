@@ -23,7 +23,7 @@ export default function MaintenanceFormPage() {
   const [form, setForm] = useState({
     Department: '',
     Location_Type: '' as LocationType | '',
-    Asset: '', Field: '', Well: '', Facility: '', Area: '', Route: '',
+    Asset: '', Field: '', Well: '', Well_UNITID: '', Facility: '', Area: '', Route: '',
     Equipment_Type: '',
     Equipment: '',
     Issue_Description: '',
@@ -136,7 +136,7 @@ export default function MaintenanceFormPage() {
               value={form.Location_Type}
               onChange={e => {
                 set('Location_Type', e.target.value)
-                set('Well', ''); set('Facility', '')
+                set('Well', ''); set('Well_UNITID', ''); set('Facility', '')
                 set('Equipment_Type', ''); set('Equipment', '')
               }}
             >
@@ -151,8 +151,13 @@ export default function MaintenanceFormPage() {
         <LocationDropdowns
           locationType={form.Location_Type as LocationType}
           userAssets={userAssets}
-          onChange={({ asset, field, well, facility, area, route }) => {
-            setForm(f => ({ ...f, Asset: asset, Field: field, Well: well, Facility: facility, Area: area, Route: route }))
+          onChange={({ asset, field, well, facility, area, route, wellUnitId }) => {
+            setForm(f => ({
+              ...f,
+              Asset: asset, Field: field,
+              Well: well, Well_UNITID: wellUnitId ?? '',
+              Facility: facility, Area: area, Route: route,
+            }))
           }}
         />
 

@@ -111,6 +111,7 @@ export async function POST(req: NextRequest) {
         Troubleshooting_Conducted: body.Troubleshooting_Conducted || null,
         Issue_Photos: body.Issue_Photos || [],
         Well: body.Well || null,
+        Well_UNITID: body.Well_UNITID || null,
         Created_by_Email: body.Created_by_Email,
         Created_by_Name: body.Created_by_Name,
         Ticket_Status: (body.assigned_foreman || body.Self_Dispatch_Assignee) ? 'In Progress' : 'Open',
