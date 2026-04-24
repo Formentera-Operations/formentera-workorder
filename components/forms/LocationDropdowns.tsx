@@ -169,6 +169,7 @@ export default function LocationDropdowns({ locationType, onChange, initialValue
           <WellSearchPicker
             value={well}
             assetFilter={asset}
+            fieldFilter={field}
             disabled={disabled || !asset}
             placeholder={asset ? 'Search for a well…' : 'Select an Asset first'}
             onChange={({ well: w, unitId, field: f, area, route }) => {

@@ -29,17 +29,33 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url)
     const q = (searchParams.get('q') ?? '').trim()
     const assetFilter = (searchParams.get('asset') ?? '').trim()
+    const fieldFilter = (searchParams.get('field') ?? '').trim()
 
     const tokens = tokenize(q)
-    if (tokens.length === 0) return NextResponse.json([])
 
-    const tokenClauses = tokens.map(() => 'SEARCH_BLOB ILIKE ?').join(' AND ')
-    const binds: string[] = tokens.map(t => `%${t}%`)
+    // Require at least an asset filter when there are no tokens — prevents
+    // pulling thousands of rows on an empty search.
+    if (tokens.length === 0 && !assetFilter) {
+      return NextResponse.json([])
+    }
 
-    let assetClause = ''
+    const whereParts: string[] = [
+      `WELLNAME IS NOT NULL`,
+      `"Asset" NOT IN ('FP WHEELER MIDSTREAM', 'FP WHEELER UPSTREAM', 'FP WHEELER')`,
+    ]
+    const binds: string[] = []
+
+    for (const t of tokens) {
+      whereParts.push('SEARCH_BLOB ILIKE ?')
+      binds.push(`%${t}%`)
+    }
     if (assetFilter) {
-      assetClause = ' AND "Asset" = ?'
+      whereParts.push('"Asset" = ?')
       binds.push(assetFilter)
+    }
+    if (fieldFilter) {
+      whereParts.push('FIELD = ?')
+      binds.push(fieldFilter)
     }
 
     const sql = `
@@ -47,10 +63,7 @@ export async function GET(req: Request) {
         UNITID, WELLNAME, NAME, UNITIDA, WVWELLID,
         "Asset", "Area", FIELD, ROUTENAME
       FROM FO_STAGE_DB.DEV_INTERMEDIATE.RETOOL_WELL_FACILITY
-      WHERE ${tokenClauses}
-        AND WELLNAME IS NOT NULL
-        AND "Asset" NOT IN ('FP WHEELER MIDSTREAM', 'FP WHEELER UPSTREAM', 'FP WHEELER')
-        ${assetClause}
+      WHERE ${whereParts.join(' AND ')}
       ORDER BY LOWER(WELLNAME)
       LIMIT 50
     `

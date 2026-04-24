@@ -14,6 +14,7 @@ export interface WellSearchResult {
 interface WellSearchPickerProps {
   value: string
   assetFilter?: string
+  fieldFilter?: string
   disabled?: boolean
   placeholder?: string
   onChange: (result: WellSearchResult) => void
@@ -35,6 +36,7 @@ type ApiRow = {
 export default function WellSearchPicker({
   value,
   assetFilter,
+  fieldFilter,
   disabled = false,
   placeholder = 'Search for a well…',
   onChange,
@@ -49,8 +51,8 @@ export default function WellSearchPicker({
   const requestIdRef = useRef(0)
 
   const runSearch = useCallback(async (q: string) => {
-    const trimmed = q.trim()
-    if (trimmed.length < 2) {
+    // Server requires at least an asset filter when q is empty/short.
+    if (!q.trim() && !assetFilter) {
       setRows([])
       setLoading(false)
       return
@@ -58,23 +60,26 @@ export default function WellSearchPicker({
     const rid = ++requestIdRef.current
     setLoading(true)
     try {
-      const params = new URLSearchParams({ q: trimmed })
+      const params = new URLSearchParams()
+      if (q.trim()) params.set('q', q.trim())
       if (assetFilter) params.set('asset', assetFilter)
+      if (fieldFilter) params.set('field', fieldFilter)
       const res = await fetch(`/api/wells/search?${params.toString()}`)
       const data = await res.json()
-      if (rid !== requestIdRef.current) return // stale response
+      if (rid !== requestIdRef.current) return
       setRows(Array.isArray(data) ? data : [])
     } catch {
       if (rid === requestIdRef.current) setRows([])
     } finally {
       if (rid === requestIdRef.current) setLoading(false)
     }
-  }, [assetFilter])
+  }, [assetFilter, fieldFilter])
 
-  // Debounce query → search
+  // Debounce query → search; fire immediately when dropdown opens
   useEffect(() => {
     if (!open) return
-    const t = setTimeout(() => runSearch(query), 300)
+    const delay = query.trim().length === 0 ? 0 : 300
+    const t = setTimeout(() => runSearch(query), delay)
     return () => clearTimeout(t)
   }, [query, open, runSearch])
 
@@ -146,7 +151,7 @@ export default function WellSearchPicker({
               ref={inputRef}
               type="text"
               className="flex-1 text-sm bg-transparent outline-none text-gray-900 placeholder-gray-400"
-              placeholder="Type a well name, API, or EID…"
+              placeholder="Type to filter…"
               value={query}
               onChange={e => setQuery(e.target.value)}
             />
@@ -155,16 +160,14 @@ export default function WellSearchPicker({
           <div className="max-h-80 overflow-y-auto">
             {loading ? (
               <p className="text-sm text-gray-400 px-3 py-3 text-center">Searching…</p>
-            ) : query.trim().length < 2 ? (
-              <p className="text-sm text-gray-400 px-3 py-3 text-center">Type at least 2 characters</p>
             ) : rows.length === 0 ? (
-              <p className="text-sm text-gray-400 px-3 py-3 text-center">No wells found</p>
+              <p className="text-sm text-gray-400 px-3 py-3 text-center">
+                {assetFilter ? 'No wells found' : 'Select an Asset first'}
+              </p>
             ) : (
               rows.map(row => {
                 const selected = row.WELLNAME === value
-                const secondary = row.NAME && row.NAME !== row.WELLNAME
-                  ? row.NAME
-                  : row.UNITIDA ?? ''
+                const secondary = row.NAME && row.NAME !== row.WELLNAME ? row.NAME : null
                 return (
                   <div
                     key={row.UNITID}
