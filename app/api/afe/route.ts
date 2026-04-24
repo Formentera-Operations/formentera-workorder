@@ -10,6 +10,7 @@ type AfeOption = {
 }
 
 let cache: { data: AfeOption[]; ts: number } | null = null
+let cacheAll: { data: AfeOption[]; ts: number } | null = null
 const CACHE_TTL = 10 * 60 * 1000
 
 async function login(base: string, id: string, key: string): Promise<string> {
@@ -41,7 +42,13 @@ async function logout(base: string, token: string): Promise<void> {
   }
 }
 
-async function fetchAfes(base: string, token: string): Promise<AfeOption[]> {
+async function fetchAfes(base: string, token: string, scope: 'default' | 'all'): Promise<AfeOption[]> {
+  const filter = scope === 'all'
+    ? []
+    : [
+        { Column: 'STATUS_DESC', Operator: '=', Value: 'Fully Approved' },
+        { Column: 'CUSTOM/OPERATOR_STATUS', Operator: '=', Value: 'Operated' },
+      ]
   const res = await fetch(`${base}/api/Documents/Reporting/Execute`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
@@ -56,20 +63,9 @@ async function fetchAfes(base: string, token: string): Promise<AfeOption[]> {
         'STATUS_DESC',
       ],
       SortColumns: [],
-      Filter: [
-        {
-          Column: 'STATUS_DESC',
-          Operator: '=',
-          Value: 'Fully Approved',
-        },
-        {
-          Column: 'CUSTOM/OPERATOR_STATUS',
-          Operator: '=',
-          Value: 'Operated',
-        },
-      ],
+      Filter: filter,
       GlobalSearch: '',
-      MaxRowCount: 1000,
+      MaxRowCount: 5000,
       SkipRows: 0,
       IncludeArchived: false,
       IncludeRawData: false,
@@ -106,9 +102,11 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
     const refresh = searchParams.get('refresh') === '1'
+    const scope: 'default' | 'all' = searchParams.get('scope') === 'all' ? 'all' : 'default'
 
-    if (!refresh && cache && Date.now() - cache.ts < CACHE_TTL) {
-      return NextResponse.json(cache.data)
+    const activeCache = scope === 'all' ? cacheAll : cache
+    if (!refresh && activeCache && Date.now() - activeCache.ts < CACHE_TTL) {
+      return NextResponse.json(activeCache.data)
     }
 
     const base = (process.env.AFE_EXECUTE_BASE_URL || '').replace(/\/+$/, '')
@@ -121,8 +119,9 @@ export async function GET(request: Request) {
 
     const token = await login(base, id, key)
     try {
-      const afes = await fetchAfes(base, token)
-      cache = { data: afes, ts: Date.now() }
+      const afes = await fetchAfes(base, token, scope)
+      if (scope === 'all') cacheAll = { data: afes, ts: Date.now() }
+      else cache = { data: afes, ts: Date.now() }
       return NextResponse.json(afes)
     } finally {
       await logout(base, token)

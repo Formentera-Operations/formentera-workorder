@@ -31,6 +31,7 @@ export default function MaintenanceTicketPage() {
   const [equipmentTypes, setEquipmentTypes] = useState<{ id: string; equipment_type: string }[]>([])
   const [equipment, setEquipment] = useState<{ id: number; equip_name: string }[]>([])
   const [afes, setAfes] = useState<{ number: string; description: string }[]>([])
+  const [afesAll, setAfesAll] = useState<{ number: string; description: string }[]>([])
   const [wellAfeNumbers, setWellAfeNumbers] = useState<string[] | null>(null)
   const [showAllAfes, setShowAllAfes] = useState(false)
 
@@ -146,12 +147,20 @@ export default function MaintenanceTicketPage() {
   useEffect(() => {
     const wot = String(repForm.Work_Order_Type || '')
     const unitId = (data?.ticket as Record<string, unknown> | undefined)?.Well_UNITID as string | undefined
-    if (!wot.startsWith('AFE') || !unitId || wellAfeNumbers !== null) return
-    fetch(`/api/wells/${encodeURIComponent(unitId)}/afes`)
-      .then(r => r.json())
-      .then(d => { if (Array.isArray(d)) setWellAfeNumbers(d) })
-      .catch(() => {})
-  }, [repForm.Work_Order_Type, data, wellAfeNumbers])
+    if (!wot.startsWith('AFE') || !unitId) return
+    if (wellAfeNumbers === null) {
+      fetch(`/api/wells/${encodeURIComponent(unitId)}/afes`)
+        .then(r => r.json())
+        .then(d => { if (Array.isArray(d)) setWellAfeNumbers(d) })
+        .catch(() => {})
+    }
+    if (afesAll.length === 0) {
+      fetch('/api/afe?scope=all')
+        .then(r => r.json())
+        .then(d => { if (Array.isArray(d)) setAfesAll(d) })
+        .catch(() => {})
+    }
+  }, [repForm.Work_Order_Type, data, wellAfeNumbers, afesAll.length])
 
   if (loading) return (
     <div className="flex items-center justify-center min-h-screen">
@@ -989,11 +998,11 @@ export default function MaintenanceTicketPage() {
                 const canScope = !!unitId && wellAfeNumbers !== null && wellAfeNumbers.length > 0
                 const scoped = canScope && !showAllAfes
                 const visibleAfes = scoped
-                  ? afes.filter(a => wellAfeNumbers!.includes(a.number))
+                  ? afesAll.filter(a => wellAfeNumbers!.includes(a.number))
                   : afes
                 const afeOptions = visibleAfes.map(a => `${a.number} — ${a.description}`)
                 const currentNumber = String(repForm.AFE_Number || '')
-                const match = afes.find(a => a.number === currentNumber)
+                const match = [...afes, ...afesAll].find(a => a.number === currentNumber)
                 const currentLabel = match ? `${match.number} — ${match.description}` : currentNumber
                 return (
                   <div>
@@ -1012,9 +1021,9 @@ export default function MaintenanceTicketPage() {
                     <SearchableSelect
                       value={currentLabel}
                       options={afeOptions}
-                      placeholder={afes.length === 0 ? 'Loading AFEs…' : 'Select AFE'}
+                      placeholder={visibleAfes.length === 0 ? 'Loading AFEs…' : 'Select AFE'}
                       onChange={v => setRep('AFE_Number', v.split(' — ')[0] || '')}
-                      disabled={isReadOnly || afes.length === 0}
+                      disabled={isReadOnly || (scoped ? afesAll.length === 0 : afes.length === 0)}
                     />
                     {scoped && (
                       <p className="text-xs text-gray-500 mt-1">
