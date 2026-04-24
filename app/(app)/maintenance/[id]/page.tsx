@@ -33,7 +33,6 @@ export default function MaintenanceTicketPage() {
   const [afes, setAfes] = useState<{ number: string; description: string }[]>([])
   const [afesAll, setAfesAll] = useState<{ number: string; description: string }[]>([])
   const [wellAfes, setWellAfes] = useState<{ number: string; jobCategory: string }[] | null>(null)
-  const [showAllAfes, setShowAllAfes] = useState(false)
 
   // Initial Report form state
   const [irForm, setIrForm] = useState<Record<string, string | boolean>>({})
@@ -1013,8 +1012,7 @@ export default function MaintenanceTicketPage() {
                 const unitId = ticket.Well_UNITID as string | undefined
                 const wellAfeNumbers = wellAfes?.map(w => w.number) ?? null
                 const wellScopeLoading = !!unitId && (wellAfes === null || afesAll.length === 0)
-                const canScope = !!unitId && wellAfeNumbers !== null && wellAfeNumbers.length > 0
-                const scoped = canScope && !showAllAfes
+                const scoped = !!unitId && wellAfeNumbers !== null && wellAfeNumbers.length > 0
                 const visibleAfes = wellScopeLoading
                   ? []
                   : scoped
@@ -1029,18 +1027,7 @@ export default function MaintenanceTicketPage() {
                 return (
                   <>
                     <div>
-                      <div className="flex items-baseline justify-between">
-                        <label className="form-label form-label-required">AFE Number</label>
-                        {canScope && !isReadOnly && (
-                          <button
-                            type="button"
-                            onClick={() => setShowAllAfes(v => !v)}
-                            className="text-xs text-[#1B2E6B] underline underline-offset-2"
-                          >
-                            {scoped ? 'Show all AFEs' : 'Show only this well’s AFEs'}
-                          </button>
-                        )}
-                      </div>
+                      <label className="form-label form-label-required">AFE Number</label>
                       <SearchableSelect
                         value={currentLabel}
                         options={afeOptions}
