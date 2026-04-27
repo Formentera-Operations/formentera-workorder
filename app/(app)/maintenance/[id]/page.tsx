@@ -32,7 +32,7 @@ export default function MaintenanceTicketPage() {
   const [equipment, setEquipment] = useState<{ id: number; equip_name: string }[]>([])
   const [afes, setAfes] = useState<{ number: string; description: string }[]>([])
   const [afesAll, setAfesAll] = useState<{ number: string; description: string }[]>([])
-  const [wellAfes, setWellAfes] = useState<{ number: string; jobCategory: string }[] | null>(null)
+  const [wellAfes, setWellAfes] = useState<{ number: string; jobCategory: string; jobTypePrimary: string }[] | null>(null)
 
   // Initial Report form state
   const [irForm, setIrForm] = useState<Record<string, string | boolean>>({})
@@ -85,6 +85,7 @@ export default function MaintenanceTicketPage() {
       Work_Order_Type: rc.Work_Order_Type || '',
       AFE_Number: rc.AFE_Number || '',
       Job_Category: rc.Job_Category || '',
+      Job_Type_Primary: rc.Job_Type_Primary || '',
       Priority_of_Issue: rc.Priority_of_Issue || 'Low',
       repair_details: rc.repair_details || '',
       date_completed: rc.date_completed || '',
@@ -162,14 +163,16 @@ export default function MaintenanceTicketPage() {
     }
   }, [repForm.Work_Order_Type, data, wellAfes, afesAll.length])
 
-  // Auto-fill Job_Category when wellAfes lands and AFE_Number is set but category isn't
+  // Auto-fill Job_Category and Job_Type_Primary when wellAfes lands and AFE_Number is set
   useEffect(() => {
     if (!wellAfes) return
     const afeNumber = String(repForm.AFE_Number || '')
-    if (!afeNumber || repForm.Job_Category) return
+    if (!afeNumber) return
     const match = wellAfes.find(w => w.number === afeNumber)
-    if (match?.jobCategory) setRep('Job_Category', match.jobCategory)
-  }, [wellAfes, repForm.AFE_Number, repForm.Job_Category])
+    if (!match) return
+    if (!repForm.Job_Category && match.jobCategory) setRep('Job_Category', match.jobCategory)
+    if (!repForm.Job_Type_Primary && match.jobTypePrimary) setRep('Job_Type_Primary', match.jobTypePrimary)
+  }, [wellAfes, repForm.AFE_Number, repForm.Job_Category, repForm.Job_Type_Primary])
 
   if (loading) return (
     <div className="flex items-center justify-center min-h-screen">
@@ -490,6 +493,7 @@ export default function MaintenanceTicketPage() {
                     ? [
                         ['AFE Number', repairs.AFE_Number] as [string, unknown],
                         ['Job Category', repairs.Job_Category] as [string, unknown],
+                        ['Job Type Primary', repairs.Job_Type_Primary] as [string, unknown],
                       ]
                     : []),
                   ['Priority of Issue', repairs.Priority_of_Issue],
@@ -999,6 +1003,7 @@ export default function MaintenanceTicketPage() {
                     if (!e.target.value.startsWith('AFE')) {
                       setRep('AFE_Number', '')
                       setRep('Job_Category', '')
+                      setRep('Job_Type_Primary', '')
                     }
                   }} disabled={isReadOnly}>
                     <option value="">Select Work Order Type</option>
@@ -1024,6 +1029,7 @@ export default function MaintenanceTicketPage() {
                 const currentLabel = match ? `${match.number} — ${match.description}` : currentNumber
                 const loading = wellScopeLoading || (scoped ? afesAll.length === 0 : afes.length === 0)
                 const jobCategory = String(repForm.Job_Category || '')
+                const jobTypePrimary = String(repForm.Job_Type_Primary || '')
                 return (
                   <>
                     <div>
@@ -1035,8 +1041,9 @@ export default function MaintenanceTicketPage() {
                         onChange={v => {
                           const picked = v.split(' — ')[0] || ''
                           setRep('AFE_Number', picked)
-                          const cat = wellAfes?.find(w => w.number === picked)?.jobCategory ?? ''
-                          setRep('Job_Category', cat)
+                          const w = wellAfes?.find(w => w.number === picked)
+                          setRep('Job_Category', w?.jobCategory ?? '')
+                          setRep('Job_Type_Primary', w?.jobTypePrimary ?? '')
                         }}
                         disabled={isReadOnly || loading}
                       />
@@ -1052,6 +1059,17 @@ export default function MaintenanceTicketPage() {
                         type="text"
                         className="form-input"
                         value={jobCategory}
+                        placeholder={currentNumber ? '—' : 'Select an AFE first'}
+                        readOnly
+                        disabled
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label">Job Type Primary</label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        value={jobTypePrimary}
                         placeholder={currentNumber ? '—' : 'Select an AFE first'}
                         readOnly
                         disabled

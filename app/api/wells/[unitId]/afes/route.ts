@@ -3,7 +3,11 @@ import { snowflakeQuery } from '@/lib/snowflake'
 
 export const dynamic = 'force-dynamic'
 
-type Row = { AFE_NUMBER_PRIMARY: string; JOB_CATEGORY: string | null }
+type Row = {
+  AFE_NUMBER_PRIMARY: string
+  JOB_CATEGORY: string | null
+  JOB_TYPE_PRIMARY: string | null
+}
 
 export async function GET(
   _req: Request,
@@ -13,10 +17,9 @@ export async function GET(
     const unitId = (params.unitId || '').trim()
     if (!unitId) return NextResponse.json([])
 
-    // Pick the most recent job per AFE number (job categories are consistent
-    // across multiple jobs for the same AFE, but QUALIFY keeps us honest).
+    // Pick the most recent job per AFE number.
     const sql = `
-      SELECT AFE_NUMBER_PRIMARY, JOB_CATEGORY
+      SELECT AFE_NUMBER_PRIMARY, JOB_CATEGORY, JOB_TYPE_PRIMARY
       FROM FO_STAGE_DB.DEV_INTERMEDIATE.RETOOL_WELL_FACILITY w
       JOIN FO_PRODUCTION_DB.GOLD_DEVELOPMENT.DIM_JOB j
         ON j.WELL_ID = w.WVWELLID
@@ -32,6 +35,7 @@ export async function GET(
     const afes = rows.map(r => ({
       number: r.AFE_NUMBER_PRIMARY,
       jobCategory: r.JOB_CATEGORY ?? '',
+      jobTypePrimary: r.JOB_TYPE_PRIMARY ?? '',
     }))
     return NextResponse.json(afes)
   } catch (error) {
