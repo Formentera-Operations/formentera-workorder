@@ -170,6 +170,14 @@ export default function MaintenanceTicketPage() {
     setVendorRows(rows => rows.map(r => (!r.cost && !r.pending ? { ...r, pending: true } : r)))
   }, [repForm.final_status])
 
+  // When the user checks Cost pending on any vendor row, flip Final Status to Awaiting Final Cost
+  useEffect(() => {
+    const hasPending = vendorRows.some(r => r.vendor && r.pending)
+    if (hasPending && repForm.final_status !== 'Repaired - Awaiting Final Cost') {
+      setRep('final_status', 'Repaired - Awaiting Final Cost')
+    }
+  }, [vendorRows, repForm.final_status])
+
   // Auto-fill Job_Category and Job_Type_Primary when wellAfes lands and AFE_Number is set
   useEffect(() => {
     if (!wellAfes) return
