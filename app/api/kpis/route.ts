@@ -9,6 +9,8 @@ export async function GET(req: NextRequest) {
   const userAssets = userAssetsParam
     ? userAssetsParam.split(',').map(a => a.trim()).filter(Boolean)
     : []
+  const startParam = searchParams.get('start') || ''
+  const endParam = searchParams.get('end') || ''
 
   try {
     const db = supabaseAdmin()
@@ -48,22 +50,36 @@ export async function GET(req: NextRequest) {
       .slice(0, 6)
       .map(([dept, count]) => ({ dept, count }))
 
-    // Daily trend — Mon through Sun of current week
-    const today = new Date()
-    const monday = new Date(today)
-    monday.setDate(today.getDate() - ((today.getDay() + 6) % 7)) // Mon = 0 offset
-    const trend: { date: string; label: string; count: number }[] = []
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(monday)
-      d.setDate(monday.getDate() + i)
-      const dateStr = d.toISOString().slice(0, 10)
-      const label = d.toLocaleDateString('en-US', { weekday: 'short' })
-      trend.push({ date: dateStr, label, count: 0 })
+    // Daily trend — defaults to Mon through Sun of current week, or honors start/end if provided
+    let rangeStart: Date
+    let rangeEnd: Date
+    if (startParam && endParam) {
+      rangeStart = new Date(startParam + 'T00:00:00')
+      rangeEnd = new Date(endParam + 'T00:00:00')
+    } else {
+      const today = new Date()
+      rangeStart = new Date(today)
+      rangeStart.setDate(today.getDate() - ((today.getDay() + 6) % 7)) // Monday
+      rangeEnd = new Date(rangeStart)
+      rangeEnd.setDate(rangeStart.getDate() + 6) // Sunday
     }
+    const trend: { date: string; label: string; count: number }[] = []
+    const dayCount = Math.floor((rangeEnd.getTime() - rangeStart.getTime()) / 86_400_000) + 1
+    const useWeekdayLabels = dayCount <= 7
+    const cur = new Date(rangeStart)
+    for (let i = 0; i < dayCount; i++) {
+      const dateStr = cur.toISOString().slice(0, 10)
+      const label = useWeekdayLabels
+        ? cur.toLocaleDateString('en-US', { weekday: 'short' })
+        : `${cur.getMonth() + 1}/${cur.getDate()}`
+      trend.push({ date: dateStr, label, count: 0 })
+      cur.setDate(cur.getDate() + 1)
+    }
+    const trendIndex = new Map(trend.map((t, i) => [t.date, i]))
     for (const r of rows) {
       const date = (r.issue_date || '').slice(0, 10)
-      const slot = trend.find(t => t.date === date)
-      if (slot) slot.count++
+      const idx = trendIndex.get(date)
+      if (idx !== undefined) trend[idx].count++
     }
 
     return NextResponse.json({

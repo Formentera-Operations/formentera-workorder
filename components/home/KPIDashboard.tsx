@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
 import { createSupabaseBrowserClient } from '@/lib/supabase-browser'
@@ -16,6 +16,23 @@ const KPI_GRID = [
 
 const KPI_CLOSED = { key: 'Closed', label: 'Closed', bg: 'bg-green-50', text: 'text-green-800', dot: 'bg-emerald-500' }
 
+type TrendPreset = 'this-week' | 'last-week' | 'this-month' | 'last-month' | 'custom'
+
+const TREND_PRESETS: { key: TrendPreset; label: string; title: string }[] = [
+  { key: 'this-week',  label: 'This Week',  title: 'Tickets This Week' },
+  { key: 'last-week',  label: 'Last Week',  title: 'Tickets Last Week' },
+  { key: 'this-month', label: 'This Month', title: 'Tickets This Month' },
+  { key: 'last-month', label: 'Last Month', title: 'Tickets Last Month' },
+  { key: 'custom',     label: 'Custom',     title: 'Tickets' },
+]
+
+function toLocalISO(d: Date) {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
 interface KPIData {
   statusCounts: Record<string, number>
   deptCounts: { dept: string; count: number }[]
@@ -29,17 +46,52 @@ export default function KPIDashboard() {
 
   const [data, setData] = useState<KPIData | null>(null)
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null)
+  const [trendPreset, setTrendPreset] = useState<TrendPreset>('this-week')
+  const [customStart, setCustomStart] = useState('')
+  const [customEnd, setCustomEnd] = useState('')
+
+  const { trendStart, trendEnd } = useMemo(() => {
+    const today = new Date()
+    if (trendPreset === 'this-week') {
+      const start = new Date(today)
+      start.setDate(today.getDate() - ((today.getDay() + 6) % 7))
+      const end = new Date(start)
+      end.setDate(start.getDate() + 6)
+      return { trendStart: toLocalISO(start), trendEnd: toLocalISO(end) }
+    }
+    if (trendPreset === 'last-week') {
+      const start = new Date(today)
+      start.setDate(today.getDate() - ((today.getDay() + 6) % 7) - 7)
+      const end = new Date(start)
+      end.setDate(start.getDate() + 6)
+      return { trendStart: toLocalISO(start), trendEnd: toLocalISO(end) }
+    }
+    if (trendPreset === 'this-month') {
+      const start = new Date(today.getFullYear(), today.getMonth(), 1)
+      const end = new Date(today.getFullYear(), today.getMonth() + 1, 0)
+      return { trendStart: toLocalISO(start), trendEnd: toLocalISO(end) }
+    }
+    if (trendPreset === 'last-month') {
+      const start = new Date(today.getFullYear(), today.getMonth() - 1, 1)
+      const end = new Date(today.getFullYear(), today.getMonth(), 0)
+      return { trendStart: toLocalISO(start), trendEnd: toLocalISO(end) }
+    }
+    return { trendStart: customStart, trendEnd: customEnd }
+  }, [trendPreset, customStart, customEnd])
 
   const fetchKPIs = useCallback(() => {
     if (loading) return
+    if (trendPreset === 'custom' && (!trendStart || !trendEnd)) return
     const params = new URLSearchParams()
     if (assets.length > 0) params.set('userAssets', assets.join(','))
+    if (trendStart) params.set('start', trendStart)
+    if (trendEnd) params.set('end', trendEnd)
     params.set('_t', Date.now().toString())
     fetch(`/api/kpis?${params}`, { cache: 'no-store' })
       .then(r => r.json())
       .then(d => { setData(d); setLastRefreshed(new Date()) })
       .catch(() => {})
-  }, [assets, loading])
+  }, [assets, loading, trendPreset, trendStart, trendEnd])
 
   useEffect(() => {
     fetchKPIs()
@@ -129,9 +181,46 @@ export default function KPIDashboard() {
         <span className={`text-xs ${KPI_CLOSED.text} opacity-50`}>Tap to view →</span>
       </div>
 
-      {/* 7-day trend */}
+      {/* Daily trend with preset filter */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-        <h3 className="text-sm font-semibold text-gray-700 mb-3">Tickets This Week</h3>
+        <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
+          <h3 className="text-sm font-semibold text-gray-700">
+            {TREND_PRESETS.find(p => p.key === trendPreset)?.title}
+          </h3>
+        </div>
+        <div className="flex gap-1.5 flex-wrap mb-3">
+          {TREND_PRESETS.map(p => (
+            <button
+              key={p.key}
+              onClick={() => setTrendPreset(p.key)}
+              className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${trendPreset === p.key ? 'bg-[#1B2E6B] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+        {trendPreset === 'custom' && (
+          <div className="flex gap-2 mb-3">
+            <div className="flex-1">
+              <label className="text-[10px] text-gray-400 block mb-0.5">From</label>
+              <input
+                type="date"
+                className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#1B2E6B]"
+                value={customStart}
+                onChange={e => setCustomStart(e.target.value)}
+              />
+            </div>
+            <div className="flex-1">
+              <label className="text-[10px] text-gray-400 block mb-0.5">To</label>
+              <input
+                type="date"
+                className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#1B2E6B]"
+                value={customEnd}
+                onChange={e => setCustomEnd(e.target.value)}
+              />
+            </div>
+          </div>
+        )}
         <ResponsiveContainer width="100%" height={110}>
           <BarChart data={dailyTrend} margin={{ top: 4, right: 4, left: -24, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F3F4F6" />
