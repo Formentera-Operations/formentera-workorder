@@ -478,99 +478,6 @@ export default function AnalysisPage() {
               })()}
             </div>
 
-            {/* Work Type Breakdown */}
-            {aggData.workTypeBreakdown && aggData.workTypeBreakdown.length > 0 && (() => {
-              const total = aggData.workTypeBreakdown.reduce((s, w) => s + w.count, 0)
-              const maxCount = aggData.workTypeBreakdown[0]?.count || 1
-              const WORK_TYPE_COLORS: Record<string, string> = {
-                'LOE': 'bg-[#1B2E6B]',
-                'AFE - Workover': 'bg-amber-500',
-                'AFE - Capital': 'bg-emerald-500',
-              }
-              return (
-                <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-sm font-semibold text-gray-700">Work Type <span className="text-[10px] font-normal text-gray-400">(closed)</span></h3>
-                    <span className="text-xs text-gray-400">{total.toLocaleString()} closed</span>
-                  </div>
-                  <div className="space-y-1.5">
-                    {aggData.workTypeBreakdown.map(w => {
-                      const barColor = WORK_TYPE_COLORS[w.type] || 'bg-gray-400'
-                      const pct = Math.round((w.count / total) * 100)
-                      return (
-                        <div
-                          key={w.type}
-                          className="flex items-center gap-3 -mx-1 px-1 py-1.5 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors active:scale-[0.99]"
-                          onClick={() => { setWorkTypeFilter(w.type === 'Unspecified' ? 'Unspecified' : w.type); setStatusFilter('Closed'); setTab('tickets') }}
-                        >
-                          <span className="text-xs text-gray-600 w-28 shrink-0 truncate">{w.type}</span>
-                          <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-                            <div
-                              className={`h-full rounded-full transition-all ${barColor}`}
-                              style={{ width: `${Math.round((w.count / maxCount) * 100)}%` }}
-                            />
-                          </div>
-                          <div className="flex items-center justify-end gap-1.5 w-16 shrink-0">
-                            <span className="text-sm font-bold text-gray-800">{w.count}</span>
-                            <span className="text-[10px] text-gray-400">{pct}%</span>
-                          </div>
-                          <ChevronRight size={12} className="text-gray-300 shrink-0" />
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              )
-            })()}
-
-            {/* Monthly Trend */}
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-              <h3 className="text-sm font-semibold text-gray-700 mb-3">Monthly Trend (12 months)</h3>
-              <ResponsiveContainer width="100%" height={160}>
-                <BarChart data={monthlyTrend} margin={{ top: 4, right: 4, left: -24, bottom: 20 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F3F4F6" />
-                  <XAxis
-                    dataKey="label"
-                    tick={{ fontSize: 10, fill: '#9CA3AF' }}
-                    axisLine={false}
-                    tickLine={false}
-                    angle={-35}
-                    textAnchor="end"
-                    interval={0}
-                  />
-                  <YAxis tick={{ fontSize: 10, fill: '#9CA3AF' }} axisLine={false} tickLine={false} allowDecimals={false} />
-                  <Tooltip cursor={{ fill: '#F3F4F6' }} formatter={(v) => [v, 'Tickets']} />
-                  <Bar dataKey="count" fill="#1B2E6B" radius={[4, 4, 0, 0]} activeBar={{ fill: '#2B3E8B', stroke: 'none' }} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-
-            {/* Cost Trend Over Time */}
-            {aggData.costTrend && aggData.costTrend.length > 0 && (
-              <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-                <h3 className="text-sm font-semibold text-gray-700 mb-3">Cost Trend</h3>
-                <ResponsiveContainer width="100%" height={220}>
-                  <BarChart data={aggData.costTrend} margin={{ top: 4, right: 4, left: -8, bottom: 60 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F3F4F6" />
-                    <XAxis
-                      dataKey="label"
-                      tick={{ fontSize: 10, fill: '#9CA3AF' }}
-                      axisLine={false}
-                      tickLine={false}
-                      angle={-45}
-                      textAnchor="end"
-                      interval={0}
-                    />
-                    <YAxis tick={{ fontSize: 10, fill: '#9CA3AF' }} axisLine={false} tickLine={false} tickFormatter={fmt} />
-                    <Tooltip formatter={(v: unknown) => [fmt(v as number), '']} />
-                    <Legend wrapperStyle={{ fontSize: 10, paddingTop: 55 }} />
-                    <Bar dataKey="estCost" name="Est. Cost" fill="#1B2E6B" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="repairCost" name="Repair Cost" fill="#3B82F6" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-
             {/* Cost by Equipment — slicer-driven (Asset / Field / Status / Equipment Category / Year / Month) */}
             {aggData.costMatrix && aggData.costMatrix.length > 0 && (() => {
               const matrix = aggData.costMatrix
@@ -754,6 +661,99 @@ export default function AnalysisPage() {
                 </div>
               )
             })()}
+
+            {/* Work Type Breakdown */}
+            {aggData.workTypeBreakdown && aggData.workTypeBreakdown.length > 0 && (() => {
+              const total = aggData.workTypeBreakdown.reduce((s, w) => s + w.count, 0)
+              const maxCount = aggData.workTypeBreakdown[0]?.count || 1
+              const WORK_TYPE_COLORS: Record<string, string> = {
+                'LOE': 'bg-[#1B2E6B]',
+                'AFE - Workover': 'bg-amber-500',
+                'AFE - Capital': 'bg-emerald-500',
+              }
+              return (
+                <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-sm font-semibold text-gray-700">Work Type <span className="text-[10px] font-normal text-gray-400">(closed)</span></h3>
+                    <span className="text-xs text-gray-400">{total.toLocaleString()} closed</span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {aggData.workTypeBreakdown.map(w => {
+                      const barColor = WORK_TYPE_COLORS[w.type] || 'bg-gray-400'
+                      const pct = Math.round((w.count / total) * 100)
+                      return (
+                        <div
+                          key={w.type}
+                          className="flex items-center gap-3 -mx-1 px-1 py-1.5 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors active:scale-[0.99]"
+                          onClick={() => { setWorkTypeFilter(w.type === 'Unspecified' ? 'Unspecified' : w.type); setStatusFilter('Closed'); setTab('tickets') }}
+                        >
+                          <span className="text-xs text-gray-600 w-28 shrink-0 truncate">{w.type}</span>
+                          <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all ${barColor}`}
+                              style={{ width: `${Math.round((w.count / maxCount) * 100)}%` }}
+                            />
+                          </div>
+                          <div className="flex items-center justify-end gap-1.5 w-16 shrink-0">
+                            <span className="text-sm font-bold text-gray-800">{w.count}</span>
+                            <span className="text-[10px] text-gray-400">{pct}%</span>
+                          </div>
+                          <ChevronRight size={12} className="text-gray-300 shrink-0" />
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })()}
+
+            {/* Monthly Trend */}
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+              <h3 className="text-sm font-semibold text-gray-700 mb-3">Monthly Trend (12 months)</h3>
+              <ResponsiveContainer width="100%" height={160}>
+                <BarChart data={monthlyTrend} margin={{ top: 4, right: 4, left: -24, bottom: 20 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F3F4F6" />
+                  <XAxis
+                    dataKey="label"
+                    tick={{ fontSize: 10, fill: '#9CA3AF' }}
+                    axisLine={false}
+                    tickLine={false}
+                    angle={-35}
+                    textAnchor="end"
+                    interval={0}
+                  />
+                  <YAxis tick={{ fontSize: 10, fill: '#9CA3AF' }} axisLine={false} tickLine={false} allowDecimals={false} />
+                  <Tooltip cursor={{ fill: '#F3F4F6' }} formatter={(v) => [v, 'Tickets']} />
+                  <Bar dataKey="count" fill="#1B2E6B" radius={[4, 4, 0, 0]} activeBar={{ fill: '#2B3E8B', stroke: 'none' }} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Cost Trend Over Time */}
+            {aggData.costTrend && aggData.costTrend.length > 0 && (
+              <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+                <h3 className="text-sm font-semibold text-gray-700 mb-3">Cost Trend</h3>
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={aggData.costTrend} margin={{ top: 4, right: 4, left: -8, bottom: 60 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F3F4F6" />
+                    <XAxis
+                      dataKey="label"
+                      tick={{ fontSize: 10, fill: '#9CA3AF' }}
+                      axisLine={false}
+                      tickLine={false}
+                      angle={-45}
+                      textAnchor="end"
+                      interval={0}
+                    />
+                    <YAxis tick={{ fontSize: 10, fill: '#9CA3AF' }} axisLine={false} tickLine={false} tickFormatter={fmt} />
+                    <Tooltip formatter={(v: unknown) => [fmt(v as number), '']} />
+                    <Legend wrapperStyle={{ fontSize: 10, paddingTop: 55 }} />
+                    <Bar dataKey="estCost" name="Est. Cost" fill="#1B2E6B" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="repairCost" name="Repair Cost" fill="#3B82F6" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
 
             {/* Ticket Breakdown by Field + Equipment */}
             {equipBreakdownData.length > 0 && (
