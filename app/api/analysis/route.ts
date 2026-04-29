@@ -237,22 +237,6 @@ export async function GET(req: NextRequest) {
       .slice(0, 10)
       .map(([name, count]) => ({ name, count }))
 
-    // 8. Aged tickets — top 10 oldest unresolved
-    const OPEN_STATUSES = ['Open', 'In Progress', 'Backlogged', 'Awaiting Cost']
-    const now = Date.now()
-    const agedTickets = rows
-      .filter(r => OPEN_STATUSES.includes(r.ticket_status) && r.ticket_id > 700)
-      .map(r => ({
-        ticket_id: r.ticket_id,
-        field: r.field || '',
-        equipment: r.equipment_name || 'Unknown',
-        status: r.ticket_status,
-        issue_date: r.issue_date,
-        days_open: Math.floor((now - new Date(r.issue_date).getTime()) / 86_400_000),
-      }))
-      .sort((a, b) => b.days_open - a.days_open)
-      .slice(0, 10)
-
     // 9. Work type breakdown — closed tickets only
     const workTypeMap = new Map<string, number>()
     for (const r of rows) {
@@ -325,7 +309,7 @@ export async function GET(req: NextRequest) {
     }))
 
     return NextResponse.json(
-      { statusTables, fieldEquipChart, costByDept, monthlyTrend, departments, topEquipment, costTrend, agedTickets, workTypeBreakdown, costMatrix },
+      { statusTables, fieldEquipChart, costByDept, monthlyTrend, departments, topEquipment, costTrend, workTypeBreakdown, costMatrix },
       { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate', 'Pragma': 'no-cache' } }
     )
   } catch (err) {

@@ -56,7 +56,6 @@ interface AggData {
   departments: string[]
   topEquipment: { name: string; count: number }[]
   costTrend: { month: string; label: string; estCost: number; repairCost: number }[]
-  agedTickets: { ticket_id: number; field: string; equipment: string; status: string; issue_date: string; days_open: number }[]
   workTypeBreakdown: { type: string; count: number }[]
   costMatrix: {
     month: string
@@ -478,48 +477,6 @@ export default function AnalysisPage() {
                 )
               })()}
             </div>
-
-            {/* Needs Attention — Aged Tickets */}
-            {aggData.agedTickets && aggData.agedTickets.length > 0 && (
-              <div className="bg-white rounded-xl border border-red-100 shadow-sm p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-semibold text-gray-700">Needs Attention</h3>
-                  <span className="text-[10px] font-medium bg-red-50 text-red-700 px-2 py-0.5 rounded-full">
-                    {aggData.agedTickets.length} oldest open
-                  </span>
-                </div>
-                <div className="space-y-2">
-                  {aggData.agedTickets.map(t => {
-                    const daysColor = t.days_open > 30 ? 'bg-red-50 text-red-700' : t.days_open > 14 ? 'bg-amber-50 text-amber-700' : 'bg-gray-100 text-gray-600'
-                    const c = STATUS_STYLE[t.status] || STATUS_STYLE['Open']
-                    return (
-                      <div
-                        key={t.ticket_id}
-                        className="flex items-center gap-3 p-2.5 rounded-xl border border-gray-100 bg-gray-50/50 cursor-pointer hover:bg-blue-50/50 transition-colors active:scale-[0.99]"
-                        onClick={() => router.push(`/maintenance/${t.ticket_id}`)}
-                      >
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5 mb-0.5">
-                            <span className="text-xs font-bold text-[#1B2E6B]">#{t.ticket_id}</span>
-                            <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-medium ${c.bg} ${c.text}`}>
-                              <span className={`w-1 h-1 rounded-full shrink-0 ${c.dot}`} />
-                              {t.status}
-                            </span>
-                          </div>
-                          <p className="text-xs font-medium text-gray-700 truncate">{t.equipment || '—'}</p>
-                          {t.field && <p className="text-[10px] text-gray-400 truncate">{t.field}</p>}
-                        </div>
-                        <div className={`shrink-0 px-2 py-1 rounded-lg text-center ${daysColor}`}>
-                          <p className="text-sm font-bold leading-tight">{t.days_open}</p>
-                          <p className="text-[9px] leading-tight">days</p>
-                        </div>
-                        <ChevronRight size={14} className="text-gray-300 shrink-0" />
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
 
             {/* Work Type Breakdown */}
             {aggData.workTypeBreakdown && aggData.workTypeBreakdown.length > 0 && (() => {
