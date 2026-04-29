@@ -1195,25 +1195,17 @@ export default function MaintenanceTicketPage() {
                       <label className="form-label text-xs">
                         {i === 0 ? 'Vendor (leave blank if not applicable)' : `Vendor ${i + 1}`}
                       </label>
-                      <div className="relative">
-                        <select
-                          className="form-select text-sm"
-                          value={row.vendor}
-                          disabled={isReadOnly}
-                          onChange={e => {
-                            const rows = [...vendorRows]
-                            rows[i] = { ...rows[i], vendor: e.target.value }
-                            setVendorRows(rows)
-                          }}
-                        >
-                          <option value="">Select Vendor</option>
-                          {row.vendor && !vendors.includes(row.vendor) && (
-                            <option key={row.vendor} value={row.vendor}>{row.vendor}</option>
-                          )}
-                          {vendors.map(v => <option key={v} value={v}>{v}</option>)}
-                        </select>
-                        <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                      </div>
+                      <SearchableSelect
+                        value={row.vendor}
+                        options={row.vendor && !vendors.includes(row.vendor) ? [row.vendor, ...vendors] : vendors}
+                        placeholder="Select Vendor"
+                        disabled={isReadOnly}
+                        onChange={v => {
+                          const rows = [...vendorRows]
+                          rows[i] = { ...rows[i], vendor: v }
+                          setVendorRows(rows)
+                        }}
+                      />
                     </div>
                     <div>
                       <label className="form-label text-xs">{i === 0 ? 'Repair Cost*' : 'Repair Cost'}</label>
