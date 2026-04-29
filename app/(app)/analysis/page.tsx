@@ -32,6 +32,22 @@ function fmtSavings(n: number): string {
   return (n >= 0 ? '+' : '-') + fmt(abs)
 }
 
+// Pick a nice step size for the y-axis. Minimum step is $1K so small charts
+// tick every thousand; the step grows with the max value so a $400K chart
+// doesn't render 400 tick marks.
+function niceTicks(max: number): number[] {
+  if (max <= 0) return [0]
+  let step = 1000
+  if (max > 10_000) step = 5_000
+  if (max > 50_000) step = 10_000
+  if (max > 100_000) step = 50_000
+  if (max > 500_000) step = 100_000
+  const top = Math.ceil(max / step) * step
+  const ticks: number[] = []
+  for (let v = 0; v <= top; v += step) ticks.push(v)
+  return ticks
+}
+
 interface AggData {
   statusTables: Record<string, { asset: string; field: string; dept: string; count: number; estCost: number; repairCost: number; savings: number }[]>
   fieldEquipChart: { field: string; equip: string; dept: string; count: number }[]
@@ -673,6 +689,8 @@ export default function AnalysisPage() {
                 for (const s of series) row[s.key] = Math.round(monthMap.get(month)?.[s.key] || 0)
                 return row
               })
+              const equipMax = data.reduce((m, row) => Math.max(m, ...series.map(s => Number(row[s.key]) || 0)), 0)
+              const equipTicks = niceTicks(equipMax)
 
               const Slicer = ({ label, value, options, optionLabel, onChange }: { label: string; value: string; options: string[]; optionLabel?: (v: string) => string; onChange: (v: string) => void }) => (
                 <div className="flex flex-col gap-1 min-w-0">
@@ -708,7 +726,7 @@ export default function AnalysisPage() {
                         <BarChart data={data} margin={{ top: 4, right: 4, left: 12, bottom: 30 }}>
                           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F3F4F6" />
                           <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#9CA3AF' }} axisLine={false} tickLine={false} angle={-45} textAnchor="end" interval={0} />
-                          <YAxis tick={{ fontSize: 10, fill: '#9CA3AF' }} axisLine={false} tickLine={false} tickFormatter={fmt} label={{ value: 'Sum of Est. Cost', angle: -90, position: 'insideLeft', offset: 0, style: { textAnchor: 'middle', fill: '#6B7280', fontSize: 11 } }} />
+                          <YAxis tick={{ fontSize: 10, fill: '#9CA3AF' }} axisLine={false} tickLine={false} tickFormatter={fmt} ticks={equipTicks} domain={[0, equipTicks[equipTicks.length - 1]]} label={{ value: 'Sum of Est. Cost', angle: -90, position: 'insideLeft', offset: 0, style: { textAnchor: 'middle', fill: '#6B7280', fontSize: 11 } }} />
                           <Tooltip formatter={(v: unknown) => [fmt(v as number), '']} />
                           <Legend layout="horizontal" verticalAlign="bottom" align="center" wrapperStyle={{ fontSize: 10, paddingTop: 8 }} />
                           {series.map(s => (
@@ -765,6 +783,8 @@ export default function AnalysisPage() {
                 for (const s of STATUSES) row[s] = Math.round(monthMap.get(month)?.[s] || 0)
                 return row
               })
+              const statusMax = data.reduce((m, row) => Math.max(m, ...STATUSES.map(s => Number(row[s]) || 0)), 0)
+              const statusTicks = niceTicks(statusMax)
 
               const Slicer = ({ label, value, options, optionLabel, onChange }: { label: string; value: string; options: string[]; optionLabel?: (v: string) => string; onChange: (v: string) => void }) => (
                 <div className="flex flex-col gap-1 min-w-0">
@@ -796,7 +816,7 @@ export default function AnalysisPage() {
                       <BarChart data={data} margin={{ top: 4, right: 4, left: 12, bottom: 30 }}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F3F4F6" />
                         <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#9CA3AF' }} axisLine={false} tickLine={false} angle={-45} textAnchor="end" interval={0} />
-                        <YAxis tick={{ fontSize: 10, fill: '#9CA3AF' }} axisLine={false} tickLine={false} tickFormatter={fmt} label={{ value: 'Sum of Est. Cost', angle: -90, position: 'insideLeft', offset: 0, style: { textAnchor: 'middle', fill: '#6B7280', fontSize: 11 } }} />
+                        <YAxis tick={{ fontSize: 10, fill: '#9CA3AF' }} axisLine={false} tickLine={false} tickFormatter={fmt} ticks={statusTicks} domain={[0, statusTicks[statusTicks.length - 1]]} label={{ value: 'Sum of Est. Cost', angle: -90, position: 'insideLeft', offset: 0, style: { textAnchor: 'middle', fill: '#6B7280', fontSize: 11 } }} />
                         <Tooltip formatter={(v: unknown) => [fmt(v as number), '']} />
                         <Legend layout="horizontal" verticalAlign="bottom" align="center" wrapperStyle={{ fontSize: 10, paddingTop: 8 }} />
                         {STATUSES.map(s => (
