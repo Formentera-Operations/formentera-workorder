@@ -4,7 +4,6 @@ import { supabaseAdmin } from '@/lib/supabase'
 export const dynamic = 'force-dynamic'
 
 const STATUS_ORDER = ['Open', 'In Progress', 'Backlogged', 'Awaiting Cost', 'Closed']
-const BACKLOG_STATUSES = ['Open', 'In Progress', 'Backlogged']
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
@@ -213,24 +212,6 @@ export async function GET(req: NextRequest) {
       .filter(d => d.estCost > 0 || d.repairCost > 0)
       .sort((a, b) => b.estCost - a.estCost)
 
-    // 4. Backlog Health — avg days open per open status
-    const backlogMap: Record<string, { totalDays: number; count: number }> = {}
-    for (const s of BACKLOG_STATUSES) backlogMap[s] = { totalDays: 0, count: 0 }
-    const now = Date.now()
-    for (const r of rows) {
-      if (!BACKLOG_STATUSES.includes(r.ticket_status)) continue
-      const days = Math.floor((now - new Date(r.issue_date).getTime()) / 86_400_000)
-      backlogMap[r.ticket_status].totalDays += days
-      backlogMap[r.ticket_status].count++
-    }
-    const backlogHealth = BACKLOG_STATUSES.map(status => ({
-      status,
-      count: backlogMap[status].count,
-      avgDays: backlogMap[status].count > 0
-        ? Math.round(backlogMap[status].totalDays / backlogMap[status].count)
-        : 0,
-    }))
-
     // 5. Monthly trend — build from actual data
     const monthCountMap = new Map<string, number>()
     for (const r of rows) {
@@ -343,7 +324,7 @@ export async function GET(req: NextRequest) {
     }))
 
     return NextResponse.json(
-      { statusTables, fieldEquipChart, costByDept, backlogHealth, monthlyTrend, departments, topEquipment, costTrend, agedTickets, workTypeBreakdown, costMatrix },
+      { statusTables, fieldEquipChart, costByDept, monthlyTrend, departments, topEquipment, costTrend, agedTickets, workTypeBreakdown, costMatrix },
       { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate', 'Pragma': 'no-cache' } }
     )
   } catch (err) {

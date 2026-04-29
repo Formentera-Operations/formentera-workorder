@@ -52,7 +52,6 @@ interface AggData {
   statusTables: Record<string, { asset: string; field: string; dept: string; count: number; estCost: number; repairCost: number; savings: number }[]>
   fieldEquipChart: { field: string; equip: string; dept: string; count: number }[]
   costByDept: { dept: string; estCost: number; repairCost: number }[]
-  backlogHealth: { status: string; count: number; avgDays: number }[]
   monthlyTrend: { month: string; label: string; count: number }[]
   departments: string[]
   topEquipment: { name: string; count: number }[]
@@ -327,7 +326,7 @@ export default function AnalysisPage() {
     )
   }
 
-  const { statusTables, costByDept, backlogHealth, monthlyTrend, departments } = aggData
+  const { statusTables, costByDept, monthlyTrend, departments } = aggData
 
   // Derive status totals for the KPI summary row
   const statusTotals = STATUSES.reduce((acc, s) => {
@@ -521,36 +520,6 @@ export default function AnalysisPage() {
                 </div>
               </div>
             )}
-
-            {/* Backlog Health */}
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-              <h3 className="text-sm font-semibold text-gray-700 mb-3">Backlog Health</h3>
-              <div className="space-y-2.5">
-                {backlogHealth.map(({ status, count, avgDays }) => {
-                  const c = STATUS_STYLE[status]
-                  const maxDays = Math.max(...backlogHealth.map(b => b.avgDays), 1)
-                  return (
-                    <div key={status} className="flex items-center gap-3">
-                      <div className="flex items-center gap-1.5 w-24 shrink-0">
-                        <div className={`w-2 h-2 rounded-full shrink-0 ${c.dot}`} />
-                        <span className={`text-xs font-medium ${c.text} truncate`}>{status}</span>
-                      </div>
-                      <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-all ${c.dot}`}
-                          style={{ width: `${Math.round((avgDays / maxDays) * 100)}%` }}
-                        />
-                      </div>
-                      <div className="text-right w-20 shrink-0">
-                        <span className="text-sm font-bold text-gray-800">{avgDays}</span>
-                        <span className="text-xs text-gray-400"> days</span>
-                      </div>
-                      <span className="text-xs text-gray-400 w-14 text-right shrink-0">{count} tickets</span>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
 
             {/* Work Type Breakdown */}
             {aggData.workTypeBreakdown && aggData.workTypeBreakdown.length > 0 && (() => {
