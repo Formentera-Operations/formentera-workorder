@@ -43,8 +43,14 @@ export async function GET(req: NextRequest) {
       }
       if (statusFilter && statusFilter !== 'All') query = query.eq('ticket_status', statusFilter)
       if (deptFilter && deptFilter !== 'All') query = query.eq('department', deptFilter)
-      if (equipmentFilter && equipmentFilter !== 'All') query = query.eq('equipment_name', equipmentFilter)
-      if (fieldFilter && fieldFilter !== 'All') query = query.eq('field', fieldFilter)
+      if (equipmentFilter && equipmentFilter !== 'All') {
+        if (equipmentFilter === 'Unknown') query = query.or('equipment_name.is.null,equipment_name.eq.')
+        else query = query.eq('equipment_name', equipmentFilter)
+      }
+      if (fieldFilter && fieldFilter !== 'All') {
+        if (fieldFilter === 'Unknown') query = query.or('field.is.null,field.eq.')
+        else query = query.eq('field', fieldFilter)
+      }
       if (workTypeFilter) {
         if (workTypeFilter === 'Unspecified') {
           query = query.or('work_order_type.is.null,work_order_type.eq.')
@@ -92,8 +98,14 @@ export async function GET(req: NextRequest) {
         }
         if (statusFilter && statusFilter !== 'All') q = q.eq('ticket_status', statusFilter)
         if (deptFilter && deptFilter !== 'All') q = q.eq('department', deptFilter)
-        if (equipmentFilter && equipmentFilter !== 'All') q = q.eq('equipment_name', equipmentFilter)
-        if (fieldFilter && fieldFilter !== 'All') q = q.eq('field', fieldFilter)
+        if (equipmentFilter && equipmentFilter !== 'All') {
+          if (equipmentFilter === 'Unknown') q = q.or('equipment_name.is.null,equipment_name.eq.')
+          else q = q.eq('equipment_name', equipmentFilter)
+        }
+        if (fieldFilter && fieldFilter !== 'All') {
+          if (fieldFilter === 'Unknown') q = q.or('field.is.null,field.eq.')
+          else q = q.eq('field', fieldFilter)
+        }
         if (workTypeFilter) {
           if (workTypeFilter === 'Unspecified') {
             q = q.or('work_order_type.is.null,work_order_type.eq.')
