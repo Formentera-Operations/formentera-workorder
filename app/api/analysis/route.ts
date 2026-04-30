@@ -47,7 +47,7 @@ export async function GET(req: NextRequest) {
       if (fieldFilter && fieldFilter !== 'All') query = query.eq('field', fieldFilter)
       if (workTypeFilter) {
         if (workTypeFilter === 'Unspecified') {
-          query = query.is('work_order_type', null)
+          query = query.or('work_order_type.is.null,work_order_type.eq.')
         } else {
           query = query.eq('work_order_type', workTypeFilter)
         }
@@ -96,7 +96,7 @@ export async function GET(req: NextRequest) {
         if (fieldFilter && fieldFilter !== 'All') q = q.eq('field', fieldFilter)
         if (workTypeFilter) {
           if (workTypeFilter === 'Unspecified') {
-            q = q.is('work_order_type', null)
+            q = q.or('work_order_type.is.null,work_order_type.eq.')
           } else {
             q = q.eq('work_order_type', workTypeFilter)
           }
