@@ -1102,7 +1102,7 @@ export default function MaintenanceTicketPage() {
               {/* Priority pill selector */}
               <div>
                 <label className="form-label">Priority of Issue</label>
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-1.5 p-1.5 bg-gray-100 rounded-xl">
+                <div className="grid grid-cols-4 gap-1 sm:gap-1.5 p-1 sm:p-1.5 bg-gray-100 rounded-xl">
                   {PRIORITY_OPTIONS.map(p => {
                     const selected = repForm.Priority_of_Issue === p
                     return (
@@ -1111,7 +1111,7 @@ export default function MaintenanceTicketPage() {
                         type="button"
                         onClick={() => setRep('Priority_of_Issue', p)}
                         disabled={isReadOnly}
-                        className={`px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                        className={`px-1 sm:px-3 py-2 sm:py-2.5 rounded-lg text-[11px] sm:text-sm font-medium whitespace-nowrap transition-all ${
                           selected
                             ? 'bg-[#1B2E6B] text-white shadow-sm'
                             : 'text-gray-700 hover:bg-white/70'
