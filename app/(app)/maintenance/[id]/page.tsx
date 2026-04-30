@@ -288,6 +288,10 @@ export default function MaintenanceTicketPage() {
   ]
 
   async function saveRepairs() {
+    if (repForm.start_date && repForm.date_completed && new Date(repForm.date_completed as string) < new Date(repForm.start_date as string)) {
+      toast.error('Date Completed must be the same as or after the Start Date.', { duration: 6000 })
+      return
+    }
     setSaving(true)
     const filledVendors = vendorRows.filter(r => r.vendor)
     const hasPendingCost = filledVendors.some(r => r.pending || !r.cost)
@@ -1272,7 +1276,17 @@ export default function MaintenanceTicketPage() {
 
               <div>
                 <label className="form-label">Date Completed</label>
-                <input type="datetime-local" className="form-input" value={repForm.date_completed ? (repForm.date_completed as string).slice(0, 16) : ''} onChange={e => setRep('date_completed', e.target.value)} disabled={isReadOnly} />
+                <input
+                  type="datetime-local"
+                  className="form-input"
+                  value={repForm.date_completed ? (repForm.date_completed as string).slice(0, 16) : ''}
+                  min={repForm.start_date ? (repForm.start_date as string).slice(0, 16) : undefined}
+                  onChange={e => setRep('date_completed', e.target.value)}
+                  disabled={isReadOnly}
+                />
+                {repForm.start_date && repForm.date_completed && new Date(repForm.date_completed as string) < new Date(repForm.start_date as string) && (
+                  <p className="text-xs text-red-600 mt-1">Date Completed must be the same as or after the Start Date.</p>
+                )}
               </div>
 
               {!isReadOnly && <p className="text-sm text-gray-500">Submit the changes above to notify the original sender.</p>}
@@ -1283,7 +1297,8 @@ export default function MaintenanceTicketPage() {
                   (String(repForm.Work_Order_Type || '').startsWith('AFE') && !repForm.AFE_Number) ||
                   !repForm.final_status ||
                   !String(repForm.repair_details || '').trim() ||
-                  (vendorRows.every(r => !r.cost) && repForm.final_status !== 'Repaired - Awaiting Final Cost')
+                  (vendorRows.every(r => !r.cost) && repForm.final_status !== 'Repaired - Awaiting Final Cost') ||
+                  (!!repForm.start_date && !!repForm.date_completed && new Date(repForm.date_completed as string) < new Date(repForm.start_date as string))
                 }>
                   {saving ? 'Submitting…' : 'Submit'}
                 </button>
