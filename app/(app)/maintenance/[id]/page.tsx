@@ -1099,24 +1099,28 @@ export default function MaintenanceTicketPage() {
                 )
               })()}
 
-              {/* Priority radio buttons */}
+              {/* Priority pill selector */}
               <div>
                 <label className="form-label">Priority of Issue</label>
-                <div className="space-y-2">
-                  {PRIORITY_OPTIONS.map(p => (
-                    <label key={p} className="flex items-center gap-2 cursor-pointer px-3 py-2 rounded-lg transition-all hover:bg-gray-100 hover:shadow-sm">
-                      <input
-                        type="radio"
-                        name="priority"
-                        value={p}
-                        checked={repForm.Priority_of_Issue === p}
-                        onChange={() => setRep('Priority_of_Issue', p)}
+                <div className="inline-flex gap-1 p-1 bg-gray-100 rounded-full flex-wrap">
+                  {PRIORITY_OPTIONS.map(p => {
+                    const selected = repForm.Priority_of_Issue === p
+                    return (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => setRep('Priority_of_Issue', p)}
                         disabled={isReadOnly}
-                        className="w-4 h-4 accent-[#1B2E6B]"
-                      />
-                      <span className="text-sm text-gray-700">{p}</span>
-                    </label>
-                  ))}
+                        className={`px-5 py-2 rounded-full text-sm font-medium transition-all ${
+                          selected
+                            ? 'bg-[#1B2E6B] text-white shadow-sm'
+                            : 'text-gray-600 hover:text-gray-900'
+                        } ${isReadOnly ? 'opacity-60 cursor-not-allowed' : ''}`}
+                      >
+                        {p}
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
 
