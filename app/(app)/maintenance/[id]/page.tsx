@@ -410,10 +410,16 @@ export default function MaintenanceTicketPage() {
               <div>
                 <p className="text-xs text-gray-400 text-center mb-1">Click to view</p>
                 <div
-                  className="w-full h-52 rounded-xl overflow-hidden cursor-pointer"
+                  className="relative w-full h-52 rounded-xl overflow-hidden cursor-pointer"
                   onClick={() => router.push(`/maintenance/${id}/issue-photos`)}
                 >
                   <img src={(ticket.Issue_Photos as string[])[0]} alt="Issue" className="w-full h-full object-cover" />
+                  {(ticket.Issue_Photos as string[]).length > 1 && (
+                    <div className="absolute top-2 right-2 flex items-center gap-1 px-2 py-1 bg-black/60 text-white text-xs font-medium rounded-full backdrop-blur-sm">
+                      <Camera size={12} />
+                      <span>{(ticket.Issue_Photos as string[]).length}</span>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -502,10 +508,16 @@ export default function MaintenanceTicketPage() {
                   <div className="mb-3">
                     <p className="text-xs text-gray-400 text-center mb-1">Click to view</p>
                     <div
-                      className="w-full h-48 rounded-xl overflow-hidden cursor-pointer"
+                      className="relative w-full h-48 rounded-xl overflow-hidden cursor-pointer"
                       onClick={() => router.push(`/maintenance/${id}/repair-images`)}
                     >
                       <img src={(repairs.repair_images as string[])[0]} alt="Repair" className="w-full h-full object-cover" />
+                      {(repairs.repair_images as string[]).length > 1 && (
+                        <div className="absolute top-2 right-2 flex items-center gap-1 px-2 py-1 bg-black/60 text-white text-xs font-medium rounded-full backdrop-blur-sm">
+                          <Camera size={12} />
+                          <span>{(repairs.repair_images as string[]).length}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
