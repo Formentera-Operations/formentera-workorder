@@ -1111,7 +1111,7 @@ export default function MaintenanceTicketPage() {
                         type="button"
                         onClick={() => setRep('Priority_of_Issue', p)}
                         disabled={isReadOnly}
-                        className={`px-1 sm:px-3 py-2 sm:py-2.5 rounded-lg text-[10px] sm:text-sm font-medium whitespace-nowrap transition-all ${
+                        className={`px-1 sm:px-3 py-2 sm:py-2.5 rounded-lg text-[8px] sm:text-sm font-medium whitespace-nowrap transition-all ${
                           selected
                             ? 'bg-[#1B2E6B] text-white shadow-sm'
                             : 'text-gray-700 hover:bg-white/70'
