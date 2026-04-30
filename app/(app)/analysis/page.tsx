@@ -1103,19 +1103,6 @@ export default function AnalysisPage() {
                 </div>
               )}
 
-              {/* Equipment */}
-              {aggData?.equipmentList && aggData.equipmentList.length > 0 && (
-                <div>
-                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Equipment</p>
-                  <SearchableSelect
-                    value={equipmentFilter}
-                    options={['All', ...aggData.equipmentList]}
-                    placeholder="All Equipment"
-                    onChange={v => setEquipmentFilter(v || 'All')}
-                  />
-                </div>
-              )}
-
               {/* Work Type */}
               <div>
                 <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Work Type</p>
@@ -1131,6 +1118,19 @@ export default function AnalysisPage() {
                   ))}
                 </div>
               </div>
+
+              {/* Equipment */}
+              {aggData?.equipmentList && aggData.equipmentList.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Equipment</p>
+                  <SearchableSelect
+                    value={equipmentFilter}
+                    options={['All', ...aggData.equipmentList]}
+                    placeholder="All Equipment"
+                    onChange={v => setEquipmentFilter(v || 'All')}
+                  />
+                </div>
+              )}
 
               {/* Reset */}
               {(search || statusFilter !== 'All' || tableDeptFilter !== 'All' || fieldFilter !== 'All' || equipmentFilter !== 'All' || workTypeFilter !== 'All') && (
