@@ -35,9 +35,16 @@ export async function GET(req: NextRequest) {
 
       if (userAssets.length > 0) query = query.in('asset', userAssets)
       if (search) {
-        query = query.or(
-          `ticket_id::text.ilike.%${search}%,equipment_name.ilike.%${search}%,issue_description.ilike.%${search}%,field.ilike.%${search}%,well.ilike.%${search}%,facility.ilike.%${search}%,department.ilike.%${search}%`
-        )
+        const orParts = [
+          `equipment_name.ilike.%${search}%`,
+          `issue_description.ilike.%${search}%`,
+          `field.ilike.%${search}%`,
+          `well.ilike.%${search}%`,
+          `facility.ilike.%${search}%`,
+          `department.ilike.%${search}%`,
+        ]
+        if (/^\d+$/.test(search)) orParts.push(`ticket_id.eq.${search}`)
+        query = query.or(orParts.join(','))
       }
       if (statusFilter && statusFilter !== 'All') query = query.eq('ticket_status', statusFilter)
       if (deptFilter && deptFilter !== 'All') query = query.eq('department', deptFilter)
@@ -88,9 +95,16 @@ export async function GET(req: NextRequest) {
           .range(from, from + BATCH - 1)
         if (userAssets.length > 0) q = q.in('asset', userAssets)
         if (search) {
-          q = q.or(
-            `ticket_id::text.ilike.%${search}%,equipment_name.ilike.%${search}%,issue_description.ilike.%${search}%,field.ilike.%${search}%,well.ilike.%${search}%,facility.ilike.%${search}%,department.ilike.%${search}%`
-          )
+          const orParts = [
+            `equipment_name.ilike.%${search}%`,
+            `issue_description.ilike.%${search}%`,
+            `field.ilike.%${search}%`,
+            `well.ilike.%${search}%`,
+            `facility.ilike.%${search}%`,
+            `department.ilike.%${search}%`,
+          ]
+          if (/^\d+$/.test(search)) orParts.push(`ticket_id.eq.${search}`)
+          q = q.or(orParts.join(','))
         }
         if (statusFilter && statusFilter !== 'All') q = q.eq('ticket_status', statusFilter)
         if (deptFilter && deptFilter !== 'All') q = q.eq('department', deptFilter)
