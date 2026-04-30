@@ -664,9 +664,10 @@ export default function AnalysisPage() {
 
             {/* Monthly Trend */}
             <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-              <h3 className="text-sm font-semibold text-gray-700 mb-3">Monthly Trend (12 months)</h3>
-              <ResponsiveContainer width="100%" height={160}>
-                <BarChart data={monthlyTrend} margin={{ top: 4, right: 4, left: -24, bottom: 20 }}>
+              <h3 className="text-sm font-semibold text-gray-700">Monthly Ticket Trend</h3>
+              <p className="text-xs text-gray-400 mb-3">Tickets created each month over the last 12 months</p>
+              <ResponsiveContainer width="100%" height={180}>
+                <BarChart data={monthlyTrend} margin={{ top: 4, right: 4, left: 12, bottom: 20 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F3F4F6" />
                   <XAxis
                     dataKey="label"
@@ -677,7 +678,13 @@ export default function AnalysisPage() {
                     textAnchor="end"
                     interval={0}
                   />
-                  <YAxis tick={{ fontSize: 10, fill: '#9CA3AF' }} axisLine={false} tickLine={false} allowDecimals={false} />
+                  <YAxis
+                    tick={{ fontSize: 10, fill: '#9CA3AF' }}
+                    axisLine={false}
+                    tickLine={false}
+                    allowDecimals={false}
+                    label={{ value: 'Tickets', angle: -90, position: 'insideLeft', offset: 0, fontSize: 11, fill: '#6B7280', style: { textAnchor: 'middle' } }}
+                  />
                   <Tooltip cursor={{ fill: '#F3F4F6' }} formatter={(v) => [v, 'Tickets']} />
                   <Bar dataKey="count" fill="#1B2E6B" radius={[4, 4, 0, 0]} activeBar={{ fill: '#2B3E8B', stroke: 'none' }} />
                 </BarChart>
@@ -687,9 +694,10 @@ export default function AnalysisPage() {
             {/* Cost by Department */}
             {costByDept.length > 0 && (
               <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-                <h3 className="text-sm font-semibold text-gray-700 mb-3">Cost by Department</h3>
+                <h3 className="text-sm font-semibold text-gray-700">Cost by Department</h3>
+                <p className="text-xs text-gray-400 mb-3">Estimated cost vs. actual repair cost by department</p>
                 <ResponsiveContainer width="100%" height={260}>
-                  <BarChart data={costByDept} margin={{ top: 4, right: 4, left: -8, bottom: 60 }}>
+                  <BarChart data={costByDept} margin={{ top: 4, right: 4, left: 12, bottom: 60 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F3F4F6" />
                     <XAxis
                       dataKey="dept"
@@ -700,7 +708,13 @@ export default function AnalysisPage() {
                       textAnchor="end"
                       interval={0}
                     />
-                    <YAxis tick={{ fontSize: 10, fill: '#9CA3AF' }} axisLine={false} tickLine={false} tickFormatter={fmt} />
+                    <YAxis
+                      tick={{ fontSize: 10, fill: '#9CA3AF' }}
+                      axisLine={false}
+                      tickLine={false}
+                      tickFormatter={fmt}
+                      label={{ value: 'Cost ($)', angle: -90, position: 'insideLeft', offset: 0, fontSize: 11, fill: '#6B7280', style: { textAnchor: 'middle' } }}
+                    />
                     <Tooltip formatter={(v: unknown) => [fmt(v as number), '']} />
                     <Legend wrapperStyle={{ fontSize: 10, paddingTop: 70 }} />
                     <Bar dataKey="estCost" name="Est. Cost" fill="#1B2E6B" radius={[4, 4, 0, 0]} />
@@ -713,9 +727,10 @@ export default function AnalysisPage() {
             {/* Cost Trend Over Time */}
             {aggData.costTrend && aggData.costTrend.length > 0 && (
               <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-                <h3 className="text-sm font-semibold text-gray-700 mb-3">Cost Trend</h3>
+                <h3 className="text-sm font-semibold text-gray-700">Monthly Cost Trend</h3>
+                <p className="text-xs text-gray-400 mb-3">Estimated cost vs. actual repair cost by month</p>
                 <ResponsiveContainer width="100%" height={220}>
-                  <BarChart data={aggData.costTrend} margin={{ top: 4, right: 4, left: -8, bottom: 60 }}>
+                  <BarChart data={aggData.costTrend} margin={{ top: 4, right: 4, left: 12, bottom: 60 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F3F4F6" />
                     <XAxis
                       dataKey="label"
@@ -726,7 +741,13 @@ export default function AnalysisPage() {
                       textAnchor="end"
                       interval={0}
                     />
-                    <YAxis tick={{ fontSize: 10, fill: '#9CA3AF' }} axisLine={false} tickLine={false} tickFormatter={fmt} />
+                    <YAxis
+                      tick={{ fontSize: 10, fill: '#9CA3AF' }}
+                      axisLine={false}
+                      tickLine={false}
+                      tickFormatter={fmt}
+                      label={{ value: 'Cost ($)', angle: -90, position: 'insideLeft', offset: 0, fontSize: 11, fill: '#6B7280', style: { textAnchor: 'middle' } }}
+                    />
                     <Tooltip formatter={(v: unknown) => [fmt(v as number), '']} />
                     <Legend wrapperStyle={{ fontSize: 10, paddingTop: 55 }} />
                     <Bar dataKey="estCost" name="Est. Cost" fill="#1B2E6B" radius={[4, 4, 0, 0]} />
