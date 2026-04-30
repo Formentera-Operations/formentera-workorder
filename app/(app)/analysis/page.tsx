@@ -2,6 +2,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
+import SearchableSelect from '@/components/ui/SearchableSelect'
 import { Search, ChevronDown, ChevronUp, X, BarChart2, Table2, List, Download, ChevronRight, MessageSquare, Send } from 'lucide-react'
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -1105,16 +1106,12 @@ export default function AnalysisPage() {
               {aggData?.equipmentList && aggData.equipmentList.length > 0 && (
                 <div>
                   <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Equipment</p>
-                  <select
-                    className="w-full py-2 px-3 border border-gray-200 rounded-lg text-sm bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#1B2E6B]/20 focus:border-[#1B2E6B] transition-colors"
+                  <SearchableSelect
                     value={equipmentFilter}
-                    onChange={e => setEquipmentFilter(e.target.value)}
-                  >
-                    <option value="All">All Equipment</option>
-                    {aggData.equipmentList.map(eq => (
-                      <option key={eq} value={eq}>{eq}</option>
-                    ))}
-                  </select>
+                    options={['All', ...aggData.equipmentList]}
+                    placeholder="All Equipment"
+                    onChange={v => setEquipmentFilter(v || 'All')}
+                  />
                 </div>
               )}
 
