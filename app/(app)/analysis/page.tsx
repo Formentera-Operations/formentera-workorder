@@ -617,7 +617,7 @@ export default function AnalysisPage() {
                           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F3F4F6" />
                           <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#9CA3AF' }} axisLine={false} tickLine={false} angle={-45} textAnchor="end" interval={0} />
                           <YAxis tick={{ fontSize: 10, fill: '#9CA3AF' }} axisLine={false} tickLine={false} tickFormatter={fmt} ticks={equipTicks} domain={[0, equipTicks[equipTicks.length - 1]]} label={{ value: 'Sum of Est. Cost', angle: -90, position: 'insideLeft', offset: 0, style: { textAnchor: 'middle', fill: '#6B7280', fontSize: 11 } }} />
-                          <Tooltip cursor={{ fill: '#F3F4F6' }} content={<ChartTooltip valueFormatter={fmt} />} offset={20} wrapperStyle={{ outline: 'none', zIndex: 50 }} />
+                          <Tooltip cursor={{ fill: '#F3F4F6' }} content={<ChartTooltip valueFormatter={fmt} />} offset={40} wrapperStyle={{ outline: 'none', zIndex: 50 }} />
                           <Legend layout="horizontal" verticalAlign="bottom" align="center" wrapperStyle={{ fontSize: 10, paddingTop: 32 }} />
                           {series.map(s => (
                             <Bar key={s.key} dataKey={s.key} name={s.key} fill={s.color} radius={[4, 4, 0, 0]} />
@@ -707,7 +707,7 @@ export default function AnalysisPage() {
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F3F4F6" />
                         <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#9CA3AF' }} axisLine={false} tickLine={false} angle={-45} textAnchor="end" interval={0} />
                         <YAxis tick={{ fontSize: 10, fill: '#9CA3AF' }} axisLine={false} tickLine={false} tickFormatter={fmt} ticks={statusTicks} domain={[0, statusTicks[statusTicks.length - 1]]} label={{ value: 'Sum of Est. Cost', angle: -90, position: 'insideLeft', offset: 0, style: { textAnchor: 'middle', fill: '#6B7280', fontSize: 11 } }} />
-                        <Tooltip cursor={{ fill: '#F3F4F6' }} content={<ChartTooltip valueFormatter={fmt} />} offset={20} wrapperStyle={{ outline: 'none', zIndex: 50 }} />
+                        <Tooltip cursor={{ fill: '#F3F4F6' }} content={<ChartTooltip valueFormatter={fmt} />} offset={40} wrapperStyle={{ outline: 'none', zIndex: 50 }} />
                         <Legend layout="horizontal" verticalAlign="bottom" align="center" wrapperStyle={{ fontSize: 10, paddingTop: 32 }} />
                         {STATUSES.map(s => (
                           <Bar key={s} dataKey={s} name={s} fill={STATUS_HEX[s]} radius={[4, 4, 0, 0]} />
@@ -742,7 +742,7 @@ export default function AnalysisPage() {
                     allowDecimals={false}
                     label={{ value: 'Tickets', angle: -90, position: 'insideLeft', offset: 0, fontSize: 11, fill: '#6B7280', style: { textAnchor: 'middle' } }}
                   />
-                  <Tooltip cursor={{ fill: '#F3F4F6' }} content={<ChartTooltip valueFormatter={(v) => `${v} tickets`} />} offset={20} wrapperStyle={{ outline: 'none', zIndex: 50 }} />
+                  <Tooltip cursor={{ fill: '#F3F4F6' }} content={<ChartTooltip valueFormatter={(v) => `${v} tickets`} />} offset={40} wrapperStyle={{ outline: 'none', zIndex: 50 }} />
                   <Bar dataKey="count" fill="#1B2E6B" radius={[4, 4, 0, 0]} activeBar={{ fill: '#2B3E8B', stroke: 'none' }} />
                 </BarChart>
               </ResponsiveContainer>
@@ -772,7 +772,7 @@ export default function AnalysisPage() {
                       tickFormatter={fmt}
                       label={{ value: 'Cost ($)', angle: -90, position: 'insideLeft', offset: 0, fontSize: 11, fill: '#6B7280', style: { textAnchor: 'middle' } }}
                     />
-                    <Tooltip cursor={{ fill: '#F3F4F6' }} content={<ChartTooltip valueFormatter={fmt} />} offset={20} wrapperStyle={{ outline: 'none', zIndex: 50 }} />
+                    <Tooltip cursor={{ fill: '#F3F4F6' }} content={<ChartTooltip valueFormatter={fmt} />} offset={40} wrapperStyle={{ outline: 'none', zIndex: 50 }} />
                     <Legend wrapperStyle={{ fontSize: 10, paddingTop: 70 }} />
                     <Bar dataKey="estCost" name="Est. Cost" fill="#1B2E6B" radius={[4, 4, 0, 0]} />
                     <Bar dataKey="repairCost" name="Repair Cost" fill="#3B82F6" radius={[4, 4, 0, 0]} />
@@ -805,7 +805,7 @@ export default function AnalysisPage() {
                       tickFormatter={fmt}
                       label={{ value: 'Cost ($)', angle: -90, position: 'insideLeft', offset: 0, fontSize: 11, fill: '#6B7280', style: { textAnchor: 'middle' } }}
                     />
-                    <Tooltip cursor={{ fill: '#F3F4F6' }} content={<ChartTooltip valueFormatter={fmt} />} offset={20} wrapperStyle={{ outline: 'none', zIndex: 50 }} />
+                    <Tooltip cursor={{ fill: '#F3F4F6' }} content={<ChartTooltip valueFormatter={fmt} />} offset={40} wrapperStyle={{ outline: 'none', zIndex: 50 }} />
                     <Legend wrapperStyle={{ fontSize: 10, paddingTop: 55 }} />
                     <Bar dataKey="estCost" name="Est. Cost" fill="#1B2E6B" radius={[4, 4, 0, 0]} />
                     <Bar dataKey="repairCost" name="Repair Cost" fill="#3B82F6" radius={[4, 4, 0, 0]} />
