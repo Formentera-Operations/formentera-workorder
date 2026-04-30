@@ -127,7 +127,7 @@ select {
   }
 
   .workflow-tab {
-    @apply flex-1 py-2 text-xs font-medium text-center rounded-md transition-colors;
+    @apply flex-1 py-2 text-[10px] lg:text-xs font-medium text-center rounded-md transition-colors;
   }
 
   .workflow-tab.active {
