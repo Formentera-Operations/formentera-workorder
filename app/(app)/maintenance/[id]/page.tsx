@@ -1194,8 +1194,8 @@ export default function MaintenanceTicketPage() {
               {/* Vendor rows */}
               {vendorRows.map((row, i) => (
                 <div key={i} className="space-y-2">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
+                  <div className="grid grid-cols-[2fr_1fr] gap-3">
+                    <div className="min-w-0">
                       <label className="form-label text-xs">
                         {i === 0 ? 'Vendor (leave blank if not applicable)' : `Vendor ${i + 1}`}
                       </label>
