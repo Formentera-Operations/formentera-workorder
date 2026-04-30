@@ -866,8 +866,9 @@ export default function AnalysisPage() {
 
             {/* Work Type Breakdown */}
             {aggData.workTypeBreakdown && aggData.workTypeBreakdown.length > 0 && (() => {
-              const total = aggData.workTypeBreakdown.reduce((s, w) => s + w.count, 0)
-              const maxCount = aggData.workTypeBreakdown[0]?.count || 1
+              const visibleWorkTypes = aggData.workTypeBreakdown.filter(w => w.type !== 'Unspecified')
+              const total = visibleWorkTypes.reduce((s, w) => s + w.count, 0)
+              const maxCount = visibleWorkTypes[0]?.count || 1
               const WORK_TYPE_COLORS: Record<string, string> = {
                 'LOE': 'bg-[#1B2E6B]',
                 'AFE - Workover': 'bg-amber-500',
@@ -880,7 +881,7 @@ export default function AnalysisPage() {
                     <span className="text-xs text-gray-400">{total.toLocaleString()} closed</span>
                   </div>
                   <div className="space-y-1.5">
-                    {aggData.workTypeBreakdown.map(w => {
+                    {visibleWorkTypes.map(w => {
                       const barColor = WORK_TYPE_COLORS[w.type] || 'bg-gray-400'
                       const pct = Math.round((w.count / total) * 100)
                       return (
@@ -1119,7 +1120,7 @@ export default function AnalysisPage() {
               <div>
                 <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Work Type</p>
                 <div className="flex gap-1.5 overflow-x-auto pb-2 scrollbar-thin-pills">
-                  {['All', ...WORK_TYPES].map(w => (
+                  {['All', ...WORK_TYPES.filter(w => w !== 'Unspecified')].map(w => (
                     <button
                       key={w}
                       className={`px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors shrink-0 ${workTypeFilter === w ? 'bg-[#1B2E6B] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
