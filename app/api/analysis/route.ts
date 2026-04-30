@@ -139,16 +139,19 @@ export async function GET(req: NextRequest) {
           ? `"${s.replace(/"/g, '""')}"` : s
       }
       const stripEmoji = (v: unknown) => String(v ?? '').replace(/^[^a-zA-Z0-9]+/, '').trim()
-      const csvRows = exportRows.map(r =>
-        [
+      const csvRows = exportRows.map(r => {
+        const est = typeof r.Estimate_Cost === 'number' ? r.Estimate_Cost : (r.Estimate_Cost ? Number(r.Estimate_Cost) : 0)
+        const rep = typeof r.repair_cost === 'number' ? r.repair_cost : (r.repair_cost ? Number(r.repair_cost) : 0)
+        const savings = est > 0 || rep > 0 ? est - rep : ''
+        return [
           r.ticket_id, escape(r.asset), escape(r.field), escape(stripEmoji(r.department)),
           escape(r.work_order_type), escape(r.location_type), escape(r.well),
           escape(r.facility), escape(r.equipment_name), escape(r.issue_description),
           escape(r.ticket_status), r.issue_date, r.repair_date_closed,
-          r.Estimate_Cost, r.repair_cost,
+          r.Estimate_Cost, r.repair_cost, savings,
         ].join(',')
-      )
-      const header = 'Ticket ID,Asset,Field,Department,Work Order Type,Location Type,Well,Facility,Equipment,Description,Status,Submitted,Closed,Est. Cost,Repair Cost'
+      })
+      const header = 'Ticket ID,Asset,Field,Department,Work Order Type,Location Type,Well,Facility,Equipment,Description,Status,Submitted,Closed,Est. Cost,Repair Cost,Savings'
       const csv = '﻿' + [header, ...csvRows].join('\n')
       const filename = `tickets-${new Date().toISOString().slice(0, 10)}.csv`
       return new Response(csv, {
@@ -236,6 +239,7 @@ export async function GET(req: NextRequest) {
         { header: 'Closed', key: 'repair_date_closed', width: 18, style: { numFmt: 'yyyy-mm-dd hh:mm' } },
         { header: 'Est. Cost', key: 'Estimate_Cost', width: 12, style: { numFmt: '$#,##0.00' } },
         { header: 'Repair Cost', key: 'repair_cost', width: 12, style: { numFmt: '$#,##0.00' } },
+        { header: 'Savings', key: 'savings', width: 12, style: { numFmt: '$#,##0.00' } },
       ]
       const headerRow = ws.getRow(1)
       headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } }
@@ -246,6 +250,9 @@ export async function GET(req: NextRequest) {
       ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: ws.columns.length } }
 
       for (const r of exportRows) {
+        const est = typeof r.Estimate_Cost === 'number' ? r.Estimate_Cost : (r.Estimate_Cost ? Number(r.Estimate_Cost) : null)
+        const rep = typeof r.repair_cost === 'number' ? r.repair_cost : (r.repair_cost ? Number(r.repair_cost) : null)
+        const savings = (est ?? 0) > 0 || (rep ?? 0) > 0 ? (est ?? 0) - (rep ?? 0) : null
         ws.addRow({
           ticket_id: r.ticket_id ?? null,
           asset: r.asset ?? '',
@@ -260,8 +267,9 @@ export async function GET(req: NextRequest) {
           ticket_status: r.ticket_status ?? '',
           issue_date: r.issue_date ? new Date(r.issue_date as string) : null,
           repair_date_closed: r.repair_date_closed ? new Date(r.repair_date_closed as string) : null,
-          Estimate_Cost: typeof r.Estimate_Cost === 'number' ? r.Estimate_Cost : (r.Estimate_Cost ? Number(r.Estimate_Cost) : null),
-          repair_cost: typeof r.repair_cost === 'number' ? r.repair_cost : (r.repair_cost ? Number(r.repair_cost) : null),
+          Estimate_Cost: est,
+          repair_cost: rep,
+          savings,
         })
       }
 
