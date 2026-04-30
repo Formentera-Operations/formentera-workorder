@@ -1102,7 +1102,7 @@ export default function MaintenanceTicketPage() {
               {/* Priority pill selector */}
               <div>
                 <label className="form-label">Priority of Issue</label>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 p-1.5 bg-gray-100 rounded-xl">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-1.5 p-1.5 bg-gray-100 rounded-xl">
                   {PRIORITY_OPTIONS.map(p => {
                     const selected = repForm.Priority_of_Issue === p
                     return (
