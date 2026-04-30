@@ -357,8 +357,8 @@ export default function AnalysisPage() {
     })
   }
 
-  function handleExport() {
-    const params = new URLSearchParams({ mode: 'export' })
+  function buildExportParams(mode: 'export' | 'excel') {
+    const params = new URLSearchParams({ mode })
     if (assets.length > 0) params.set('userAssets', assets.join(','))
     if (debouncedSearch) params.set('search', debouncedSearch)
     if (statusFilter !== 'All') params.set('status', statusFilter)
@@ -368,9 +368,20 @@ export default function AnalysisPage() {
     if (workTypeFilter && workTypeFilter !== 'All') params.set('workType', workTypeFilter)
     if (effectiveStart) params.set('startDate', effectiveStart)
     if (effectiveEnd) params.set('endDate', effectiveEnd)
+    return params
+  }
+
+  function handleExport() {
     const a = document.createElement('a')
-    a.href = `/api/analysis?${params}`
+    a.href = `/api/analysis?${buildExportParams('export')}`
     a.download = `tickets-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+  }
+
+  function handleExportExcel() {
+    const a = document.createElement('a')
+    a.href = `/api/analysis?${buildExportParams('excel')}`
+    a.download = `tickets-${new Date().toISOString().slice(0, 10)}.xlsx`
     a.click()
   }
 
@@ -1146,13 +1157,24 @@ export default function AnalysisPage() {
             {/* Count + Export */}
             <div className="flex items-center justify-between px-0.5">
               <p className="text-xs text-gray-400">{tableCount.toLocaleString()} tickets</p>
-              <button
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#1B2E6B] bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
-                onClick={handleExport}
-              >
-                <Download size={13} />
-                Export CSV
-              </button>
+              <div className="flex items-center gap-2">
+                {role === 'admin' && (
+                  <button
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                    onClick={handleExport}
+                  >
+                    <Download size={13} />
+                    Export CSV
+                  </button>
+                )}
+                <button
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#1B2E6B] bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
+                  onClick={handleExportExcel}
+                >
+                  <Download size={13} />
+                  Export Excel
+                </button>
+              </div>
             </div>
 
             {/* Mobile: card list — hidden, use table on all screens */}

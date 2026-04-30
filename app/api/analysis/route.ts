@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
+import ExcelJS from 'exceljs'
 
 export const dynamic = 'force-dynamic'
 
@@ -153,6 +154,122 @@ export async function GET(req: NextRequest) {
       return new Response(csv, {
         headers: {
           'Content-Type': 'text/csv; charset=utf-8',
+          'Content-Disposition': `attachment; filename="${filename}"`,
+        },
+      })
+    }
+
+    if (mode === 'excel') {
+      const search = searchParams.get('search') || ''
+      const statusFilter = searchParams.get('status') || ''
+      const deptFilter = searchParams.get('department') || ''
+      const workTypeFilter = searchParams.get('workType') || ''
+      const equipmentFilter = searchParams.get('equipment') || ''
+      const fieldFilter = searchParams.get('field') || ''
+      const BATCH = 1000
+      const exportRows: Record<string, unknown>[] = []
+      let from = 0
+      while (true) {
+        let q = db
+          .from('workorder_ticket_summary')
+          .select('ticket_id, asset, field, department, work_order_type, location_type, well, facility, equipment_name, issue_description, ticket_status, issue_date, repair_date_closed, Estimate_Cost, repair_cost')
+          .order('issue_date', { ascending: false })
+          .order('ticket_id', { ascending: false })
+          .range(from, from + BATCH - 1)
+        if (userAssets.length > 0) q = q.in('asset', userAssets)
+        if (search) {
+          const orParts = [
+            `equipment_name.ilike.%${search}%`,
+            `issue_description.ilike.%${search}%`,
+            `field.ilike.%${search}%`,
+            `well.ilike.%${search}%`,
+            `facility.ilike.%${search}%`,
+            `department.ilike.%${search}%`,
+          ]
+          if (/^\d+$/.test(search)) orParts.push(`ticket_id.eq.${search}`)
+          q = q.or(orParts.join(','))
+        }
+        if (statusFilter && statusFilter !== 'All') q = q.eq('ticket_status', statusFilter)
+        if (deptFilter && deptFilter !== 'All') q = q.eq('department', deptFilter)
+        if (equipmentFilter && equipmentFilter !== 'All') {
+          if (equipmentFilter === 'Unknown') q = q.or('equipment_name.is.null,equipment_name.eq.')
+          else q = q.eq('equipment_name', equipmentFilter)
+        }
+        if (fieldFilter && fieldFilter !== 'All') {
+          if (fieldFilter === 'Unknown') q = q.or('field.is.null,field.eq.')
+          else q = q.eq('field', fieldFilter)
+        }
+        if (workTypeFilter) {
+          if (workTypeFilter === 'Unspecified') {
+            q = q.or('work_order_type.is.null,work_order_type.eq.')
+          } else {
+            q = q.eq('work_order_type', workTypeFilter)
+          }
+        }
+        if (startDate) q = q.gte('issue_date', startDate)
+        if (endDate) q = q.lte('issue_date', endDate + 'T23:59:59')
+        const { data, error } = await q
+        if (error) throw error
+        exportRows.push(...(data || []))
+        if (!data || data.length < BATCH) break
+        from += BATCH
+      }
+
+      const stripEmoji = (v: unknown) => String(v ?? '').replace(/^[^a-zA-Z0-9]+/, '').trim()
+      const wb = new ExcelJS.Workbook()
+      wb.creator = 'Formentera Work Order'
+      wb.created = new Date()
+      const ws = wb.addWorksheet('Tickets')
+      ws.columns = [
+        { header: 'Ticket ID', key: 'ticket_id', width: 10 },
+        { header: 'Asset', key: 'asset', width: 16 },
+        { header: 'Field', key: 'field', width: 14 },
+        { header: 'Department', key: 'department', width: 22 },
+        { header: 'Work Order Type', key: 'work_order_type', width: 16 },
+        { header: 'Location Type', key: 'location_type', width: 14 },
+        { header: 'Well', key: 'well', width: 22 },
+        { header: 'Facility', key: 'facility', width: 22 },
+        { header: 'Equipment', key: 'equipment_name', width: 22 },
+        { header: 'Description', key: 'issue_description', width: 50 },
+        { header: 'Status', key: 'ticket_status', width: 14 },
+        { header: 'Submitted', key: 'issue_date', width: 18, style: { numFmt: 'yyyy-mm-dd hh:mm' } },
+        { header: 'Closed', key: 'repair_date_closed', width: 18, style: { numFmt: 'yyyy-mm-dd hh:mm' } },
+        { header: 'Est. Cost', key: 'Estimate_Cost', width: 12, style: { numFmt: '$#,##0.00' } },
+        { header: 'Repair Cost', key: 'repair_cost', width: 12, style: { numFmt: '$#,##0.00' } },
+      ]
+      const headerRow = ws.getRow(1)
+      headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } }
+      headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1B2E6B' } }
+      headerRow.alignment = { vertical: 'middle' }
+      headerRow.height = 22
+      ws.views = [{ state: 'frozen', ySplit: 1 }]
+      ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: ws.columns.length } }
+
+      for (const r of exportRows) {
+        ws.addRow({
+          ticket_id: r.ticket_id ?? null,
+          asset: r.asset ?? '',
+          field: r.field ?? '',
+          department: stripEmoji(r.department),
+          work_order_type: r.work_order_type ?? '',
+          location_type: r.location_type ?? '',
+          well: r.well ?? '',
+          facility: r.facility ?? '',
+          equipment_name: r.equipment_name ?? '',
+          issue_description: r.issue_description ?? '',
+          ticket_status: r.ticket_status ?? '',
+          issue_date: r.issue_date ? new Date(r.issue_date as string) : null,
+          repair_date_closed: r.repair_date_closed ? new Date(r.repair_date_closed as string) : null,
+          Estimate_Cost: typeof r.Estimate_Cost === 'number' ? r.Estimate_Cost : (r.Estimate_Cost ? Number(r.Estimate_Cost) : null),
+          repair_cost: typeof r.repair_cost === 'number' ? r.repair_cost : (r.repair_cost ? Number(r.repair_cost) : null),
+        })
+      }
+
+      const buf = await wb.xlsx.writeBuffer()
+      const filename = `tickets-${new Date().toISOString().slice(0, 10)}.xlsx`
+      return new Response(buf, {
+        headers: {
+          'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
           'Content-Disposition': `attachment; filename="${filename}"`,
         },
       })
