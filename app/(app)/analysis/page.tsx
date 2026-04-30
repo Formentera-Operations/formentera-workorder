@@ -79,7 +79,7 @@ function niceTicks(max: number): number[] {
 }
 
 interface AggData {
-  statusTables: Record<string, { asset: string; field: string; dept: string; count: number; estCost: number; repairCost: number; savings: number }[]>
+  statusTables: Record<string, { asset: string; field: string; dept: string; count: number; estCost: number; repairCost: number; savings: number; avgAge: number | null }[]>
   fieldEquipChart: { field: string; equip: string; dept: string; count: number }[]
   costByDept: { dept: string; estCost: number; repairCost: number }[]
   monthlyTrend: { month: string; label: string; count: number }[]
@@ -1000,6 +1000,11 @@ export default function AnalysisPage() {
               const totalEst = rows.reduce((s, r) => s + r.estCost, 0)
               const totalRepair = rows.reduce((s, r) => s + r.repairCost, 0)
               const totalSavings = totalEst - totalRepair
+              const showAge = status !== 'Closed'
+              const totalAvgAge = showAge && totalCount > 0
+                ? Math.round(rows.reduce((s, r) => s + (r.avgAge ?? 0) * r.count, 0) / totalCount)
+                : null
+              const ageClass = (age: number) => age > 30 ? 'text-red-700' : age > 7 ? 'text-amber-700' : 'text-gray-700'
 
               return (
                 <div key={status} className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
@@ -1027,6 +1032,7 @@ export default function AnalysisPage() {
                             <th className="text-left px-3 py-2 font-medium text-gray-500 whitespace-nowrap">Field</th>
                             <th className="text-left px-3 py-2 font-medium text-gray-500 whitespace-nowrap">Department</th>
                             <th className="text-right px-3 py-2 font-medium text-gray-500 whitespace-nowrap">Count</th>
+                            {showAge && <th className="text-right px-3 py-2 font-medium text-gray-500 whitespace-nowrap">Avg. Age</th>}
                             <th className="text-right px-3 py-2 font-medium text-gray-500 whitespace-nowrap">Est. Cost</th>
                             <th className="text-right px-3 py-2 font-medium text-gray-500 whitespace-nowrap">Repair Cost</th>
                             <th className="text-right px-3 py-2 font-medium text-gray-500 whitespace-nowrap">Savings</th>
@@ -1034,11 +1040,29 @@ export default function AnalysisPage() {
                         </thead>
                         <tbody>
                           {rows.map((r, i) => (
-                            <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}>
+                            <tr
+                              key={i}
+                              className={`${i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'} cursor-pointer hover:bg-blue-50 transition-colors`}
+                              title={`View ${r.count} ticket${r.count === 1 ? '' : 's'} in ${status}`}
+                              onClick={() => {
+                                setStatusFilter(status)
+                                setTableDeptFilter(r.dept || 'All')
+                                setFieldFilter(r.field || 'Unknown')
+                                setEquipmentFilter('All')
+                                setWorkTypeFilter('All')
+                                setSearch('')
+                                setTab('tickets')
+                              }}
+                            >
                               <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{r.asset || '—'}</td>
                               <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{r.field || '—'}</td>
                               <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{r.dept || '—'}</td>
                               <td className="px-3 py-2 text-right font-semibold text-gray-800">{r.count}</td>
+                              {showAge && (
+                                <td className={`px-3 py-2 text-right font-medium ${r.avgAge !== null ? ageClass(r.avgAge) : 'text-gray-400'}`}>
+                                  {r.avgAge !== null ? `${r.avgAge}d` : '—'}
+                                </td>
+                              )}
                               <td className="px-3 py-2 text-right text-gray-700">{r.estCost > 0 ? fmt(r.estCost) : '—'}</td>
                               <td className="px-3 py-2 text-right text-gray-700">{r.repairCost > 0 ? fmt(r.repairCost) : '—'}</td>
                               <td className={`px-3 py-2 text-right font-medium ${r.savings >= 0 ? 'text-green-700' : 'text-red-600'}`}>
@@ -1049,6 +1073,11 @@ export default function AnalysisPage() {
                           <tr className="bg-gray-100 font-semibold border-t border-gray-200">
                             <td className="px-3 py-2 text-gray-800" colSpan={3}>Total</td>
                             <td className="px-3 py-2 text-right text-gray-800">{totalCount}</td>
+                            {showAge && (
+                              <td className={`px-3 py-2 text-right ${totalAvgAge !== null ? ageClass(totalAvgAge) : 'text-gray-500'}`}>
+                                {totalAvgAge !== null ? `${totalAvgAge}d` : '—'}
+                              </td>
+                            )}
                             <td className="px-3 py-2 text-right text-gray-800">{totalEst > 0 ? fmt(totalEst) : '—'}</td>
                             <td className="px-3 py-2 text-right text-gray-800">{totalRepair > 0 ? fmt(totalRepair) : '—'}</td>
                             <td className={`px-3 py-2 text-right ${totalSavings >= 0 ? 'text-green-700' : 'text-red-600'}`}>

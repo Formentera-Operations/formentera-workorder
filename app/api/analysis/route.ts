@@ -318,26 +318,31 @@ export async function GET(req: NextRequest) {
     }
 
     // 1. Status tables — grouped by asset + field + dept
-    const statusTableMap: Record<string, Map<string, { count: number; estCost: number; repairCost: number }>> = {}
+    const nowMs = Date.now()
+    const statusTableMap: Record<string, Map<string, { count: number; estCost: number; repairCost: number; ageSum: number }>> = {}
     for (const s of STATUS_ORDER) statusTableMap[s] = new Map()
 
     for (const r of rows) {
       const status = r.ticket_status || 'Open'
       if (!statusTableMap[status]) statusTableMap[status] = new Map()
       const key = `${r.asset || ''}||${r.field || ''}||${r.department || ''}`
-      const existing = statusTableMap[status].get(key) || { count: 0, estCost: 0, repairCost: 0 }
+      const existing = statusTableMap[status].get(key) || { count: 0, estCost: 0, repairCost: 0, ageSum: 0 }
       existing.count++
       existing.estCost += r.Estimate_Cost || 0
       existing.repairCost += r.repair_cost || 0
+      if (status !== 'Closed' && r.issue_date) {
+        existing.ageSum += Math.floor((nowMs - new Date(r.issue_date).getTime()) / 86_400_000)
+      }
       statusTableMap[status].set(key, existing)
     }
 
-    const statusTables: Record<string, { asset: string; field: string; dept: string; count: number; estCost: number; repairCost: number; savings: number }[]> = {}
+    const statusTables: Record<string, { asset: string; field: string; dept: string; count: number; estCost: number; repairCost: number; savings: number; avgAge: number | null }[]> = {}
     for (const s of STATUS_ORDER) {
       statusTables[s] = Array.from(statusTableMap[s].entries())
         .map(([key, val]) => {
           const [asset, field, dept] = key.split('||')
-          return { asset, field, dept, ...val, savings: val.estCost - val.repairCost }
+          const avgAge = s === 'Closed' || val.count === 0 ? null : Math.round(val.ageSum / val.count)
+          return { asset, field, dept, count: val.count, estCost: val.estCost, repairCost: val.repairCost, savings: val.estCost - val.repairCost, avgAge }
         })
         .sort((a, b) => b.count - a.count)
     }
