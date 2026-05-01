@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { ArrowLeft, ChevronDown, Camera, X } from 'lucide-react'
+import { ArrowLeft, ChevronDown, Camera, X, AlertTriangle } from 'lucide-react'
 import LocationDropdowns from '@/components/forms/LocationDropdowns'
 import SearchableSelect from '@/components/ui/SearchableSelect'
 import { DEPARTMENTS, LOCATION_TYPES } from '@/lib/utils'
@@ -19,6 +19,17 @@ export default function MaintenanceFormPage() {
   const [equipmentTypes, setEquipmentTypes] = useState<{ id: string; equipment_type: string }[]>([])
   const [equipment, setEquipment] = useState<{ id: number; equip_name: string }[]>([])
   const [employees, setEmployees] = useState<{ id: number; name: string }[]>([])
+  type DuplicateTicket = {
+    id: number
+    Ticket_Status: string
+    Issue_Date: string
+    Created_by_Name: string | null
+    Issue_Description: string | null
+    assigned_foreman: string | null
+  }
+  const [duplicates, setDuplicates] = useState<DuplicateTicket[]>([])
+  const [duplicateBannerDismissed, setDuplicateBannerDismissed] = useState(false)
+  const [confirmDuplicates, setConfirmDuplicates] = useState<DuplicateTicket[] | null>(null)
 
   const [form, setForm] = useState({
     Department: '',
@@ -57,7 +68,46 @@ export default function MaintenanceFormPage() {
     }
   }, [form.Equipment_Type, form.Location_Type])
 
+  useEffect(() => {
+    if (!form.Equipment || (!form.Well && !form.Facility)) {
+      setDuplicates([])
+      setDuplicateBannerDismissed(false)
+      return
+    }
+    const params = new URLSearchParams({ equipment: form.Equipment })
+    if (form.Well) params.set('well', form.Well)
+    else if (form.Facility) params.set('facility', form.Facility)
+    fetch(`/api/tickets/check-duplicates?${params}`)
+      .then(r => r.json())
+      .then(d => {
+        setDuplicates(d.duplicates || [])
+        setDuplicateBannerDismissed(false)
+      })
+      .catch(() => setDuplicates([]))
+  }, [form.Equipment, form.Well, form.Facility])
+
   const set = (key: string, val: unknown) => setForm(f => ({ ...f, [key]: val }))
+
+  async function submitTicket(force: boolean): Promise<{ conflict: true; duplicates: DuplicateTicket[] } | { conflict: false }> {
+    const res = await fetch('/api/tickets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...form,
+        Created_by_Email: userEmail,
+        Created_by_Name: userName,
+        Self_Dispatch_Assignee: form.Self_Dispatch ? userName : null,
+        Estimate_Cost: form.Estimate_Cost ? parseFloat(form.Estimate_Cost) : null,
+        force,
+      }),
+    })
+    if (res.status === 409) {
+      const body = await res.json().catch(() => ({ duplicates: [] }))
+      return { conflict: true, duplicates: (body.duplicates || []) as DuplicateTicket[] }
+    }
+    if (!res.ok) throw new Error('Submit failed')
+    return { conflict: false }
+  }
 
   async function handleSubmit() {
     if (submitLock.current) return
@@ -80,18 +130,28 @@ export default function MaintenanceFormPage() {
 
     setSubmitting(true)
     try {
-      const res = await fetch('/api/tickets', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...form,
-          Created_by_Email: userEmail,
-          Created_by_Name: userName,
-          Self_Dispatch_Assignee: form.Self_Dispatch ? userName : null,
-          Estimate_Cost: form.Estimate_Cost ? parseFloat(form.Estimate_Cost) : null,
-        }),
-      })
-      if (!res.ok) throw new Error('Submit failed')
+      const result = await submitTicket(false)
+      if (result.conflict) {
+        setConfirmDuplicates(result.duplicates)
+        return
+      }
+      toast.info('Maintenance Form Successfully Submitted', { duration: 5000 })
+      router.push('/my-tickets')
+    } catch {
+      toast.error('Failed to submit ticket. Please try again.')
+    } finally {
+      setSubmitting(false)
+      submitLock.current = false
+    }
+  }
+
+  async function handleConfirmSubmit() {
+    setConfirmDuplicates(null)
+    if (submitLock.current) return
+    submitLock.current = true
+    setSubmitting(true)
+    try {
+      await submitTicket(true)
       toast.info('Maintenance Form Successfully Submitted', { duration: 5000 })
       router.push('/my-tickets')
     } catch {
@@ -187,6 +247,58 @@ export default function MaintenanceFormPage() {
             </div>
           </div>
         </div>
+
+        {/* Duplicate ticket warning */}
+        {duplicates.length > 0 && !duplicateBannerDismissed && (
+          <div className="rounded-xl border border-amber-300 bg-amber-50 p-3">
+            <div className="flex items-start gap-2">
+              <AlertTriangle size={18} className="text-amber-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-semibold text-amber-900">
+                  {duplicates.length === 1
+                    ? 'There is already an active ticket on this equipment'
+                    : `There are ${duplicates.length} active tickets on this equipment`}
+                </div>
+                <div className="mt-2 space-y-2">
+                  {duplicates.map(d => (
+                    <div key={d.id} className="rounded-lg bg-white border border-amber-200 px-3 py-2 text-xs">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="font-semibold text-gray-900">
+                          #{d.id} · {d.Ticket_Status}
+                        </div>
+                        <a
+                          href={`/maintenance/${d.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[#1B2E6B] font-medium hover:underline"
+                        >
+                          View ticket
+                        </a>
+                      </div>
+                      <div className="text-gray-500 mt-0.5">
+                        Opened {new Date(d.Issue_Date).toLocaleDateString()}
+                        {d.Created_by_Name ? ` by ${d.Created_by_Name}` : ''}
+                        {d.assigned_foreman ? ` · Assigned to ${d.assigned_foreman}` : ''}
+                      </div>
+                      {d.Issue_Description && (
+                        <div className="text-gray-700 mt-1 line-clamp-2">
+                          {d.Issue_Description}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setDuplicateBannerDismissed(true)}
+                  className="mt-2 text-xs text-amber-900 underline"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Issue Details section */}
         <div className="pt-2">
@@ -354,6 +466,70 @@ export default function MaintenanceFormPage() {
           {submitting ? 'Submitting…' : 'Submit'}
         </button>
       </div>
+
+      {/* Duplicate ticket confirmation modal */}
+      {confirmDuplicates && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-5 shadow-xl">
+            <div className="flex items-start gap-2 mb-3">
+              <AlertTriangle size={20} className="text-amber-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <h3 className="text-base font-bold text-gray-900">Possible duplicate ticket</h3>
+                <p className="text-sm text-gray-600 mt-1">
+                  {confirmDuplicates.length === 1
+                    ? 'An active ticket already exists on this equipment:'
+                    : `${confirmDuplicates.length} active tickets already exist on this equipment:`}
+                </p>
+              </div>
+            </div>
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {confirmDuplicates.map(d => (
+                <div key={d.id} className="rounded-lg border border-gray-200 px-3 py-2 text-xs">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="font-semibold text-gray-900">#{d.id} · {d.Ticket_Status}</div>
+                    <a
+                      href={`/maintenance/${d.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[#1B2E6B] font-medium hover:underline"
+                    >
+                      View ticket
+                    </a>
+                  </div>
+                  <div className="text-gray-500 mt-0.5">
+                    Opened {new Date(d.Issue_Date).toLocaleDateString()}
+                    {d.Created_by_Name ? ` by ${d.Created_by_Name}` : ''}
+                    {d.assigned_foreman ? ` · Assigned to ${d.assigned_foreman}` : ''}
+                  </div>
+                  {d.Issue_Description && (
+                    <div className="text-gray-700 mt-1 line-clamp-2">{d.Issue_Description}</div>
+                  )}
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirmDuplicates(null)
+                  setSubmitting(false)
+                  submitLock.current = false
+                }}
+                className="flex-1 py-2.5 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmSubmit}
+                className="flex-1 py-2.5 rounded-lg bg-[#1B2E6B] text-sm font-medium text-white hover:bg-[#152552]"
+              >
+                Submit anyway
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

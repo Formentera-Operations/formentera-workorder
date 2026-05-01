@@ -96,6 +96,25 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const db = supabaseAdmin()
 
+    // Duplicate guard: if an active ticket exists on the same Well+Equipment
+    // (or Facility+Equipment) and the user hasn't acknowledged it
+    // (force !== true), return 409 with the matches.
+    if (!body.force && body.Equipment && (body.Well || body.Facility)) {
+      let dupQuery = db
+        .from('workorder_ticket_list')
+        .select('id, Ticket_Status, Issue_Date, Created_by_Name, Issue_Description, assigned_foreman, Equipment, Well, Facility')
+        .eq('Equipment', body.Equipment)
+        .neq('Ticket_Status', 'Closed')
+        .order('Issue_Date', { ascending: false })
+        .limit(5)
+      if (body.Well) dupQuery = dupQuery.eq('Well', body.Well)
+      else if (body.Facility) dupQuery = dupQuery.eq('Facility', body.Facility)
+      const { data: dupes } = await dupQuery
+      if (dupes && dupes.length > 0) {
+        return NextResponse.json({ duplicates: dupes }, { status: 409 })
+      }
+    }
+
     const { data, error } = await db
       .from('Maintenance_Form_Submission')
       .insert([{
