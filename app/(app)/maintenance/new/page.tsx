@@ -31,6 +31,14 @@ export default function MaintenanceFormPage() {
   const [duplicateBannerDismissed, setDuplicateBannerDismissed] = useState(false)
   const [confirmDuplicates, setConfirmDuplicates] = useState<DuplicateTicket[] | null>(null)
 
+  function meaningfulDescription(s: string | null): string | null {
+    if (!s) return null
+    const trimmed = s.trim()
+    if (!trimmed) return null
+    if (['none', 'n/a', 'na', '-', '--'].includes(trimmed.toLowerCase())) return null
+    return trimmed
+  }
+
   const [form, setForm] = useState({
     Department: '',
     Location_Type: '' as LocationType | '',
@@ -280,9 +288,9 @@ export default function MaintenanceFormPage() {
                         {d.Created_by_Name ? ` by ${d.Created_by_Name}` : ''}
                         {d.assigned_foreman ? ` · Assigned to ${d.assigned_foreman}` : ''}
                       </div>
-                      {d.Issue_Description && (
+                      {meaningfulDescription(d.Issue_Description) && (
                         <div className="text-gray-700 mt-1 line-clamp-2">
-                          {d.Issue_Description}
+                          {meaningfulDescription(d.Issue_Description)}
                         </div>
                       )}
                     </div>
@@ -501,8 +509,8 @@ export default function MaintenanceFormPage() {
                     {d.Created_by_Name ? ` by ${d.Created_by_Name}` : ''}
                     {d.assigned_foreman ? ` · Assigned to ${d.assigned_foreman}` : ''}
                   </div>
-                  {d.Issue_Description && (
-                    <div className="text-gray-700 mt-1 line-clamp-2">{d.Issue_Description}</div>
+                  {meaningfulDescription(d.Issue_Description) && (
+                    <div className="text-gray-700 mt-1 line-clamp-2">{meaningfulDescription(d.Issue_Description)}</div>
                   )}
                 </div>
               ))}
