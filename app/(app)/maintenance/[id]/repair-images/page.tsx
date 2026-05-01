@@ -1,7 +1,8 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
-import { ArrowLeft, ImageIcon } from 'lucide-react'
+import { ArrowLeft, ImageIcon, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react'
+import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch'
 
 export default function RepairImagesPage() {
   const router = useRouter()
@@ -40,8 +41,49 @@ export default function RepairImagesPage() {
         ) : (
           <div className="space-y-3">
             {photos.map((url, i) => (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img key={i} src={url} alt={`Repair photo ${i + 1}`} className="w-full rounded-xl object-cover" />
+              <TransformWrapper
+                key={i}
+                initialScale={1}
+                minScale={1}
+                maxScale={5}
+                doubleClick={{ mode: 'toggle', step: 2 }}
+                wheel={{ step: 0.2 }}
+              >
+                {({ zoomIn, zoomOut, resetTransform }) => (
+                  <div className="relative bg-gray-100 rounded-xl overflow-hidden">
+                    <TransformComponent wrapperClass="!w-full" contentClass="!w-full">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={url} alt={`Repair photo ${i + 1}`} className="w-full object-contain select-none" draggable={false} />
+                    </TransformComponent>
+                    <div className="absolute bottom-2 right-2 flex items-center gap-1 bg-black/60 backdrop-blur-sm rounded-full p-1">
+                      <button
+                        type="button"
+                        onClick={() => zoomOut()}
+                        className="w-8 h-8 flex items-center justify-center text-white rounded-full hover:bg-white/15 active:bg-white/25 transition-colors"
+                        aria-label="Zoom out"
+                      >
+                        <ZoomOut size={16} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => resetTransform()}
+                        className="w-8 h-8 flex items-center justify-center text-white rounded-full hover:bg-white/15 active:bg-white/25 transition-colors"
+                        aria-label="Reset zoom"
+                      >
+                        <RotateCcw size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => zoomIn()}
+                        className="w-8 h-8 flex items-center justify-center text-white rounded-full hover:bg-white/15 active:bg-white/25 transition-colors"
+                        aria-label="Zoom in"
+                      >
+                        <ZoomIn size={16} />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </TransformWrapper>
             ))}
           </div>
         )}
