@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { supabaseAdmin } from '@/lib/supabase'
+import { runPivot } from '@/lib/pivot'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,7 +23,8 @@ You start each conversation with a pre-aggregated summary (TOTAL TICKETS, TICKET
 For drill-downs, call one of these tools:
 - get_ticket(id): full detail of a single ticket (issue description, dispatch, repair, vendor, costs). Use when the user asks about a specific ticket number.
 - search_tickets(filters): up to 20 ticket summaries matching filters. Free-text matches issue_description and repair_details (case-insensitive substring). Use for "find tickets where pump seals failed", "show me belt repairs in Goldsmith", etc.
-- cost_breakdown(group_by, ...): cost rollup by foreman / vendor / equipment / equipment_type / well / facility / department / job_category / priority / work_order_type / asset / field. Use whenever the user wants cost grouped by a dimension that isn't already in the dossier.
+- cost_breakdown(group_by, ...): cost rollup by foreman / vendor / equipment / equipment_type / well / facility / department / job_category / priority / work_order_type / asset / field. Use whenever the user wants cost grouped by ONE dimension that isn't already in the dossier.
+- pivot_breakdown(rows, columns, value, ...): Excel-style pivot — aggregates count or cost across TWO dimensions. Use whenever the user says "pivot chart", "pivot", "broken down by X by Y", "split by", "stacked by", or any two-dimension comparison ("repair cost by equipment by department", "tickets by status by foreman"). The result is already shaped for a multi-series bar chart — render it directly.
 
 After tool results come back, produce your FINAL response in the JSON format below — do not call more tools than necessary, and never expose the raw tool JSON to the user.
 
@@ -55,6 +57,29 @@ RESPONSE FORMAT — return a JSON object in one of these formats:
   "series": [...],
   "insight": "A longer explanation with context, recommendations, or next steps. You can write 2-3 sentences here when helpful."
 }
+
+4. Pivot / multi-series chart (Excel-pivot-chart style — grouped bars):
+After calling pivot_breakdown, build the response like this. The tool returns { rows, columns, series: [...], data: [...] } already shaped for the chart — pass the data through and build the series array from the labels it returned:
+{
+  "type": "chart",
+  "chartType": "bar",
+  "title": "Repair Cost by Equipment by Department",
+  "data": [
+    { "equipment": "Belts",        "Production Operations": 42000, "Electrical": 18000, "Repair and Maintenance": 9000, "Other": 5200 },
+    { "equipment": "Prime Mover",  "Production Operations": 38000, "Electrical": 12000, "Repair and Maintenance": 6000, "Other": 1800 }
+  ],
+  "xKey": "equipment",
+  "series": [
+    { "key": "Production Operations",  "label": "Production Operations", "color": "#1B2E6B" },
+    { "key": "Electrical",             "label": "Electrical",            "color": "#3B82F6" },
+    { "key": "Repair and Maintenance", "label": "Repair and Maintenance","color": "#F59E0B" },
+    { "key": "Other",                  "label": "Other",                 "color": "#9CA3AF" }
+  ],
+  "insight": "Belts dominate cross-department spend, with Production Operations carrying ~$42K of belt repair cost."
+}
+- xKey must match the row dimension name returned by the tool (e.g., "equipment", "foreman").
+- Build one entry in the response "series" array per label in the tool's series list, in the same order. Each "key" must match the field name in the row objects.
+- Use the standard color palette in order; "Other" looks good in gray (#9CA3AF).
 
 RULES:
 - ALWAYS return valid JSON only. No markdown, no backticks, no text outside the JSON object.
@@ -479,6 +504,37 @@ const TOOL_DEFINITIONS: Anthropic.Tool[] = [
       required: ['group_by'],
     },
   },
+  {
+    name: 'pivot_breakdown',
+    description: 'Excel-style pivot. Aggregates a value across two dimensions: rows (x-axis groups) and columns (series). Returns data shaped for a multi-series bar chart — render the result as a chart with one series per column, one bar per row. Use whenever the user asks for a "pivot chart", "broken down by X by Y", "split by", "stacked by", or any two-dimension comparison like "repair cost by equipment by department" or "tickets by status by foreman".',
+    input_schema: {
+      type: 'object',
+      properties: {
+        rows: {
+          type: 'string',
+          enum: ['foreman', 'vendor', 'equipment', 'equipment_type', 'well', 'facility', 'department', 'job_category', 'priority', 'work_order_type', 'status', 'asset', 'field'],
+          description: 'Row dimension (x-axis groups)',
+        },
+        columns: {
+          type: 'string',
+          enum: ['foreman', 'vendor', 'equipment', 'equipment_type', 'well', 'facility', 'department', 'job_category', 'priority', 'work_order_type', 'status', 'asset', 'field'],
+          description: 'Column dimension (one series per value). Must differ from rows.',
+        },
+        value: {
+          type: 'string',
+          enum: ['count', 'estimate_cost', 'repair_cost'],
+          description: 'What to aggregate. Default: count.',
+        },
+        status: { type: 'string', description: 'Filter to a single ticket status' },
+        work_order_type: { type: 'string' },
+        start_date: { type: 'string', description: 'YYYY-MM-DD' },
+        end_date: { type: 'string', description: 'YYYY-MM-DD' },
+        max_rows: { type: 'number', description: 'Max row groups (default 12, capped at 20)' },
+        max_columns: { type: 'number', description: 'Max series before bucketing the rest into "Other" (default 5, capped at 6)' },
+      },
+      required: ['rows', 'columns'],
+    },
+  },
 ]
 
 function escapeLikePattern(s: string): string {
@@ -626,11 +682,32 @@ async function costBreakdown(input: Record<string, unknown>, userAssets: string[
   }
 }
 
+async function pivotBreakdown(input: Record<string, unknown>, userAssets: string[]) {
+  const result = await runPivot({
+    rows: String(input.rows || ''),
+    columns: typeof input.columns === 'string' ? input.columns : null,
+    value: input.value as 'count' | 'estimate_cost' | 'repair_cost' | undefined,
+    status: typeof input.status === 'string' ? input.status : undefined,
+    work_order_type: typeof input.work_order_type === 'string' ? input.work_order_type : undefined,
+    start_date: typeof input.start_date === 'string' ? input.start_date : undefined,
+    end_date: typeof input.end_date === 'string' ? input.end_date : undefined,
+    user_assets: userAssets,
+    max_rows: typeof input.max_rows === 'number' ? input.max_rows : undefined,
+    max_columns: typeof input.max_columns === 'number' ? input.max_columns : undefined,
+  })
+  if ('error' in result) return result
+  return {
+    ...result,
+    note: 'Render as a multi-series bar chart: xKey is the rows field; one series per item in `series`. Pick distinct colors from the palette.',
+  }
+}
+
 async function executeTool(name: string, input: Record<string, unknown>, userAssets: string[]): Promise<unknown> {
   try {
     if (name === 'get_ticket') return await getTicket(input, userAssets)
     if (name === 'search_tickets') return await searchTickets(input, userAssets)
     if (name === 'cost_breakdown') return await costBreakdown(input, userAssets)
+    if (name === 'pivot_breakdown') return await pivotBreakdown(input, userAssets)
     return { error: `Unknown tool: ${name}` }
   } catch (err) {
     console.error(`Tool ${name} error:`, err)

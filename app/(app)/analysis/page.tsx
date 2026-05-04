@@ -3,7 +3,8 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
 import SearchableSelect from '@/components/ui/SearchableSelect'
-import { Search, ChevronDown, ChevronUp, X, BarChart2, Table2, List, Download, ChevronRight, MessageSquare, Send } from 'lucide-react'
+import PivotBuilder from '@/components/PivotBuilder'
+import { Search, ChevronDown, ChevronUp, X, BarChart2, Table2, List, Download, ChevronRight, MessageSquare, Send, LayoutGrid } from 'lucide-react'
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   LineChart, Line, PieChart, Pie, Cell,
@@ -122,6 +123,7 @@ const TABS = [
   { key: 'overview', label: 'Overview', icon: BarChart2 },
   { key: 'tables',   label: 'Tables',   icon: Table2 },
   { key: 'tickets',  label: 'Tickets',  icon: List },
+  { key: 'pivot',    label: 'Pivot',    icon: LayoutGrid },
   { key: 'chat',     label: 'Ask AI',   icon: MessageSquare },
 ] as const
 
@@ -136,6 +138,12 @@ interface ChartSpec {
   insight?: string
 }
 
+const COST_WORDS_RE = /\b(cost|spend|savings|repair|estimate|expense|budget|amount|revenue|payment|invoice|\$)\b/i
+function isCostChart(chart: ChartSpec): boolean {
+  if (COST_WORDS_RE.test(chart.title)) return true
+  return chart.series.some(s => COST_WORDS_RE.test(s.key) || COST_WORDS_RE.test(s.label))
+}
+
 interface ChatMessage {
   role: 'user' | 'assistant'
   text?: string
@@ -147,7 +155,7 @@ export default function AnalysisPage() {
   const router = useRouter()
   const { role, assets, loading, userName } = useAuth()
 
-  const [tab, setTab] = useState<'overview' | 'tables' | 'tickets' | 'chat'>('overview')
+  const [tab, setTab] = useState<'overview' | 'tables' | 'tickets' | 'pivot' | 'chat'>('overview')
   const [aggData, setAggData] = useState<AggData | null>(null)
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null)
   const [deptFilter, setDeptFilter] = useState('All')
@@ -445,7 +453,7 @@ export default function AnalysisPage() {
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 lg:px-32">
 
         {/* ── DATE RANGE FILTER ── */}
-        {tab !== 'chat' && (
+        {tab !== 'chat' && tab !== 'pivot' && (
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3">
           <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">Date Range</p>
           <div className="flex gap-1.5 flex-wrap">
@@ -1364,6 +1372,11 @@ export default function AnalysisPage() {
           </div>
         )}
 
+        {/* ── Pivot Tab ── */}
+        {tab === 'pivot' && (
+          <PivotBuilder userAssets={assets} />
+        )}
+
         {/* ── Chat Tab ── */}
         {tab === 'chat' && (
           <div className="flex flex-col h-full">
@@ -1402,6 +1415,10 @@ export default function AnalysisPage() {
                       {msg.text}
                     </div>
                   ) : msg.chart ? (
+                    (() => {
+                      const costy = isCostChart(msg.chart)
+                      const valueFormatter = costy ? fmt : (v: number) => v.toLocaleString()
+                      return (
                     <div className="w-full bg-white rounded-xl border border-gray-100 shadow-sm p-3">
                       <p className="text-xs font-semibold text-gray-700 mb-2">{msg.chart.title}</p>
                       <ResponsiveContainer width="100%" height={200}>
@@ -1412,14 +1429,14 @@ export default function AnalysisPage() {
                                 <Cell key={idx} fill={CHART_COLORS_LIST[idx % CHART_COLORS_LIST.length]} />
                               ))}
                             </Pie>
-                            <Tooltip />
+                            <Tooltip content={<ChartTooltip valueFormatter={valueFormatter} />} wrapperStyle={{ outline: 'none', zIndex: 50 }} />
                           </PieChart>
                         ) : msg.chart.chartType === 'line' ? (
                           <LineChart data={msg.chart.data} margin={{ top: 4, right: 8, left: -10, bottom: 0 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                             <XAxis dataKey={msg.chart.xKey} tick={{ fontSize: 10 }} />
-                            <YAxis tick={{ fontSize: 10 }} />
-                            <Tooltip />
+                            <YAxis tick={{ fontSize: 10 }} tickFormatter={valueFormatter} />
+                            <Tooltip cursor={{ fill: '#F3F4F6' }} content={<ChartTooltip valueFormatter={valueFormatter} />} wrapperStyle={{ outline: 'none', zIndex: 50 }} />
                             {msg.chart.series.length > 1 && <Legend wrapperStyle={{ fontSize: 10 }} />}
                             {msg.chart.series.map(s => (
                               <Line key={s.key} type="monotone" dataKey={s.key} name={s.label} stroke={s.color} strokeWidth={2} dot={false} />
@@ -1429,8 +1446,8 @@ export default function AnalysisPage() {
                           <BarChart data={msg.chart.data} margin={{ top: 4, right: 8, left: -10, bottom: 0 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                             <XAxis dataKey={msg.chart.xKey} tick={{ fontSize: 10 }} />
-                            <YAxis tick={{ fontSize: 10 }} />
-                            <Tooltip />
+                            <YAxis tick={{ fontSize: 10 }} tickFormatter={valueFormatter} />
+                            <Tooltip cursor={{ fill: '#F3F4F6' }} content={<ChartTooltip valueFormatter={valueFormatter} />} wrapperStyle={{ outline: 'none', zIndex: 50 }} />
                             {msg.chart.series.length > 1 && <Legend wrapperStyle={{ fontSize: 10 }} />}
                             {msg.chart.series.map(s => (
                               <Bar key={s.key} dataKey={s.key} name={s.label} fill={s.color} radius={[3, 3, 0, 0]} />
@@ -1442,6 +1459,8 @@ export default function AnalysisPage() {
                         <p className="mt-2 text-xs text-gray-500 border-t border-gray-100 pt-2">{msg.chart.insight}</p>
                       )}
                     </div>
+                      )
+                    })()
                   ) : (
                     <div className={`max-w-[85%] px-3.5 py-2.5 rounded-2xl rounded-tl-sm text-sm ${msg.error ? 'bg-red-50 text-red-700' : 'bg-gray-100 text-gray-800'}`}>
                       {msg.text}
