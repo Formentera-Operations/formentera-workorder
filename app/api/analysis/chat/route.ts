@@ -16,6 +16,16 @@ USER CONTEXT:
 
 The data you receive is scoped to the user's assigned assets and any active date filter. All data is freshly queried from the database for every question.
 
+TOOLS AVAILABLE:
+You start each conversation with a pre-aggregated summary (TOTAL TICKETS, TICKET COUNTS BY STATUS, TOP EQUIPMENT, etc.) — use that for high-level questions without calling a tool.
+
+For drill-downs, call one of these tools:
+- get_ticket(id): full detail of a single ticket (issue description, dispatch, repair, vendor, costs). Use when the user asks about a specific ticket number.
+- search_tickets(filters): up to 20 ticket summaries matching filters. Free-text matches issue_description and repair_details (case-insensitive substring). Use for "find tickets where pump seals failed", "show me belt repairs in Goldsmith", etc.
+- cost_breakdown(group_by, ...): cost rollup by foreman / vendor / equipment / equipment_type / well / facility / department / job_category / priority / work_order_type / asset / field. Use whenever the user wants cost grouped by a dimension that isn't already in the dossier.
+
+After tool results come back, produce your FINAL response in the JSON format below — do not call more tools than necessary, and never expose the raw tool JSON to the user.
+
 RESPONSE FORMAT — return a JSON object in one of these formats:
 
 1. Chart response (when data is best shown visually):
@@ -59,9 +69,13 @@ DOMAIN KNOWLEDGE:
 - Ticket statuses: Open, In Progress, Backlogged, Awaiting Cost, Closed
 - Work order types: LOE (lease operating expense — routine maintenance), AFE - Workover (well intervention), AFE - Capital (capital expenditure projects), Unspecified
 - Work type breakdown only includes closed tickets
+- Priority levels: Low, Medium, High, Urgent / Critical (or unspecified — many tickets have no priority set)
 - Departments include: Production Operations, Compression, Electrical, Repair and Maintenance, Measurement, Engineering, and others
 - Each ticket has a location — either a Well or a Facility within a Field
+- Tickets are assigned to a foreman (assigned_foreman) — useful for workload and cost-per-foreman analysis
 - "Estimate_Cost" is the cost estimate before work begins. "repair_cost" is the actual cost after completion. The difference (est - repair) = savings.
+- Closed repairs may have a vendor (repair_vendor) and total spend tracked there.
+- AFE work orders (AFE - Workover, AFE - Capital) carry an AFE Number and a Job Category from the AFE system — use the AFE breakdown for capital/workover spend questions.
 - Tickets with large "days open" values indicate stalled work that may need attention
 
 SECURITY — READ-ONLY ACCESS:
@@ -91,8 +105,15 @@ async function fetchFreshData(userAssets: string[], startDate: string, endDate: 
     field: string
     department: string
     equipment_name: string
+    equipment_type: string | null
     work_order_type: string | null
     ticket_status: string
+    priority_of_issue: string | null
+    final_status: string | null
+    assigned_foreman: string | null
+    repair_vendor: string | null
+    afe_number: string | null
+    job_category: string | null
     issue_date: string
     repair_date_closed: string | null
     Estimate_Cost: number | null
@@ -103,7 +124,7 @@ async function fetchFreshData(userAssets: string[], startDate: string, endDate: 
   while (true) {
     let q = db
       .from('workorder_ticket_summary')
-      .select('ticket_id, asset, field, department, equipment_name, work_order_type, ticket_status, issue_date, repair_date_closed, Estimate_Cost, repair_cost')
+      .select('ticket_id, asset, field, department, equipment_name, equipment_type, work_order_type, ticket_status, priority_of_issue, final_status, assigned_foreman, repair_vendor, afe_number, job_category, issue_date, repair_date_closed, Estimate_Cost, repair_cost')
       .order('ticket_id', { ascending: true })
       .range(from, from + BATCH - 1)
     if (userAssets.length > 0) q = q.in('asset', userAssets)
@@ -233,7 +254,58 @@ async function fetchFreshData(userAssets: string[], startDate: string, endDate: 
     .slice(0, 10)
     .map(([field, count]) => ({ field, count }))
 
-  return { statusCounts, topEquipment, costByDept, monthlyTrend, costTrend, backlogHealth, workTypeBreakdown, agedTickets, fieldBreakdown, totalTickets: rows.length }
+  // Foreman workload — top 10 assigned foremen by ticket count + cost
+  const foremanMap = new Map<string, { count: number; estCost: number; repairCost: number }>()
+  for (const r of rows) {
+    if (!r.assigned_foreman) continue
+    const existing = foremanMap.get(r.assigned_foreman) || { count: 0, estCost: 0, repairCost: 0 }
+    existing.count++
+    existing.estCost += r.Estimate_Cost || 0
+    existing.repairCost += r.repair_cost || 0
+    foremanMap.set(r.assigned_foreman, existing)
+  }
+  const foremanWorkload = Array.from(foremanMap.entries())
+    .map(([name, val]) => ({ name, count: val.count, estCost: Math.round(val.estCost), repairCost: Math.round(val.repairCost) }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 10)
+
+  // Priority distribution
+  const priorityCounts: Record<string, number> = {}
+  for (const r of rows) {
+    const p = r.priority_of_issue || 'Unspecified'
+    priorityCounts[p] = (priorityCounts[p] || 0) + 1
+  }
+
+  // Top vendors by repair spend
+  const vendorMap = new Map<string, { count: number; cost: number }>()
+  for (const r of rows) {
+    if (!r.repair_vendor) continue
+    const existing = vendorMap.get(r.repair_vendor) || { count: 0, cost: 0 }
+    existing.count++
+    existing.cost += r.repair_cost || 0
+    vendorMap.set(r.repair_vendor, existing)
+  }
+  const topVendors = Array.from(vendorMap.entries())
+    .map(([name, val]) => ({ name, count: val.count, cost: Math.round(val.cost) }))
+    .sort((a, b) => b.cost - a.cost)
+    .slice(0, 10)
+
+  // AFE work breakdown by job category (closed AFE tickets only)
+  const afeMap = new Map<string, { count: number; cost: number }>()
+  for (const r of rows) {
+    if (r.ticket_status !== 'Closed') continue
+    if (!r.work_order_type?.includes('AFE')) continue
+    const cat = r.job_category || 'Uncategorized'
+    const existing = afeMap.get(cat) || { count: 0, cost: 0 }
+    existing.count++
+    existing.cost += r.repair_cost || 0
+    afeMap.set(cat, existing)
+  }
+  const afeBreakdown = Array.from(afeMap.entries())
+    .map(([category, val]) => ({ category, count: val.count, cost: Math.round(val.cost) }))
+    .sort((a, b) => b.cost - a.cost)
+
+  return { statusCounts, topEquipment, costByDept, monthlyTrend, costTrend, backlogHealth, workTypeBreakdown, agedTickets, fieldBreakdown, foremanWorkload, priorityCounts, topVendors, afeBreakdown, totalTickets: rows.length }
 }
 
 function buildDataContext(data: Awaited<ReturnType<typeof fetchFreshData>>) {
@@ -268,6 +340,18 @@ ${data.fieldBreakdown.map(f => `- ${f.field}: ${f.count} tickets`).join('\n')}
 
 TOP AGED OPEN TICKETS (oldest unresolved):
 ${data.agedTickets.slice(0, 5).map(t => `- Ticket #${t.ticket_id}: ${t.equipment} (${t.field}), ${t.status}, ${t.days_open} days open`).join('\n')}
+
+TICKETS BY PRIORITY:
+${Object.entries(data.priorityCounts).map(([p, c]) => `- ${p}: ${c} tickets`).join('\n')}
+
+TOP ASSIGNED FOREMEN (by ticket count):
+${data.foremanWorkload.map(f => `- ${f.name}: ${f.count} tickets, Est $${f.estCost.toLocaleString()}, Repair $${f.repairCost.toLocaleString()}`).join('\n')}
+
+TOP VENDORS (by repair spend):
+${data.topVendors.map(v => `- ${v.name}: ${v.count} tickets, $${v.cost.toLocaleString()}`).join('\n')}
+
+AFE WORK BREAKDOWN (closed AFE tickets by job category):
+${data.afeBreakdown.length > 0 ? data.afeBreakdown.map(a => `- ${a.category}: ${a.count} tickets, $${a.cost.toLocaleString()}`).join('\n') : '- No closed AFE tickets in this date range.'}
 `
 }
 
@@ -338,6 +422,222 @@ function validateResponse(parsed: Record<string, unknown>): Record<string, unkno
   return null
 }
 
+// ── Tools (let Claude drill into specific data on demand) ──
+const TOOL_LOOP_MAX = 5
+const TOOL_RESULT_MAX_CHARS = 30_000
+
+const TOOL_DEFINITIONS: Anthropic.Tool[] = [
+  {
+    name: 'get_ticket',
+    description: 'Get full details for a single ticket by ID — issue description, troubleshooting, dispatch, repair details, vendor, costs. Use when the user asks about a specific ticket number.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'number', description: 'The ticket ID' },
+      },
+      required: ['id'],
+    },
+  },
+  {
+    name: 'search_tickets',
+    description: 'Find tickets matching filters. Returns up to 20 ticket summaries. Free-text search runs ILIKE substring across issue_description and repair_details. Use for "find tickets where pump seals failed" or "show me belt repairs in March".',
+    input_schema: {
+      type: 'object',
+      properties: {
+        text: { type: 'string', description: 'Free-text substring to find in issue_description or repair_details' },
+        equipment: { type: 'string', description: 'Equipment name substring' },
+        well: { type: 'string', description: 'Well name substring' },
+        facility: { type: 'string', description: 'Facility name substring' },
+        foreman: { type: 'string', description: 'Assigned foreman substring' },
+        vendor: { type: 'string', description: 'Repair vendor substring' },
+        status: { type: 'string', enum: ['Open', 'In Progress', 'Backlogged', 'Awaiting Cost', 'Closed'] },
+        priority: { type: 'string', enum: ['Low', 'Medium', 'High', 'Urgent / Critical'] },
+        work_order_type: { type: 'string', enum: ['LOE', 'AFE - Workover', 'AFE - Capital'] },
+        start_date: { type: 'string', description: 'YYYY-MM-DD inclusive lower bound on Issue_Date' },
+        end_date: { type: 'string', description: 'YYYY-MM-DD inclusive upper bound on Issue_Date' },
+        limit: { type: 'number', description: 'Max results (default 20, capped at 20)' },
+      },
+    },
+  },
+  {
+    name: 'cost_breakdown',
+    description: 'Roll up cost by a chosen dimension. Returns top 20 groups with ticket count and total cost. Use for "cost by vendor", "spend by job category", "tickets and cost by foreman" type questions.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        group_by: {
+          type: 'string',
+          enum: ['foreman', 'vendor', 'equipment', 'equipment_type', 'well', 'facility', 'department', 'job_category', 'priority', 'work_order_type', 'asset', 'field'],
+          description: 'Dimension to group by',
+        },
+        cost_type: { type: 'string', enum: ['estimate', 'repair'], description: 'Which cost field to sum (default: repair)' },
+        status: { type: 'string', description: 'Filter to a single status (e.g., "Closed")' },
+        work_order_type: { type: 'string' },
+        start_date: { type: 'string', description: 'YYYY-MM-DD' },
+        end_date: { type: 'string', description: 'YYYY-MM-DD' },
+      },
+      required: ['group_by'],
+    },
+  },
+]
+
+function escapeLikePattern(s: string): string {
+  return s.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_')
+}
+
+function sanitizeToolText(s: unknown, maxLen = 100): string {
+  if (typeof s !== 'string') return ''
+  return s.trim().slice(0, maxLen).replace(/[<>,]/g, ' ')
+}
+
+function truncate(s: string | null | undefined, n = 500): string | null {
+  if (!s) return null
+  return s.length <= n ? s : s.slice(0, n) + '…'
+}
+
+function isYmd(s: unknown): s is string {
+  return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s)
+}
+
+async function getTicket(input: Record<string, unknown>, userAssets: string[]) {
+  const id = typeof input.id === 'number' ? input.id : parseInt(String(input.id ?? ''), 10)
+  if (!Number.isFinite(id)) return { error: 'Invalid ticket id' }
+
+  const db = supabaseAdmin()
+  let query = db.from('workorder_ticket_summary').select('*').eq('ticket_id', id)
+  if (userAssets.length > 0) query = query.in('asset', userAssets)
+
+  const { data, error } = await query.maybeSingle()
+  if (error) return { error: error.message }
+  if (!data) return { error: `Ticket #${id} not found or not in your assets.` }
+
+  return {
+    ...data,
+    issue_description: truncate(data.issue_description as string, 500),
+    repair_details: truncate(data.repair_details as string, 500),
+    troubleshooting_conducted: truncate(data.troubleshooting_conducted as string, 500),
+  }
+}
+
+async function searchTickets(input: Record<string, unknown>, userAssets: string[]) {
+  const db = supabaseAdmin()
+  const limit = Math.min(typeof input.limit === 'number' ? input.limit : 20, 20)
+
+  let query = db
+    .from('workorder_ticket_summary')
+    .select('ticket_id, asset, field, well, facility, equipment_name, equipment_type, department, ticket_status, priority_of_issue, assigned_foreman, work_order_type, issue_date, issue_description, repair_vendor, repair_cost, "Estimate_Cost", final_status')
+    .order('ticket_id', { ascending: false })
+    .limit(limit)
+
+  if (userAssets.length > 0) query = query.in('asset', userAssets)
+
+  const text = sanitizeToolText(input.text)
+  if (text) {
+    const escaped = escapeLikePattern(text)
+    query = query.or(`issue_description.ilike.%${escaped}%,repair_details.ilike.%${escaped}%`)
+  }
+
+  const equipment = sanitizeToolText(input.equipment)
+  if (equipment) query = query.ilike('equipment_name', `%${escapeLikePattern(equipment)}%`)
+  const well = sanitizeToolText(input.well)
+  if (well) query = query.ilike('well', `%${escapeLikePattern(well)}%`)
+  const facility = sanitizeToolText(input.facility)
+  if (facility) query = query.ilike('facility', `%${escapeLikePattern(facility)}%`)
+  const foreman = sanitizeToolText(input.foreman)
+  if (foreman) query = query.ilike('assigned_foreman', `%${escapeLikePattern(foreman)}%`)
+  const vendor = sanitizeToolText(input.vendor)
+  if (vendor) query = query.ilike('repair_vendor', `%${escapeLikePattern(vendor)}%`)
+
+  if (typeof input.status === 'string') query = query.eq('ticket_status', input.status)
+  if (typeof input.priority === 'string') query = query.eq('priority_of_issue', input.priority)
+  if (typeof input.work_order_type === 'string') query = query.eq('work_order_type', input.work_order_type)
+  if (isYmd(input.start_date)) query = query.gte('issue_date', input.start_date)
+  if (isYmd(input.end_date)) query = query.lte('issue_date', input.end_date + 'T23:59:59')
+
+  const { data, error } = await query
+  if (error) return { error: error.message }
+
+  const tickets = (data || []).map((t) => ({
+    ...t,
+    issue_description: truncate((t as { issue_description?: string }).issue_description, 200),
+  }))
+  return { count: tickets.length, tickets }
+}
+
+async function costBreakdown(input: Record<string, unknown>, userAssets: string[]) {
+  const groupColMap: Record<string, string> = {
+    foreman: 'assigned_foreman',
+    vendor: 'repair_vendor',
+    equipment: 'equipment_name',
+    equipment_type: 'equipment_type',
+    well: 'well',
+    facility: 'facility',
+    department: 'department',
+    job_category: 'job_category',
+    priority: 'priority_of_issue',
+    work_order_type: 'work_order_type',
+    asset: 'asset',
+    field: 'field',
+  }
+  const groupBy = String(input.group_by || '')
+  const groupCol = groupColMap[groupBy]
+  if (!groupCol) return { error: `Invalid group_by: ${groupBy}. Valid: ${Object.keys(groupColMap).join(', ')}` }
+
+  const useEstimate = input.cost_type === 'estimate'
+  const costCol = useEstimate ? 'Estimate_Cost' : 'repair_cost'
+  const costSelect = useEstimate ? '"Estimate_Cost"' : 'repair_cost'
+
+  const db = supabaseAdmin()
+  let query = db
+    .from('workorder_ticket_summary')
+    .select(`${groupCol}, ${costSelect}`)
+    .limit(5000)
+
+  if (userAssets.length > 0) query = query.in('asset', userAssets)
+  if (typeof input.status === 'string') query = query.eq('ticket_status', input.status)
+  if (typeof input.work_order_type === 'string') query = query.eq('work_order_type', input.work_order_type)
+  if (isYmd(input.start_date)) query = query.gte('issue_date', input.start_date)
+  if (isYmd(input.end_date)) query = query.lte('issue_date', input.end_date + 'T23:59:59')
+
+  const { data, error } = await query
+  if (error) return { error: error.message }
+
+  const aggMap = new Map<string, { count: number; cost: number }>()
+  const rows = (data ?? []) as unknown as Record<string, unknown>[]
+  for (const r of rows) {
+    const key = (r[groupCol] as string) || 'Unspecified'
+    const cost = (r[costCol] as number) || 0
+    const existing = aggMap.get(key) || { count: 0, cost: 0 }
+    existing.count++
+    existing.cost += cost
+    aggMap.set(key, existing)
+  }
+
+  const results = Array.from(aggMap.entries())
+    .map(([key, val]) => ({ [groupBy]: key, count: val.count, total_cost: Math.round(val.cost) }))
+    .sort((a, b) => (b.total_cost as number) - (a.total_cost as number))
+    .slice(0, 20)
+
+  return {
+    group_by: groupBy,
+    cost_type: useEstimate ? 'estimate' : 'repair',
+    total_groups: aggMap.size,
+    results,
+  }
+}
+
+async function executeTool(name: string, input: Record<string, unknown>, userAssets: string[]): Promise<unknown> {
+  try {
+    if (name === 'get_ticket') return await getTicket(input, userAssets)
+    if (name === 'search_tickets') return await searchTickets(input, userAssets)
+    if (name === 'cost_breakdown') return await costBreakdown(input, userAssets)
+    return { error: `Unknown tool: ${name}` }
+  } catch (err) {
+    console.error(`Tool ${name} error:`, err)
+    return { error: 'Tool execution failed' }
+  }
+}
+
 // ── Content filtering ──
 const BLOCKED_CONTENT_PATTERNS = [
   /\b(password|secret|token|api.?key|credential)\b/i,
@@ -390,8 +690,9 @@ export async function POST(req: NextRequest) {
     const freshData = await fetchFreshData(userAssets || [], startDate || '', endDate || '')
     const dataContext = buildDataContext(freshData)
 
-    // Build multi-turn message history (capped)
-    const claudeMessages: { role: 'user' | 'assistant'; content: string }[] = []
+    // Build multi-turn message history (capped). Content can be string OR an
+    // array of content blocks once we start handling tool_use turns.
+    const claudeMessages: Anthropic.MessageParam[] = []
     const safeMessages = (messages || []).slice(-MAX_HISTORY_MESSAGES)
 
     if (safeMessages.length > 0) {
@@ -414,14 +715,44 @@ export async function POST(req: NextRequest) {
         : `User question: ${cleanQuestion}`,
     })
 
-    const message = await client.messages.create({
-      model: 'claude-sonnet-4-5',
-      max_tokens: 1024,
-      system: buildSystemPrompt(userName || '', role || '', userAssets || [], new Date().toISOString().slice(0, 10)),
-      messages: claudeMessages,
-    })
+    const systemPrompt = buildSystemPrompt(userName || '', role || '', userAssets || [], new Date().toISOString().slice(0, 10))
 
-    const raw = message.content[0].type === 'text' ? message.content[0].text.trim() : ''
+    // Tool loop: call Claude, run any tools it requests, feed results back, repeat.
+    let message: Anthropic.Message | null = null
+    for (let iter = 0; iter < TOOL_LOOP_MAX; iter++) {
+      message = await client.messages.create({
+        model: 'claude-sonnet-4-5',
+        max_tokens: 2048,
+        system: systemPrompt,
+        messages: claudeMessages,
+        tools: TOOL_DEFINITIONS,
+      })
+
+      if (message.stop_reason !== 'tool_use') break
+
+      // Append the assistant's tool-call turn verbatim, then execute the tools
+      // and append the results as a single user message.
+      claudeMessages.push({ role: 'assistant', content: message.content })
+
+      const toolResults: Anthropic.ToolResultBlockParam[] = []
+      for (const block of message.content) {
+        if (block.type !== 'tool_use') continue
+        const result = await executeTool(block.name, (block.input || {}) as Record<string, unknown>, userAssets || [])
+        toolResults.push({
+          type: 'tool_result',
+          tool_use_id: block.id,
+          content: JSON.stringify(result).slice(0, TOOL_RESULT_MAX_CHARS),
+        })
+      }
+      claudeMessages.push({ role: 'user', content: toolResults })
+    }
+
+    if (!message) {
+      return NextResponse.json({ type: 'text', text: 'No response from AI.' })
+    }
+
+    const finalText = message.content.find((b): b is Anthropic.TextBlock => b.type === 'text')
+    const raw = finalText ? finalText.text.trim() : ''
 
     // Strip markdown code fences if present
     const cleaned = raw.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim()
