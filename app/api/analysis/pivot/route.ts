@@ -13,6 +13,7 @@ export async function POST(req: NextRequest) {
       value: body.value,
       status: body.status,
       work_order_type: body.work_order_type,
+      filters: Array.isArray(body.filters) ? body.filters : undefined,
       start_date: body.start_date,
       end_date: body.end_date,
       user_assets: Array.isArray(body.userAssets) ? body.userAssets : [],

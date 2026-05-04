@@ -31,13 +31,19 @@ const VALUE_COL_MAP: Record<PivotValue, string | null> = {
   repair_cost: 'repair_cost',
 }
 
+export interface PivotFilter {
+  dim: string
+  values: string[]
+}
+
 export interface PivotInput {
   rows: string | string[]
   columns?: string | null
   value?: PivotValue
   values?: PivotValue[]
-  status?: string
-  work_order_type?: string
+  status?: string | string[]
+  work_order_type?: string | string[]
+  filters?: PivotFilter[]
   start_date?: string
   end_date?: string
   user_assets?: string[]
@@ -129,8 +135,32 @@ export async function runPivot(input: PivotInput): Promise<PivotResult | { error
 
   const userAssets = input.user_assets || []
   if (userAssets.length > 0) query = query.in('asset', userAssets)
-  if (typeof input.status === 'string' && input.status) query = query.eq('ticket_status', input.status)
-  if (typeof input.work_order_type === 'string' && input.work_order_type) query = query.eq('work_order_type', input.work_order_type)
+
+  // Status / work-type accept string OR string[]; treat empty array as no filter.
+  const statusList = Array.isArray(input.status)
+    ? input.status.filter(s => typeof s === 'string' && s)
+    : (typeof input.status === 'string' && input.status ? [input.status] : [])
+  if (statusList.length === 1) query = query.eq('ticket_status', statusList[0])
+  else if (statusList.length > 1) query = query.in('ticket_status', statusList)
+
+  const wotList = Array.isArray(input.work_order_type)
+    ? input.work_order_type.filter(s => typeof s === 'string' && s)
+    : (typeof input.work_order_type === 'string' && input.work_order_type ? [input.work_order_type] : [])
+  if (wotList.length === 1) query = query.eq('work_order_type', wotList[0])
+  else if (wotList.length > 1) query = query.in('work_order_type', wotList)
+
+  // Free-form filters: any pivot dim with a list of allowed values.
+  if (Array.isArray(input.filters)) {
+    for (const f of input.filters) {
+      if (!f || typeof f.dim !== 'string') continue
+      const fc = PIVOT_DIM_MAP[f.dim]
+      if (!fc) continue
+      const vals = Array.isArray(f.values) ? f.values.filter(v => typeof v === 'string') : []
+      if (vals.length === 0) continue
+      query = query.in(fc, vals)
+    }
+  }
+
   if (isYmd(input.start_date)) query = query.gte('issue_date', input.start_date)
   if (isYmd(input.end_date)) query = query.lte('issue_date', input.end_date + 'T23:59:59')
 
