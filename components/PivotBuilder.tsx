@@ -128,9 +128,9 @@ function ChartTooltip({ active, payload, label, currencyByKey }: {
 }
 
 export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
-  const [rowsDims, setRowsDims] = useState<string[]>(['equipment'])
-  const [colsDim, setColsDim] = useState<string>('department')
-  const [valueKeys, setValueKeys] = useState<ValueKey[]>(['repair_cost'])
+  const [rowsDims, setRowsDims] = useState<string[]>([])
+  const [colsDim, setColsDim] = useState<string>('')
+  const [valueKeys, setValueKeys] = useState<ValueKey[]>([])
   const [statusFilter, setStatusFilter] = useState<string[]>([])
   const [workTypeFilter, setWorkTypeFilter] = useState<string[]>([])
   const [datePreset, setDatePreset] = useState<'all' | 'ytd' | 'lastmonth' | 'thismonth'>('all')
@@ -526,6 +526,55 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
 
       {/* Zones */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <ZoneCard title="Filters" hint="Slice the chart to specific values of any dimension." {...zoneDropProps('dim', dropOnFilters)}>
+          {filterDimList.length === 0 ? (
+            <EmptyZone />
+          ) : (
+            filterDimList.map(dim => (
+              <FilterPill
+                key={dim}
+                dim={dim}
+                label={DIM_LABEL[dim] || dim}
+                state={dimValues[dim]}
+                selected={dimFilters[dim] || []}
+                onChange={(vals) => setFilterValues(dim, vals)}
+                onSwitchToRows={() => moveDim(dim, 'rows')}
+                onSwitchToColumns={() => moveDim(dim, 'columns')}
+                onRemove={() => removeFilterDim(dim)}
+                onDragStart={(e) => startDrag(e, { kind: 'dim', key: dim, from: 'filters' })}
+                onDragEnd={endDrag}
+              />
+            ))
+          )}
+          <FieldAdder
+            label="Add filter"
+            options={ALL_DIM_OPTIONS.filter(d => !usedDims.has(d.key))}
+            onPick={addFilterDim}
+          />
+        </ZoneCard>
+
+        <ZoneCard title="Columns" hint="One dimension max — becomes the chart series." {...zoneDropProps('dim', dropOnColumns)}>
+          {!colsDim ? (
+            <EmptyZone />
+          ) : (
+            <DimPill
+              label={DIM_LABEL[colsDim] || colsDim}
+              onSwitchToRows={() => moveDim(colsDim, 'rows')}
+              onSwitchToFilters={() => moveDim(colsDim, 'filters')}
+              onRemove={clearColumns}
+              onDragStart={(e) => startDrag(e, { kind: 'dim', key: colsDim, from: 'columns' })}
+              onDragEnd={endDrag}
+            />
+          )}
+          {!colsDim && (
+            <FieldAdder
+              label="Set columns"
+              options={ALL_DIM_OPTIONS.filter(d => !usedDims.has(d.key))}
+              onPick={setColumns}
+            />
+          )}
+        </ZoneCard>
+
         <ZoneCard title="Rows" hint="Drag dimensions here. Multiple rows nest left-to-right." {...zoneDropProps('dim', dropOnRows)}>
           {rowsDims.length === 0 ? (
             <EmptyZone />
@@ -559,56 +608,7 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
           />
         </ZoneCard>
 
-        <ZoneCard title="Columns" hint="One dimension max — becomes the chart series." {...zoneDropProps('dim', dropOnColumns)}>
-          {!colsDim ? (
-            <EmptyZone />
-          ) : (
-            <DimPill
-              label={DIM_LABEL[colsDim] || colsDim}
-              onSwitchToRows={() => moveDim(colsDim, 'rows')}
-              onSwitchToFilters={() => moveDim(colsDim, 'filters')}
-              onRemove={clearColumns}
-              onDragStart={(e) => startDrag(e, { kind: 'dim', key: colsDim, from: 'columns' })}
-              onDragEnd={endDrag}
-            />
-          )}
-          {!colsDim && (
-            <FieldAdder
-              label="Set columns"
-              options={ALL_DIM_OPTIONS.filter(d => !usedDims.has(d.key))}
-              onPick={setColumns}
-            />
-          )}
-        </ZoneCard>
-
-        <ZoneCard title="Filters" hint="Slice the chart to specific values of any dimension." className="md:col-span-2" {...zoneDropProps('dim', dropOnFilters)}>
-          {filterDimList.length === 0 ? (
-            <EmptyZone />
-          ) : (
-            filterDimList.map(dim => (
-              <FilterPill
-                key={dim}
-                dim={dim}
-                label={DIM_LABEL[dim] || dim}
-                state={dimValues[dim]}
-                selected={dimFilters[dim] || []}
-                onChange={(vals) => setFilterValues(dim, vals)}
-                onSwitchToRows={() => moveDim(dim, 'rows')}
-                onSwitchToColumns={() => moveDim(dim, 'columns')}
-                onRemove={() => removeFilterDim(dim)}
-                onDragStart={(e) => startDrag(e, { kind: 'dim', key: dim, from: 'filters' })}
-                onDragEnd={endDrag}
-              />
-            ))
-          )}
-          <FieldAdder
-            label="Add filter"
-            options={ALL_DIM_OPTIONS.filter(d => !usedDims.has(d.key))}
-            onPick={addFilterDim}
-          />
-        </ZoneCard>
-
-        <ZoneCard title="Values" hint="Each value renders as its own bar series." className="md:col-span-2" {...zoneDropProps('value', dropOnValues)}>
+        <ZoneCard title="Values" hint="Each value renders as its own bar series." {...zoneDropProps('value', dropOnValues)}>
           {valueKeys.length === 0 ? (
             <EmptyZone />
           ) : (
