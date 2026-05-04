@@ -335,8 +335,8 @@ export default function AnalysisPage() {
           question,
           messages: history.slice(0, -1),
           userAssets: assets,
-          startDate: effectiveStart,
-          endDate: effectiveEnd,
+          startDate: '',
+          endDate: '',
           userName,
           role,
         }),
@@ -445,6 +445,7 @@ export default function AnalysisPage() {
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 lg:px-32">
 
         {/* ── DATE RANGE FILTER ── */}
+        {tab !== 'chat' && (
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3">
           <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">Date Range</p>
           <div className="flex gap-1.5 flex-wrap">
@@ -484,6 +485,7 @@ export default function AnalysisPage() {
             <p className="text-[10px] text-gray-400 mt-1.5">{effectiveStart} – {effectiveEnd}</p>
           )}
         </div>
+        )}
 
         {/* ── OVERVIEW TAB ── */}
         {tab === 'overview' && (
