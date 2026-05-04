@@ -268,10 +268,19 @@ export async function runPivot(input: PivotInput): Promise<PivotResult | { error
     if (colCol) colTotals.set(colKey, (colTotals.get(colKey) || 0) + firstVal)
   }
 
-  const topRowCombos = Array.from(rowTotals.entries())
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, maxRows)
-    .map(([k]) => k)
+  // Pick top N by total, then re-sort chronologically when any row dim is a
+  // date grain so months / quarters / years read in time order rather than by
+  // size. Lexical sort works for our date bucket formats (YYYY, YYYY Qn,
+  // YYYY-MM, YYYY-MM-DD).
+  const hasDateDimInRows = rowsKeys.some(k => k.startsWith('submitted_'))
+  const topRowCombos = (() => {
+    const byTotal = Array.from(rowTotals.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, maxRows)
+      .map(([k]) => k)
+    if (hasDateDimInRows) byTotal.sort()
+    return byTotal
+  })()
 
   // Decide series
   let series: PivotSeries[] = []
