@@ -7,8 +7,9 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
     const result = await runPivot({
-      rows: body.rows,
+      rows: Array.isArray(body.rows) ? body.rows : (body.rows ? [body.rows] : []),
       columns: body.columns ?? null,
+      values: Array.isArray(body.values) ? body.values : undefined,
       value: body.value,
       status: body.status,
       work_order_type: body.work_order_type,

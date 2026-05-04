@@ -697,7 +697,13 @@ async function pivotBreakdown(input: Record<string, unknown>, userAssets: string
   })
   if ('error' in result) return result
   return {
-    ...result,
+    rows: result.rows[0],
+    columns: result.columns,
+    value: result.values[0]?.key,
+    series: result.series.map(s => s.label),
+    data: result.data,
+    total_row_groups: result.total_row_groups,
+    total_col_groups: result.total_col_groups,
     note: 'Render as a multi-series bar chart: xKey is the rows field; one series per item in `series`. Pick distinct colors from the palette.',
   }
 }

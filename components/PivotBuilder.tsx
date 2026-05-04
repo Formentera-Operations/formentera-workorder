@@ -3,7 +3,9 @@ import { useState, useEffect, useMemo } from 'react'
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from 'recharts'
-import { Download } from 'lucide-react'
+import { Download, X, Plus } from 'lucide-react'
+
+type ValueKey = 'count' | 'repair_cost' | 'estimate_cost'
 
 const DIM_OPTIONS: { key: string; label: string }[] = [
   { key: 'equipment',       label: 'Equipment' },
@@ -22,21 +24,31 @@ const DIM_OPTIONS: { key: string; label: string }[] = [
 ]
 const DIM_LABEL = Object.fromEntries(DIM_OPTIONS.map(d => [d.key, d.label]))
 
-const VALUE_OPTIONS = [
+const VALUE_OPTIONS: { key: ValueKey; label: string }[] = [
   { key: 'count',         label: 'Ticket Count' },
   { key: 'repair_cost',   label: 'Repair Cost' },
   { key: 'estimate_cost', label: 'Estimate Cost' },
-] as const
+]
+const VALUE_LABEL: Record<ValueKey, string> = Object.fromEntries(
+  VALUE_OPTIONS.map(v => [v.key, v.label])
+) as Record<ValueKey, string>
 
 const STATUSES = ['Open', 'In Progress', 'Backlogged', 'Awaiting Cost', 'Closed']
 const WORK_TYPES = ['LOE', 'AFE - Workover', 'AFE - Capital']
-const SERIES_COLORS = ['#1B2E6B', '#3B82F6', '#F59E0B', '#10B981', '#EF4444', '#8B5CF6', '#9CA3AF']
+const SERIES_COLORS = ['#1B2E6B', '#3B82F6', '#F59E0B', '#10B981', '#EF4444', '#8B5CF6']
+
+interface PivotSeriesMeta {
+  key: string
+  label: string
+  valueKey: ValueKey
+  columnGroup: string | null
+}
 
 interface PivotResponse {
-  rows: string
+  rows: string[]
   columns: string | null
-  value: 'count' | 'estimate_cost' | 'repair_cost'
-  series: string[]
+  values: { key: ValueKey; label: string }[]
+  series: PivotSeriesMeta[]
   data: Record<string, string | number>[]
   total_row_groups: number
   total_col_groups: number
@@ -50,17 +62,17 @@ function fmt(n: number, isCurrency: boolean): string {
   return `$${Math.round(n)}`
 }
 
-function ChartTooltip({ active, payload, label, valueFormatter }: {
+function ChartTooltip({ active, payload, label, currencyByKey }: {
   active?: boolean
-  payload?: Array<{ name?: string; value?: number; color?: string }>
+  payload?: Array<{ name?: string; value?: number; color?: string; dataKey?: string }>
   label?: string | number
-  valueFormatter: (v: number) => string
+  currencyByKey: Record<string, boolean>
 }) {
   if (!active || !payload || payload.length === 0) return null
   const items = payload.filter(p => typeof p.value === 'number' && p.value !== 0)
   if (items.length === 0) return null
   return (
-    <div className="bg-white border border-gray-200 rounded-lg shadow-lg px-3 py-2 text-xs" style={{ minWidth: 180, maxWidth: 280 }}>
+    <div className="bg-white border border-gray-200 rounded-lg shadow-lg px-3 py-2 text-xs" style={{ minWidth: 180, maxWidth: 320 }}>
       {label !== undefined && label !== '' && (
         <div className="font-semibold text-gray-900 mb-1.5 border-b border-gray-100 pb-1">{label}</div>
       )}
@@ -71,7 +83,9 @@ function ChartTooltip({ active, payload, label, valueFormatter }: {
               <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: p.color }} />
               <span className="text-gray-600 truncate">{p.name}</span>
             </div>
-            <span className="font-medium text-gray-900 flex-shrink-0">{valueFormatter(p.value as number)}</span>
+            <span className="font-medium text-gray-900 flex-shrink-0">
+              {fmt(p.value as number, !!currencyByKey[p.dataKey || ''])}
+            </span>
           </div>
         ))}
       </div>
@@ -80,9 +94,9 @@ function ChartTooltip({ active, payload, label, valueFormatter }: {
 }
 
 export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
-  const [rowsDim, setRowsDim] = useState('equipment')
-  const [colsDim, setColsDim] = useState('department')
-  const [valueType, setValueType] = useState<'count' | 'repair_cost' | 'estimate_cost'>('repair_cost')
+  const [rowsDims, setRowsDims] = useState<string[]>(['equipment'])
+  const [colsDim, setColsDim] = useState<string>('department')
+  const [valueKeys, setValueKeys] = useState<ValueKey[]>(['repair_cost'])
   const [statusFilter, setStatusFilter] = useState('')
   const [workTypeFilter, setWorkTypeFilter] = useState('')
   const [datePreset, setDatePreset] = useState<'all' | 'ytd' | 'lastmonth' | 'thismonth'>('all')
@@ -90,6 +104,9 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
   const [result, setResult] = useState<PivotResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const usedDims = useMemo(() => new Set([...rowsDims, ...(colsDim ? [colsDim] : [])]), [rowsDims, colsDim])
+  const usedValues = useMemo(() => new Set(valueKeys), [valueKeys])
 
   const { startDate, endDate } = useMemo(() => {
     const today = new Date()
@@ -108,6 +125,10 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
   }, [datePreset])
 
   useEffect(() => {
+    if (rowsDims.length === 0 || valueKeys.length === 0) {
+      setResult(null)
+      return
+    }
     const controller = new AbortController()
     setLoading(true)
     setError(null)
@@ -116,9 +137,9 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
       headers: { 'Content-Type': 'application/json' },
       signal: controller.signal,
       body: JSON.stringify({
-        rows: rowsDim,
+        rows: rowsDims,
         columns: colsDim || null,
-        value: valueType,
+        values: valueKeys,
         status: statusFilter || undefined,
         work_order_type: workTypeFilter || undefined,
         start_date: startDate || undefined,
@@ -136,126 +157,273 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
       })
       .finally(() => setLoading(false))
     return () => controller.abort()
-  }, [rowsDim, colsDim, valueType, statusFilter, workTypeFilter, startDate, endDate, userAssets])
+  }, [rowsDims, colsDim, valueKeys, statusFilter, workTypeFilter, startDate, endDate, userAssets])
 
-  const isCurrency = valueType !== 'count'
-  const valueFormatter = (v: number) => fmt(v, isCurrency)
-  const valueLabel = VALUE_OPTIONS.find(v => v.key === valueType)?.label || ''
-  const rowsLabel = DIM_LABEL[rowsDim] || rowsDim
-  const colsLabel = colsDim ? DIM_LABEL[colsDim] || colsDim : ''
-  const title = colsDim
-    ? `${valueLabel} by ${rowsLabel} by ${colsLabel}`
-    : `${valueLabel} by ${rowsLabel}`
+  // ── Helpers for zone manipulation ──
+  function addToRows(dim: string) {
+    if (rowsDims.includes(dim)) return
+    if (rowsDims.length >= 4) return
+    setRowsDims([...rowsDims, dim])
+    if (colsDim === dim) setColsDim('')
+  }
+  function removeFromRows(dim: string) {
+    setRowsDims(rowsDims.filter(d => d !== dim))
+  }
+  function setColumns(dim: string) {
+    if (rowsDims.includes(dim)) return
+    setColsDim(dim)
+  }
+  function clearColumns() {
+    setColsDim('')
+  }
+  function addValue(v: ValueKey) {
+    if (valueKeys.includes(v)) return
+    if (valueKeys.length >= 3) return
+    setValueKeys([...valueKeys, v])
+  }
+  function removeValue(v: ValueKey) {
+    setValueKeys(valueKeys.filter(x => x !== v))
+  }
+  function moveDim(dim: string, target: 'rows' | 'columns') {
+    if (target === 'rows') {
+      if (colsDim === dim) setColsDim('')
+      addToRows(dim)
+    } else {
+      removeFromRows(dim)
+      setColumns(dim)
+    }
+  }
+
+  // Default-zone click from field shelf: dim → rows, value → values
+  function clickDimField(dim: string) {
+    if (rowsDims.includes(dim)) removeFromRows(dim)
+    else if (colsDim === dim) setColsDim('')
+    else addToRows(dim)
+  }
+  function clickValueField(v: ValueKey) {
+    if (valueKeys.includes(v)) removeValue(v)
+    else addValue(v)
+  }
+
+  const isCurrencySeries = useMemo(() => {
+    const map: Record<string, boolean> = {}
+    if (!result) return map
+    for (const s of result.series) map[s.key] = s.valueKey !== 'count'
+    return map
+  }, [result])
+  const allCurrency = useMemo(
+    () => valueKeys.length > 0 && valueKeys.every(v => v !== 'count'),
+    [valueKeys]
+  )
+  const yAxisFormatter = (v: number) => fmt(v, allCurrency)
+
+  const titleParts: string[] = []
+  if (valueKeys.length > 0) titleParts.push(valueKeys.map(v => VALUE_LABEL[v]).join(' & '))
+  if (rowsDims.length > 0) titleParts.push(`by ${rowsDims.map(r => DIM_LABEL[r]).join(' › ')}`)
+  if (colsDim) titleParts.push(`by ${DIM_LABEL[colsDim]}`)
+  const title = titleParts.join(' ')
 
   function exportCsv() {
     if (!result) return
-    const headers = [rowsLabel, ...result.series]
-    const lines = [headers.join(',')]
+    const dimHeaders = result.rows.map(r => DIM_LABEL[r] || r)
+    const seriesHeaders = result.series.map(s => s.label)
+    const header = [...dimHeaders, ...seriesHeaders]
+    const lines = [header.join(',')]
     for (const row of result.data) {
-      const cells = [String(row[result.rows] ?? '').replace(/"/g, '""')]
-      for (const s of result.series) cells.push(String(row[s] ?? 0))
-      lines.push(cells.map(c => /[,"\n]/.test(c) ? `"${c}"` : c).join(','))
+      const cells: string[] = []
+      for (const r of result.rows) cells.push(String(row[r] ?? ''))
+      for (const s of result.series) cells.push(String(row[s.key] ?? 0))
+      lines.push(cells.map(c => /[,"\n]/.test(c) ? `"${c.replace(/"/g, '""')}"` : c).join(','))
     }
     const blob = new Blob([lines.join('\n')], { type: 'text/csv' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `pivot_${rowsDim}${colsDim ? `_by_${colsDim}` : ''}.csv`
+    a.download = `pivot_${rowsDims.join('_')}${colsDim ? `_by_${colsDim}` : ''}.csv`
     a.click()
     URL.revokeObjectURL(url)
   }
 
   return (
     <div className="space-y-3">
-      {/* Field selectors */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3 space-y-3">
-        <div>
-          <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Fields</p>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-            <div>
-              <label className="text-[10px] text-gray-500 block mb-0.5">Rows</label>
-              <select
-                className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-[#1B2E6B]"
-                value={rowsDim}
-                onChange={e => setRowsDim(e.target.value)}
-              >
-                {DIM_OPTIONS.map(d => <option key={d.key} value={d.key}>{d.label}</option>)}
-              </select>
+      {/* Field shelf */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3">
+        <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">Available Fields</p>
+        <div className="space-y-2">
+          <div>
+            <p className="text-[10px] text-gray-500 mb-1">Dimensions (click to add to Rows)</p>
+            <div className="flex flex-wrap gap-1.5">
+              {DIM_OPTIONS.map(d => {
+                const active = usedDims.has(d.key)
+                return (
+                  <button
+                    key={d.key}
+                    onClick={() => clickDimField(d.key)}
+                    className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                      active
+                        ? 'bg-[#1B2E6B] text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    {d.label}
+                  </button>
+                )
+              })}
             </div>
-            <div>
-              <label className="text-[10px] text-gray-500 block mb-0.5">Columns</label>
-              <select
-                className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-[#1B2E6B]"
-                value={colsDim}
-                onChange={e => setColsDim(e.target.value)}
-              >
-                <option value="">None (single series)</option>
-                {DIM_OPTIONS.filter(d => d.key !== rowsDim).map(d => (
-                  <option key={d.key} value={d.key}>{d.label}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="text-[10px] text-gray-500 block mb-0.5">Value</label>
-              <select
-                className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-[#1B2E6B]"
-                value={valueType}
-                onChange={e => setValueType(e.target.value as typeof valueType)}
-              >
-                {VALUE_OPTIONS.map(v => <option key={v.key} value={v.key}>{v.label}</option>)}
-              </select>
+          </div>
+          <div>
+            <p className="text-[10px] text-gray-500 mb-1">Measures (click to add to Values)</p>
+            <div className="flex flex-wrap gap-1.5">
+              {VALUE_OPTIONS.map(v => {
+                const active = usedValues.has(v.key)
+                return (
+                  <button
+                    key={v.key}
+                    onClick={() => clickValueField(v.key)}
+                    className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                      active
+                        ? 'bg-[#1B2E6B] text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    Σ {v.label}
+                  </button>
+                )
+              })}
             </div>
           </div>
         </div>
+      </div>
 
-        <div>
-          <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Filters</p>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-            <select
-              className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-[#1B2E6B]"
-              value={statusFilter}
-              onChange={e => setStatusFilter(e.target.value)}
-            >
-              <option value="">All Statuses</option>
-              {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-            <select
-              className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-[#1B2E6B]"
-              value={workTypeFilter}
-              onChange={e => setWorkTypeFilter(e.target.value)}
-            >
-              <option value="">All Work Types</option>
-              {WORK_TYPES.map(w => <option key={w} value={w}>{w}</option>)}
-            </select>
-            <select
-              className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-[#1B2E6B]"
-              value={datePreset}
-              onChange={e => setDatePreset(e.target.value as typeof datePreset)}
-            >
-              <option value="all">All Time</option>
-              <option value="ytd">YTD</option>
-              <option value="thismonth">This Month</option>
-              <option value="lastmonth">Last Month</option>
-            </select>
-          </div>
+      {/* Zones */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <ZoneCard title="Rows" hint="Drag dimensions here. Multiple rows nest left-to-right.">
+          {rowsDims.length === 0 ? (
+            <EmptyZone />
+          ) : (
+            rowsDims.map((dim, i) => (
+              <DimPill
+                key={dim}
+                label={DIM_LABEL[dim] || dim}
+                index={i}
+                total={rowsDims.length}
+                onMove={(dir) => {
+                  const next = [...rowsDims]
+                  const j = i + (dir === 'up' ? -1 : 1)
+                  if (j < 0 || j >= next.length) return
+                  ;[next[i], next[j]] = [next[j], next[i]]
+                  setRowsDims(next)
+                }}
+                onSwitchToColumns={() => moveDim(dim, 'columns')}
+                onRemove={() => removeFromRows(dim)}
+              />
+            ))
+          )}
+          <FieldAdder
+            label="Add dimension"
+            options={DIM_OPTIONS.filter(d => !usedDims.has(d.key))}
+            onPick={addToRows}
+            disabled={rowsDims.length >= 4}
+          />
+        </ZoneCard>
+
+        <ZoneCard title="Columns" hint="One dimension max — becomes the chart series.">
+          {!colsDim ? (
+            <EmptyZone />
+          ) : (
+            <DimPill
+              label={DIM_LABEL[colsDim] || colsDim}
+              onSwitchToRows={() => moveDim(colsDim, 'rows')}
+              onRemove={clearColumns}
+            />
+          )}
+          {!colsDim && (
+            <FieldAdder
+              label="Set columns"
+              options={DIM_OPTIONS.filter(d => !usedDims.has(d.key))}
+              onPick={setColumns}
+            />
+          )}
+        </ZoneCard>
+
+        <ZoneCard title="Values" hint="Each value renders as its own bar series." className="md:col-span-2">
+          {valueKeys.length === 0 ? (
+            <EmptyZone />
+          ) : (
+            valueKeys.map(v => (
+              <div key={v} className="inline-flex items-center gap-1 bg-[#1B2E6B] text-white text-xs rounded-full pl-3 pr-1 py-1">
+                <span>Σ {VALUE_LABEL[v]}</span>
+                <button
+                  onClick={() => removeValue(v)}
+                  className="w-4 h-4 rounded-full hover:bg-white/20 flex items-center justify-center"
+                  aria-label="Remove"
+                >
+                  <X size={11} />
+                </button>
+              </div>
+            ))
+          )}
+          <FieldAdder
+            label="Add value"
+            options={VALUE_OPTIONS.filter(v => !usedValues.has(v.key)).map(v => ({ key: v.key, label: v.label }))}
+            onPick={(k) => addValue(k as ValueKey)}
+            disabled={valueKeys.length >= 3}
+          />
+        </ZoneCard>
+      </div>
+
+      {/* Inline filters (status / work type / date) */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3">
+        <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Filters</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+          <select
+            className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-[#1B2E6B]"
+            value={statusFilter}
+            onChange={e => setStatusFilter(e.target.value)}
+          >
+            <option value="">All Statuses</option>
+            {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <select
+            className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-[#1B2E6B]"
+            value={workTypeFilter}
+            onChange={e => setWorkTypeFilter(e.target.value)}
+          >
+            <option value="">All Work Types</option>
+            {WORK_TYPES.map(w => <option key={w} value={w}>{w}</option>)}
+          </select>
+          <select
+            className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-[#1B2E6B]"
+            value={datePreset}
+            onChange={e => setDatePreset(e.target.value as typeof datePreset)}
+          >
+            <option value="all">All Time</option>
+            <option value="ytd">YTD</option>
+            <option value="thismonth">This Month</option>
+            <option value="lastmonth">Last Month</option>
+          </select>
         </div>
       </div>
 
       {/* Chart */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3">
-        <div className="flex items-center justify-between mb-2">
-          <p className="text-xs font-semibold text-gray-700">{title}</p>
+        <div className="flex items-center justify-between mb-2 gap-2">
+          <p className="text-xs font-semibold text-gray-700 truncate">{title || 'Pivot'}</p>
           {result && result.data.length > 0 && (
             <button
               onClick={exportCsv}
-              className="flex items-center gap-1 text-[11px] text-gray-500 hover:text-[#1B2E6B] transition-colors"
+              className="flex items-center gap-1 text-[11px] text-gray-500 hover:text-[#1B2E6B] transition-colors flex-shrink-0"
             >
               <Download size={12} /> Export CSV
             </button>
           )}
         </div>
 
-        {loading && !result ? (
+        {rowsDims.length === 0 || valueKeys.length === 0 ? (
+          <div className="h-[260px] flex items-center justify-center text-xs text-gray-400">
+            Add at least one dimension to <b className="mx-1">Rows</b> and one measure to <b className="mx-1">Values</b>.
+          </div>
+        ) : loading && !result ? (
           <div className="h-[260px] flex items-center justify-center text-xs text-gray-400">Loading…</div>
         ) : error ? (
           <div className="h-[260px] flex items-center justify-center text-xs text-red-600">{error}</div>
@@ -263,30 +431,31 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
           <div className="h-[260px] flex items-center justify-center text-xs text-gray-400">No data for these filters.</div>
         ) : (
           <>
-            <ResponsiveContainer width="100%" height={260}>
+            <ResponsiveContainer width="100%" height={280}>
               <BarChart data={result.data} margin={{ top: 4, right: 8, left: -10, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey={result.rows} tick={{ fontSize: 10 }} interval={0} angle={-15} textAnchor="end" height={60} />
-                <YAxis tick={{ fontSize: 10 }} tickFormatter={valueFormatter} />
-                <Tooltip cursor={{ fill: '#F3F4F6' }} content={<ChartTooltip valueFormatter={valueFormatter} />} wrapperStyle={{ outline: 'none', zIndex: 50 }} />
+                <XAxis dataKey="_rowLabel" tick={{ fontSize: 10 }} interval={0} angle={-15} textAnchor="end" height={70} />
+                <YAxis tick={{ fontSize: 10 }} tickFormatter={yAxisFormatter} />
+                <Tooltip
+                  cursor={{ fill: '#F3F4F6' }}
+                  content={<ChartTooltip currencyByKey={isCurrencySeries} />}
+                  wrapperStyle={{ outline: 'none', zIndex: 50 }}
+                />
                 {result.series.length > 1 && <Legend wrapperStyle={{ fontSize: 11 }} />}
                 {result.series.map((s, i) => (
                   <Bar
-                    key={s}
-                    dataKey={s}
-                    name={s === 'Total' ? valueLabel : s}
-                    fill={s === 'Other' ? '#9CA3AF' : SERIES_COLORS[i % SERIES_COLORS.length]}
+                    key={s.key}
+                    dataKey={s.key}
+                    name={s.label}
+                    fill={s.columnGroup === 'Other' ? '#9CA3AF' : SERIES_COLORS[i % SERIES_COLORS.length]}
                     radius={[3, 3, 0, 0]}
                   />
                 ))}
               </BarChart>
             </ResponsiveContainer>
-            {(result.total_row_groups > result.data.length || result.total_col_groups > result.series.length) && (
+            {result.total_row_groups > result.data.length && (
               <p className="mt-2 text-[10px] text-gray-400">
-                Showing top {result.data.length} of {result.total_row_groups} {rowsLabel.toLowerCase()} groups
-                {colsDim && result.total_col_groups > result.series.length && (
-                  <> · {result.total_col_groups - (result.series.includes('Other') ? result.series.length - 1 : result.series.length)} smaller {colsLabel.toLowerCase()} groups bucketed into &quot;Other&quot;</>
-                )}
+                Showing top {result.data.length} of {result.total_row_groups} row combinations.
               </p>
             )}
           </>
@@ -300,35 +469,191 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
             <table className="w-full text-xs">
               <thead className="bg-gray-50 border-b border-gray-100">
                 <tr>
-                  <th className="px-3 py-2 text-left font-semibold text-gray-600">{rowsLabel}</th>
-                  {result.series.map(s => (
-                    <th key={s} className="px-3 py-2 text-right font-semibold text-gray-600">
-                      {s === 'Total' ? valueLabel : s}
+                  {result.rows.map(r => (
+                    <th key={r} className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap">
+                      {DIM_LABEL[r] || r}
                     </th>
                   ))}
-                  <th className="px-3 py-2 text-right font-semibold text-gray-600">Total</th>
+                  {result.series.map(s => (
+                    <th key={s.key} className="px-3 py-2 text-right font-semibold text-gray-600 whitespace-nowrap">
+                      {s.label}
+                    </th>
+                  ))}
+                  {result.series.length > 1 && (
+                    <th className="px-3 py-2 text-right font-semibold text-gray-600 whitespace-nowrap">Row Total</th>
+                  )}
                 </tr>
               </thead>
               <tbody>
                 {result.data.map((row, idx) => {
-                  const total = result.series.reduce((sum, s) => sum + (Number(row[s]) || 0), 0)
+                  const total = result.series.reduce((sum, s) => sum + (Number(row[s.key]) || 0), 0)
                   return (
                     <tr key={idx} className="border-b border-gray-50 last:border-0">
-                      <td className="px-3 py-1.5 text-gray-900">{row[result.rows]}</td>
-                      {result.series.map(s => (
-                        <td key={s} className="px-3 py-1.5 text-right text-gray-700">
-                          {(Number(row[s]) || 0) === 0 ? '—' : (isCurrency ? `$${Number(row[s]).toLocaleString()}` : Number(row[s]).toLocaleString())}
-                        </td>
+                      {result.rows.map(r => (
+                        <td key={r} className="px-3 py-1.5 text-gray-900">{row[r]}</td>
                       ))}
-                      <td className="px-3 py-1.5 text-right font-semibold text-gray-900">
-                        {isCurrency ? `$${total.toLocaleString()}` : total.toLocaleString()}
-                      </td>
+                      {result.series.map(s => {
+                        const v = Number(row[s.key]) || 0
+                        const cur = isCurrencySeries[s.key]
+                        return (
+                          <td key={s.key} className="px-3 py-1.5 text-right text-gray-700">
+                            {v === 0 ? '—' : (cur ? `$${v.toLocaleString()}` : v.toLocaleString())}
+                          </td>
+                        )
+                      })}
+                      {result.series.length > 1 && (
+                        <td className="px-3 py-1.5 text-right font-semibold text-gray-900">
+                          {allCurrency ? `$${total.toLocaleString()}` : total.toLocaleString()}
+                        </td>
+                      )}
                     </tr>
                   )
                 })}
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Sub-components ──
+
+function ZoneCard({ title, hint, children, className = '' }: {
+  title: string
+  hint: string
+  children: React.ReactNode
+  className?: string
+}) {
+  return (
+    <div className={`bg-white rounded-xl border border-gray-100 shadow-sm p-3 ${className}`}>
+      <div className="flex items-baseline gap-2 mb-2">
+        <p className="text-[10px] font-semibold text-gray-700 uppercase tracking-wide">{title}</p>
+        <p className="text-[10px] text-gray-400 truncate">{hint}</p>
+      </div>
+      <div className="flex flex-wrap items-center gap-1.5">{children}</div>
+    </div>
+  )
+}
+
+function EmptyZone() {
+  return <p className="text-[11px] text-gray-400 italic">No fields</p>
+}
+
+function DimPill({
+  label,
+  index,
+  total,
+  onMove,
+  onSwitchToRows,
+  onSwitchToColumns,
+  onRemove,
+}: {
+  label: string
+  index?: number
+  total?: number
+  onMove?: (dir: 'up' | 'down') => void
+  onSwitchToRows?: () => void
+  onSwitchToColumns?: () => void
+  onRemove: () => void
+}) {
+  const [menuOpen, setMenuOpen] = useState(false)
+  return (
+    <div className="relative inline-flex items-center gap-1 bg-[#1B2E6B] text-white text-xs rounded-full pl-3 pr-1 py-1">
+      <span>{label}</span>
+      <button
+        onClick={() => setMenuOpen(o => !o)}
+        onBlur={() => setTimeout(() => setMenuOpen(false), 150)}
+        className="w-4 h-4 rounded-full hover:bg-white/20 flex items-center justify-center text-[10px]"
+        aria-label="Options"
+      >
+        ⋯
+      </button>
+      <button
+        onClick={onRemove}
+        className="w-4 h-4 rounded-full hover:bg-white/20 flex items-center justify-center"
+        aria-label="Remove"
+      >
+        <X size={11} />
+      </button>
+      {menuOpen && (
+        <div className="absolute top-full left-0 mt-1 z-20 bg-white border border-gray-200 rounded-lg shadow-lg text-[11px] text-gray-700 min-w-[140px] py-1">
+          {typeof index === 'number' && total && total > 1 && (
+            <>
+              {index > 0 && (
+                <button
+                  className="w-full text-left px-3 py-1.5 hover:bg-gray-50"
+                  onMouseDown={(e) => { e.preventDefault(); onMove?.('up'); setMenuOpen(false) }}
+                >
+                  ↑ Move left
+                </button>
+              )}
+              {index < total - 1 && (
+                <button
+                  className="w-full text-left px-3 py-1.5 hover:bg-gray-50"
+                  onMouseDown={(e) => { e.preventDefault(); onMove?.('down'); setMenuOpen(false) }}
+                >
+                  ↓ Move right
+                </button>
+              )}
+            </>
+          )}
+          {onSwitchToColumns && (
+            <button
+              className="w-full text-left px-3 py-1.5 hover:bg-gray-50"
+              onMouseDown={(e) => { e.preventDefault(); onSwitchToColumns(); setMenuOpen(false) }}
+            >
+              → Move to Columns
+            </button>
+          )}
+          {onSwitchToRows && (
+            <button
+              className="w-full text-left px-3 py-1.5 hover:bg-gray-50"
+              onMouseDown={(e) => { e.preventDefault(); onSwitchToRows(); setMenuOpen(false) }}
+            >
+              → Move to Rows
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function FieldAdder({
+  label,
+  options,
+  onPick,
+  disabled = false,
+}: {
+  label: string
+  options: { key: string; label: string }[]
+  onPick: (key: string) => void
+  disabled?: boolean
+}) {
+  const [open, setOpen] = useState(false)
+  if (options.length === 0 || disabled) return null
+  return (
+    <div className="relative inline-block">
+      <button
+        onClick={() => setOpen(o => !o)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border border-dashed border-gray-300 text-gray-500 hover:border-[#1B2E6B] hover:text-[#1B2E6B] transition-colors"
+      >
+        <Plus size={11} /> {label}
+      </button>
+      {open && (
+        <div className="absolute top-full left-0 mt-1 z-20 bg-white border border-gray-200 rounded-lg shadow-lg text-xs min-w-[160px] py-1 max-h-64 overflow-y-auto">
+          {options.map(o => (
+            <button
+              key={o.key}
+              onMouseDown={(e) => { e.preventDefault(); onPick(o.key); setOpen(false) }}
+              className="w-full text-left px-3 py-1.5 hover:bg-gray-50 text-gray-700"
+            >
+              {o.label}
+            </button>
+          ))}
         </div>
       )}
     </div>
