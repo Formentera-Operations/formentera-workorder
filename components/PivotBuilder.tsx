@@ -21,8 +21,19 @@ const DIM_OPTIONS: { key: string; label: string }[] = [
   { key: 'priority',        label: 'Priority' },
   { key: 'work_order_type', label: 'Work Order Type' },
   { key: 'status',          label: 'Status' },
+  { key: 'description',     label: 'Description' },
+  { key: 'ticket_id',       label: 'Ticket #' },
 ]
-const DIM_LABEL = Object.fromEntries(DIM_OPTIONS.map(d => [d.key, d.label]))
+
+const DATE_HIERARCHY_OPTIONS: { key: string; label: string }[] = [
+  { key: 'submitted_year',    label: 'Submitted Year' },
+  { key: 'submitted_quarter', label: 'Submitted Quarter' },
+  { key: 'submitted_month',   label: 'Submitted Month' },
+  { key: 'submitted_day',     label: 'Submitted Day' },
+]
+
+const ALL_DIM_OPTIONS = [...DIM_OPTIONS, ...DATE_HIERARCHY_OPTIONS]
+const DIM_LABEL = Object.fromEntries(ALL_DIM_OPTIONS.map(d => [d.key, d.label]))
 
 const VALUE_OPTIONS: { key: ValueKey; label: string }[] = [
   { key: 'count',         label: 'Ticket Count' },
@@ -323,6 +334,27 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
             </div>
           </div>
           <div>
+            <p className="text-[10px] text-gray-500 mb-1">Submitted Date (hierarchy — chain Year › Quarter › Month › Day in Rows)</p>
+            <div className="flex flex-wrap gap-1.5">
+              {DATE_HIERARCHY_OPTIONS.map(d => {
+                const active = usedDims.has(d.key)
+                return (
+                  <button
+                    key={d.key}
+                    onClick={() => clickDimField(d.key)}
+                    className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                      active
+                        ? 'bg-[#1B2E6B] text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    {d.label.replace('Submitted ', '')}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+          <div>
             <p className="text-[10px] text-gray-500 mb-1">Measures (click to add to Values)</p>
             <div className="flex flex-wrap gap-1.5">
               {VALUE_OPTIONS.map(v => {
@@ -373,7 +405,7 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
           )}
           <FieldAdder
             label="Add dimension"
-            options={DIM_OPTIONS.filter(d => !usedDims.has(d.key))}
+            options={ALL_DIM_OPTIONS.filter(d => !usedDims.has(d.key))}
             onPick={addToRows}
             disabled={rowsDims.length >= 4}
           />
@@ -393,7 +425,7 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
           {!colsDim && (
             <FieldAdder
               label="Set columns"
-              options={DIM_OPTIONS.filter(d => !usedDims.has(d.key))}
+              options={ALL_DIM_OPTIONS.filter(d => !usedDims.has(d.key))}
               onPick={setColumns}
             />
           )}
@@ -419,7 +451,7 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
           )}
           <FieldAdder
             label="Add filter"
-            options={DIM_OPTIONS.filter(d => !usedDims.has(d.key))}
+            options={ALL_DIM_OPTIONS.filter(d => !usedDims.has(d.key))}
             onPick={addFilterDim}
           />
         </ZoneCard>

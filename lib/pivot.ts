@@ -14,6 +14,42 @@ export const PIVOT_DIM_MAP: Record<string, string> = {
   status: 'ticket_status',
   asset: 'asset',
   field: 'field',
+  description: 'issue_description',
+  ticket_id: 'ticket_id',
+  // ── Submitted Date hierarchy (all derived from issue_date) ──
+  submitted_year: 'issue_date',
+  submitted_quarter: 'issue_date',
+  submitted_month: 'issue_date',
+  submitted_day: 'issue_date',
+}
+
+// Some dims are derived from another column (e.g. date buckets). The
+// transform maps the raw DB value to the bucket label used in pivot keys.
+export const PIVOT_DIM_TRANSFORMS: Partial<Record<string, (raw: unknown) => string | null>> = {
+  ticket_id: (raw) => {
+    if (typeof raw === 'number' && Number.isFinite(raw)) return String(raw)
+    if (typeof raw === 'string' && raw) return raw
+    return null
+  },
+  submitted_year: (raw) => {
+    const s = typeof raw === 'string' ? raw : ''
+    return s.length >= 4 ? s.slice(0, 4) : null
+  },
+  submitted_quarter: (raw) => {
+    const s = typeof raw === 'string' ? raw : ''
+    if (s.length < 7) return null
+    const m = parseInt(s.slice(5, 7), 10)
+    if (!Number.isFinite(m)) return null
+    return `${s.slice(0, 4)} Q${Math.floor((m - 1) / 3) + 1}`
+  },
+  submitted_month: (raw) => {
+    const s = typeof raw === 'string' ? raw : ''
+    return s.length >= 7 ? s.slice(0, 7) : null
+  },
+  submitted_day: (raw) => {
+    const s = typeof raw === 'string' ? raw : ''
+    return s.length >= 10 ? s.slice(0, 10) : null
+  },
 }
 
 export const PIVOT_VALUES = ['count', 'estimate_cost', 'repair_cost'] as const
@@ -150,6 +186,10 @@ export async function runPivot(input: PivotInput): Promise<PivotResult | { error
   else if (wotList.length > 1) query = query.in('work_order_type', wotList)
 
   // Free-form filters: any pivot dim with a list of allowed values.
+  // Transform-backed dims (e.g. submitted_year) can't be filtered via SQL .in()
+  // because Postgres needs date_part — apply those in JS after fetching.
+  type PostFilter = { col: string; transform: (raw: unknown) => string | null; allowed: Set<string> }
+  const postFilters: PostFilter[] = []
   if (Array.isArray(input.filters)) {
     for (const f of input.filters) {
       if (!f || typeof f.dim !== 'string') continue
@@ -157,7 +197,12 @@ export async function runPivot(input: PivotInput): Promise<PivotResult | { error
       if (!fc) continue
       const vals = Array.isArray(f.values) ? f.values.filter(v => typeof v === 'string') : []
       if (vals.length === 0) continue
-      query = query.in(fc, vals)
+      const transform = PIVOT_DIM_TRANSFORMS[f.dim]
+      if (transform) {
+        postFilters.push({ col: fc, transform, allowed: new Set(vals) })
+      } else {
+        query = query.in(fc, vals)
+      }
     }
   }
 
@@ -167,7 +212,18 @@ export async function runPivot(input: PivotInput): Promise<PivotResult | { error
   const { data, error } = await query
   if (error) return { error: error.message }
 
-  const rawRows = (data ?? []) as unknown as Record<string, unknown>[]
+  let rawRows = (data ?? []) as unknown as Record<string, unknown>[]
+  if (postFilters.length > 0) {
+    rawRows = rawRows.filter(r => postFilters.every(pf => {
+      const bucket = pf.transform(r[pf.col])
+      return bucket !== null && pf.allowed.has(bucket)
+    }))
+  }
+
+  // Pre-resolve transforms for row/column dims so the aggregation loop
+  // doesn't repeatedly look them up.
+  const rowTransforms = rowsKeys.map(rk => PIVOT_DIM_TRANSFORMS[rk] || null)
+  const colTransform = colsKey ? (PIVOT_DIM_TRANSFORMS[colsKey] || null) : null
 
   // Aggregate: for each (rowComboKey, colKey), accumulate one number per value
   type Cell = Partial<Record<PivotValue, number>>
@@ -179,11 +235,21 @@ export async function runPivot(input: PivotInput): Promise<PivotResult | { error
   const firstValueKey = valueKeys[0]
 
   for (const r of rawRows) {
-    const dimVals = rowCols.map(rc => (r[rc] as string) || 'Unspecified')
+    const dimVals = rowCols.map((rc, i) => {
+      const tx = rowTransforms[i]
+      const raw = r[rc]
+      const v = tx ? tx(raw) : (typeof raw === 'string' ? raw : null)
+      return v || 'Unspecified'
+    })
     const rowComboKey = dimVals.join(ROW_KEY_SEP)
     if (!rowDimsByCombo.has(rowComboKey)) rowDimsByCombo.set(rowComboKey, dimVals)
 
-    const colKey = colCol ? ((r[colCol] as string) || 'Unspecified') : SINGLE_COL
+    let colKey = SINGLE_COL
+    if (colCol) {
+      const raw = r[colCol]
+      const v = colTransform ? colTransform(raw) : (typeof raw === 'string' ? raw : null)
+      colKey = v || 'Unspecified'
+    }
 
     let inner = cellMap.get(rowComboKey)
     if (!inner) { inner = new Map(); cellMap.set(rowComboKey, inner) }
