@@ -63,15 +63,15 @@ select {
   }
 
   .form-input {
-    @apply w-full bg-[#f3f4f6] border-0 rounded-lg px-4 py-3 text-gray-900 placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-[#1B2E6B] focus:bg-white transition-all hover:bg-[#ebedf0] hover:shadow-sm;
+    @apply w-full bg-[#f3f4f6] border-0 rounded-lg px-4 py-3 text-gray-900 placeholder-gray-400 text-base md:text-sm focus:outline-none focus:ring-2 focus:ring-[#1B2E6B] focus:bg-white transition-all hover:bg-[#ebedf0] hover:shadow-sm;
   }
 
   .form-select {
-    @apply w-full bg-[#f3f4f6] border-0 rounded-lg px-4 py-3 text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-[#1B2E6B] focus:bg-white transition-all appearance-none pr-10 hover:bg-[#ebedf0] hover:shadow-sm;
+    @apply w-full bg-[#f3f4f6] border-0 rounded-lg px-4 py-3 text-gray-900 text-base md:text-sm focus:outline-none focus:ring-2 focus:ring-[#1B2E6B] focus:bg-white transition-all appearance-none pr-10 hover:bg-[#ebedf0] hover:shadow-sm;
   }
 
   .form-textarea {
-    @apply w-full bg-[#f3f4f6] border-0 rounded-lg px-4 py-3 text-gray-900 placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-[#1B2E6B] focus:bg-white transition-all resize-none min-h-[90px] hover:bg-[#ebedf0] hover:shadow-sm;
+    @apply w-full bg-[#f3f4f6] border-0 rounded-lg px-4 py-3 text-gray-900 placeholder-gray-400 text-base md:text-sm focus:outline-none focus:ring-2 focus:ring-[#1B2E6B] focus:bg-white transition-all resize-none min-h-[90px] hover:bg-[#ebedf0] hover:shadow-sm;
   }
 
   .page-header {
