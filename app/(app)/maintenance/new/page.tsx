@@ -39,9 +39,21 @@ function TicketSummaryPreview({ ticketId, onClose }: { ticketId: number; onClose
     ['Equipment Type', t.Equipment_Type],
     ['Equipment', t.Equipment],
   ]
-  if (dispatch.self_dispatch_assignee) rows.push(['Self Dispatch', dispatch.self_dispatch_assignee])
-  else if (dispatch.maintenance_foreman) rows.push(['Assigned Foreman', dispatch.maintenance_foreman])
-  if (dispatch.work_order_decision) rows.push(['Work Order Decision', dispatch.work_order_decision])
+
+  const hasDispatch = !!dispatch.ticket_id
+  const dispatchRows: Array<[string, unknown]> = []
+  if (hasDispatch) {
+    if (dispatch.work_order_decision) dispatchRows.push(['Work Order Decision', dispatch.work_order_decision])
+    const estCost = (dispatch.Estimate_Cost ?? t.Estimate_Cost)
+    if (estCost != null) dispatchRows.push(['Estimated Cost', `$${estCost}`])
+    if (dispatch.self_dispatch_assignee) {
+      dispatchRows.push(['Self Dispatch Assignee', dispatch.self_dispatch_assignee])
+    } else if (dispatch.maintenance_foreman) {
+      dispatchRows.push(['Assigned Foreman', dispatch.maintenance_foreman])
+      if (dispatch.production_foreman) dispatchRows.push(['Additional Assignee', dispatch.production_foreman])
+    }
+    if (dispatch.date_assigned) dispatchRows.push(['Date Assigned', fmtDate(dispatch.date_assigned)])
+  }
 
   return (
     <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
@@ -83,6 +95,20 @@ function TicketSummaryPreview({ ticketId, onClose }: { ticketId: number; onClose
                   </div>
                 ))}
               </div>
+
+              {dispatchRows.length > 0 && (
+                <div>
+                  <div className="text-xs font-semibold text-gray-700 mb-1">Dispatch Details</div>
+                  <div className="rounded-lg border border-gray-200 divide-y divide-gray-100">
+                    {dispatchRows.map(([label, value]) => (
+                      <div key={label} className="flex justify-between gap-3 px-3 py-2 text-xs">
+                        <span className="text-gray-500">{label}</span>
+                        <span className="text-gray-900 font-medium text-right">{display(value)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {!!t.Issue_Description && (
                 <div>
