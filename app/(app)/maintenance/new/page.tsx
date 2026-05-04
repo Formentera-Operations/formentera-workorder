@@ -87,13 +87,16 @@ function TicketSummaryPreview({ ticketId, onClose }: { ticketId: number; onClose
                 </div>
               )}
 
-              <div className="rounded-lg border border-gray-200 divide-y divide-gray-100">
-                {rows.map(([label, value]) => (
-                  <div key={label} className="flex justify-between gap-3 px-3 py-2 text-xs">
-                    <span className="text-gray-500">{label}</span>
-                    <span className="text-gray-900 font-medium text-right">{display(value)}</span>
-                  </div>
-                ))}
+              <div>
+                <div className="text-xs font-semibold text-gray-700 mb-1">Maintenance Details</div>
+                <div className="rounded-lg border border-gray-200 divide-y divide-gray-100">
+                  {rows.map(([label, value]) => (
+                    <div key={label} className="flex justify-between gap-3 px-3 py-2 text-xs">
+                      <span className="text-gray-500">{label}</span>
+                      <span className="text-gray-900 font-medium text-right">{display(value)}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
 
               {dispatchRows.length > 0 && (
