@@ -572,56 +572,170 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
 
       {/* Data table */}
       {result && result.data.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead className="bg-gray-50 border-b border-gray-100">
-                <tr>
-                  {result.rows.map(r => (
-                    <th key={r} className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap">
-                      {DIM_LABEL[r] || r}
-                    </th>
-                  ))}
-                  {result.series.map(s => (
-                    <th key={s.key} className="px-3 py-2 text-right font-semibold text-gray-600 whitespace-nowrap">
-                      {s.label}
-                    </th>
-                  ))}
-                  {result.series.length > 1 && (
-                    <th className="px-3 py-2 text-right font-semibold text-gray-600 whitespace-nowrap">Row Total</th>
-                  )}
-                </tr>
-              </thead>
-              <tbody>
-                {result.data.map((row, idx) => {
-                  const total = result.series.reduce((sum, s) => sum + (Number(row[s.key]) || 0), 0)
-                  return (
-                    <tr key={idx} className="border-b border-gray-50 last:border-0">
-                      {result.rows.map(r => (
-                        <td key={r} className="px-3 py-1.5 text-gray-900">{row[r]}</td>
-                      ))}
-                      {result.series.map(s => {
-                        const v = Number(row[s.key]) || 0
-                        const cur = isCurrencySeries[s.key]
-                        return (
-                          <td key={s.key} className="px-3 py-1.5 text-right text-gray-700">
-                            {v === 0 ? '—' : (cur ? `$${v.toLocaleString()}` : v.toLocaleString())}
-                          </td>
-                        )
-                      })}
-                      {result.series.length > 1 && (
-                        <td className="px-3 py-1.5 text-right font-semibold text-gray-900">
-                          {allCurrency ? `$${total.toLocaleString()}` : total.toLocaleString()}
-                        </td>
-                      )}
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <PivotTable
+          result={result}
+          isCurrencySeries={isCurrencySeries}
+          allCurrency={allCurrency}
+        />
       )}
+    </div>
+  )
+}
+
+// ── Pivot data table with subtotals + grand total ──
+
+type TableRowKind = 'data' | 'subtotal' | 'grand_total'
+
+interface BuiltTableRow {
+  kind: TableRowKind
+  cells: Record<string, string | number>
+  groupLabel?: string
+  isFirstOfGroup?: boolean
+}
+
+function totalsFor(rows: Record<string, string | number>[], seriesKeys: string[]) {
+  const out: Record<string, number> = {}
+  for (const k of seriesKeys) {
+    out[k] = rows.reduce((sum, r) => sum + (Number(r[k]) || 0), 0)
+  }
+  return out
+}
+
+function buildTableRows(result: PivotResponse): BuiltTableRow[] {
+  if (result.data.length === 0) return []
+  const dimKeys = result.rows
+  const seriesKeys = result.series.map(s => s.key)
+
+  if (dimKeys.length <= 1) {
+    const rows: BuiltTableRow[] = result.data.map(d => ({ kind: 'data', cells: d }))
+    rows.push({
+      kind: 'grand_total',
+      cells: totalsFor(result.data, seriesKeys),
+      groupLabel: 'Grand Total',
+    })
+    return rows
+  }
+
+  // Group by the OUTER row dim, preserve incoming order of first appearance.
+  const order: string[] = []
+  const groups = new Map<string, Record<string, string | number>[]>()
+  for (const row of result.data) {
+    const k = String(row[dimKeys[0]] ?? '')
+    if (!groups.has(k)) { groups.set(k, []); order.push(k) }
+    groups.get(k)!.push(row)
+  }
+
+  const rows: BuiltTableRow[] = []
+  for (const groupKey of order) {
+    const members = groups.get(groupKey)!
+    members.forEach((m, i) => {
+      rows.push({ kind: 'data', cells: m, isFirstOfGroup: i === 0 })
+    })
+    rows.push({
+      kind: 'subtotal',
+      cells: { ...totalsFor(members, seriesKeys), [dimKeys[0]]: groupKey },
+      groupLabel: `${groupKey} Total`,
+    })
+  }
+  rows.push({
+    kind: 'grand_total',
+    cells: totalsFor(result.data, seriesKeys),
+    groupLabel: 'Grand Total',
+  })
+  return rows
+}
+
+function PivotTable({
+  result,
+  isCurrencySeries,
+  allCurrency,
+}: {
+  result: PivotResponse
+  isCurrencySeries: Record<string, boolean>
+  allCurrency: boolean
+}) {
+  const tableRows = useMemo(() => buildTableRows(result), [result])
+  const dimKeys = result.rows
+  const showHierarchy = dimKeys.length > 1
+  const showRowTotal = result.series.length > 1
+
+  function renderValueCell(v: number, currency: boolean, bold = false) {
+    const text = v === 0 ? '—' : (currency ? `$${v.toLocaleString()}` : v.toLocaleString())
+    return (
+      <td className={`px-3 py-1.5 text-right whitespace-nowrap ${bold ? 'font-semibold text-gray-900' : 'text-gray-700'}`}>
+        {text}
+      </td>
+    )
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead className="bg-gray-50 border-b border-gray-100">
+            <tr>
+              {dimKeys.map(r => (
+                <th key={r} className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap">
+                  {DIM_LABEL[r] || r}
+                </th>
+              ))}
+              {result.series.map(s => (
+                <th key={s.key} className="px-3 py-2 text-right font-semibold text-gray-600 whitespace-nowrap">
+                  {s.label}
+                </th>
+              ))}
+              {showRowTotal && (
+                <th className="px-3 py-2 text-right font-semibold text-gray-600 whitespace-nowrap">Grand Total</th>
+              )}
+            </tr>
+          </thead>
+          <tbody>
+            {tableRows.map((row, idx) => {
+              const rowTotal = result.series.reduce((sum, s) => sum + (Number(row.cells[s.key]) || 0), 0)
+              if (row.kind === 'data') {
+                return (
+                  <tr key={idx} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/50">
+                    {dimKeys.map((r, i) => {
+                      // Excel-style: blank repeating outer dim values within a group.
+                      const isOuter = showHierarchy && i === 0
+                      const text = isOuter && !row.isFirstOfGroup ? '' : String(row.cells[r] ?? '')
+                      const indent = showHierarchy && i > 0 ? 'pl-6' : 'px-3'
+                      return (
+                        <td key={r} className={`py-1.5 text-gray-900 whitespace-nowrap ${indent} ${i === 0 && !indent.includes('pl') ? 'pr-3' : 'pr-3'}`}>
+                          {text}
+                        </td>
+                      )
+                    })}
+                    {result.series.map(s =>
+                      renderValueCell(Number(row.cells[s.key]) || 0, !!isCurrencySeries[s.key])
+                    )}
+                    {showRowTotal && renderValueCell(rowTotal, allCurrency, true)}
+                  </tr>
+                )
+              }
+
+              const isGrand = row.kind === 'grand_total'
+              const baseClass = isGrand
+                ? 'bg-gray-100 border-t-2 border-gray-300 font-semibold text-gray-900'
+                : 'bg-gray-50/70 border-b border-gray-100 font-semibold text-gray-800'
+              return (
+                <tr key={idx} className={baseClass}>
+                  <td
+                    colSpan={dimKeys.length}
+                    className="px-3 py-1.5 whitespace-nowrap"
+                  >
+                    {row.groupLabel}
+                  </td>
+                  {result.series.map(s =>
+                    renderValueCell(Number(row.cells[s.key]) || 0, !!isCurrencySeries[s.key], true)
+                  )}
+                  {showRowTotal && renderValueCell(rowTotal, allCurrency, true)}
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }
