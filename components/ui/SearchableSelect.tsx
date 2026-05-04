@@ -86,7 +86,8 @@ export default function SearchableSelect({
             <input
               ref={inputRef}
               type="text"
-              className="flex-1 text-base md:text-sm bg-transparent outline-none text-gray-900 placeholder-gray-400"
+              className="flex-1 bg-transparent outline-none text-gray-900 placeholder-gray-400"
+              style={{ fontSize: 16 }}
               placeholder="Search…"
               value={query}
               onChange={e => setQuery(e.target.value)}
