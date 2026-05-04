@@ -297,6 +297,78 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
     else addValue(v)
   }
 
+  // ── Drag-and-drop state + helpers ──
+  type DragItem =
+    | { kind: 'dim'; key: string; from: 'shelf' | 'rows' | 'columns' | 'filters' }
+    | { kind: 'value'; key: ValueKey; from: 'shelf' | 'values' }
+  const [draggedItem, setDraggedItem] = useState<DragItem | null>(null)
+
+  const DRAG_MIME = 'application/x-pivot'
+
+  function startDrag(e: React.DragEvent, item: DragItem) {
+    e.dataTransfer.setData(DRAG_MIME, JSON.stringify(item))
+    e.dataTransfer.effectAllowed = item.from === 'shelf' ? 'copyMove' : 'move'
+    setDraggedItem(item)
+  }
+  function endDrag() {
+    setDraggedItem(null)
+  }
+
+  function removeFromSource(item: DragItem) {
+    if (item.kind === 'dim') {
+      if (item.from === 'rows') removeFromRows(item.key)
+      else if (item.from === 'columns') setColsDim('')
+      else if (item.from === 'filters') removeFilterDim(item.key)
+    }
+  }
+  function dropOnRows(item: DragItem) {
+    if (item.kind !== 'dim') return
+    if (item.from === 'rows') return  // same zone — ignore for now
+    removeFromSource(item)
+    addToRows(item.key)
+  }
+  function dropOnColumns(item: DragItem) {
+    if (item.kind !== 'dim') return
+    if (item.from === 'columns') return
+    removeFromSource(item)
+    setColumns(item.key)
+  }
+  function dropOnFilters(item: DragItem) {
+    if (item.kind !== 'dim') return
+    if (item.from === 'filters') return
+    removeFromSource(item)
+    addFilterDim(item.key)
+  }
+  function dropOnValues(item: DragItem) {
+    if (item.kind !== 'value') return
+    if (item.from === 'values') return
+    if (!valueKeys.includes(item.key)) addValue(item.key)
+  }
+
+  function zoneDropProps(accepts: 'dim' | 'value', onDrop: (item: DragItem) => void) {
+    const active = !!draggedItem && draggedItem.kind === accepts
+    return {
+      dragActive: active,
+      onDragOver: (e: React.DragEvent) => {
+        if (!active) return
+        e.preventDefault()
+        e.dataTransfer.dropEffect = 'move'
+      },
+      onDrop: (e: React.DragEvent) => {
+        e.preventDefault()
+        const raw = e.dataTransfer.getData(DRAG_MIME)
+        if (!raw) { endDrag(); return }
+        try {
+          const item = JSON.parse(raw) as DragItem
+          onDrop(item)
+        } catch {
+          // ignore
+        }
+        endDrag()
+      },
+    }
+  }
+
   const isCurrencySeries = useMemo(() => {
     const map: Record<string, boolean> = {}
     if (!result) return map
@@ -378,15 +450,18 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
         <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">Available Fields</p>
         <div className="space-y-2">
           <div>
-            <p className="text-[10px] text-gray-500 mb-1">Dimensions (click to add to Rows)</p>
+            <p className="text-[10px] text-gray-500 mb-1">Dimensions (click to add to Rows · drag to any zone)</p>
             <div className="flex flex-wrap gap-1.5">
               {DIM_OPTIONS.map(d => {
                 const active = usedDims.has(d.key)
                 return (
                   <button
                     key={d.key}
+                    draggable
+                    onDragStart={(e) => startDrag(e, { kind: 'dim', key: d.key, from: 'shelf' })}
+                    onDragEnd={endDrag}
                     onClick={() => clickDimField(d.key)}
-                    className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                    className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors cursor-grab active:cursor-grabbing ${
                       active
                         ? 'bg-[#1B2E6B] text-white'
                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -406,8 +481,11 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
                 return (
                   <button
                     key={d.key}
+                    draggable
+                    onDragStart={(e) => startDrag(e, { kind: 'dim', key: d.key, from: 'shelf' })}
+                    onDragEnd={endDrag}
                     onClick={() => clickDimField(d.key)}
-                    className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                    className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors cursor-grab active:cursor-grabbing ${
                       active
                         ? 'bg-[#1B2E6B] text-white'
                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -420,15 +498,18 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
             </div>
           </div>
           <div>
-            <p className="text-[10px] text-gray-500 mb-1">Measures (click to add to Values)</p>
+            <p className="text-[10px] text-gray-500 mb-1">Measures (click to add to Values · drag onto Values)</p>
             <div className="flex flex-wrap gap-1.5">
               {VALUE_OPTIONS.map(v => {
                 const active = usedValues.has(v.key)
                 return (
                   <button
                     key={v.key}
+                    draggable
+                    onDragStart={(e) => startDrag(e, { kind: 'value', key: v.key, from: 'shelf' })}
+                    onDragEnd={endDrag}
                     onClick={() => clickValueField(v.key)}
-                    className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                    className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors cursor-grab active:cursor-grabbing ${
                       active
                         ? 'bg-[#1B2E6B] text-white'
                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -445,7 +526,7 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
 
       {/* Zones */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <ZoneCard title="Rows" hint="Drag dimensions here. Multiple rows nest left-to-right.">
+        <ZoneCard title="Rows" hint="Drag dimensions here. Multiple rows nest left-to-right." {...zoneDropProps('dim', dropOnRows)}>
           {rowsDims.length === 0 ? (
             <EmptyZone />
           ) : (
@@ -465,6 +546,8 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
                 onSwitchToColumns={() => moveDim(dim, 'columns')}
                 onSwitchToFilters={() => moveDim(dim, 'filters')}
                 onRemove={() => removeFromRows(dim)}
+                onDragStart={(e) => startDrag(e, { kind: 'dim', key: dim, from: 'rows' })}
+                onDragEnd={endDrag}
               />
             ))
           )}
@@ -476,7 +559,7 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
           />
         </ZoneCard>
 
-        <ZoneCard title="Columns" hint="One dimension max — becomes the chart series.">
+        <ZoneCard title="Columns" hint="One dimension max — becomes the chart series." {...zoneDropProps('dim', dropOnColumns)}>
           {!colsDim ? (
             <EmptyZone />
           ) : (
@@ -485,6 +568,8 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
               onSwitchToRows={() => moveDim(colsDim, 'rows')}
               onSwitchToFilters={() => moveDim(colsDim, 'filters')}
               onRemove={clearColumns}
+              onDragStart={(e) => startDrag(e, { kind: 'dim', key: colsDim, from: 'columns' })}
+              onDragEnd={endDrag}
             />
           )}
           {!colsDim && (
@@ -496,7 +581,7 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
           )}
         </ZoneCard>
 
-        <ZoneCard title="Filters" hint="Slice the chart to specific values of any dimension." className="md:col-span-2">
+        <ZoneCard title="Filters" hint="Slice the chart to specific values of any dimension." className="md:col-span-2" {...zoneDropProps('dim', dropOnFilters)}>
           {filterDimList.length === 0 ? (
             <EmptyZone />
           ) : (
@@ -511,6 +596,8 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
                 onSwitchToRows={() => moveDim(dim, 'rows')}
                 onSwitchToColumns={() => moveDim(dim, 'columns')}
                 onRemove={() => removeFilterDim(dim)}
+                onDragStart={(e) => startDrag(e, { kind: 'dim', key: dim, from: 'filters' })}
+                onDragEnd={endDrag}
               />
             ))
           )}
@@ -521,12 +608,18 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
           />
         </ZoneCard>
 
-        <ZoneCard title="Values" hint="Each value renders as its own bar series." className="md:col-span-2">
+        <ZoneCard title="Values" hint="Each value renders as its own bar series." className="md:col-span-2" {...zoneDropProps('value', dropOnValues)}>
           {valueKeys.length === 0 ? (
             <EmptyZone />
           ) : (
             valueKeys.map(v => (
-              <div key={v} className="inline-flex items-center gap-1 bg-[#1B2E6B] text-white text-xs rounded-full pl-3 pr-1 py-1">
+              <div
+                key={v}
+                draggable
+                onDragStart={(e) => startDrag(e, { kind: 'value', key: v, from: 'values' })}
+                onDragEnd={endDrag}
+                className="inline-flex items-center gap-1 bg-[#1B2E6B] text-white text-xs rounded-full pl-3 pr-1 py-1 cursor-grab active:cursor-grabbing"
+              >
                 <span>Σ {VALUE_LABEL[v]}</span>
                 <button
                   onClick={() => removeValue(v)}
@@ -886,14 +979,31 @@ function PivotTable({
 
 // ── Sub-components ──
 
-function ZoneCard({ title, hint, children, className = '' }: {
+function ZoneCard({
+  title,
+  hint,
+  children,
+  className = '',
+  dragActive = false,
+  onDragOver,
+  onDrop,
+}: {
   title: string
   hint: string
   children: React.ReactNode
   className?: string
+  dragActive?: boolean
+  onDragOver?: (e: React.DragEvent) => void
+  onDrop?: (e: React.DragEvent) => void
 }) {
   return (
-    <div className={`bg-white rounded-xl border border-gray-100 shadow-sm p-3 ${className}`}>
+    <div
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      className={`bg-white rounded-xl shadow-sm p-3 transition-colors border ${
+        dragActive ? 'border-[#1B2E6B] ring-2 ring-[#1B2E6B]/30 bg-[#1B2E6B]/[0.03]' : 'border-gray-100'
+      } ${className}`}
+    >
       <div className="flex items-baseline gap-2 mb-2">
         <p className="text-[10px] font-semibold text-gray-700 uppercase tracking-wide">{title}</p>
         <p className="text-[10px] text-gray-400 truncate">{hint}</p>
@@ -916,6 +1026,8 @@ function DimPill({
   onSwitchToColumns,
   onSwitchToFilters,
   onRemove,
+  onDragStart,
+  onDragEnd,
 }: {
   label: string
   index?: number
@@ -925,10 +1037,16 @@ function DimPill({
   onSwitchToColumns?: () => void
   onSwitchToFilters?: () => void
   onRemove: () => void
+  onDragStart?: (e: React.DragEvent) => void
+  onDragEnd?: () => void
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
   return (
-    <div className="relative inline-flex items-center gap-1 bg-[#1B2E6B] text-white text-xs rounded-full pl-3 pr-1 py-1">
+    <div
+      draggable={!!onDragStart}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      className={`relative inline-flex items-center gap-1 bg-[#1B2E6B] text-white text-xs rounded-full pl-3 pr-1 py-1 ${onDragStart ? 'cursor-grab active:cursor-grabbing' : ''}`}>
       <span>{label}</span>
       <button
         onClick={() => setMenuOpen(o => !o)}
@@ -1072,6 +1190,8 @@ function FilterPill({
   onSwitchToRows,
   onSwitchToColumns,
   onRemove,
+  onDragStart,
+  onDragEnd,
 }: {
   dim: string
   label: string
@@ -1081,6 +1201,8 @@ function FilterPill({
   onSwitchToRows: () => void
   onSwitchToColumns: () => void
   onRemove: () => void
+  onDragStart?: (e: React.DragEvent) => void
+  onDragEnd?: () => void
 }) {
   const [open, setOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -1104,7 +1226,13 @@ function FilterPill({
       : `${label}: ${selected[0]} +${selected.length - 1}`
 
   return (
-    <div className="relative inline-flex items-center gap-1 bg-[#1B2E6B] text-white text-xs rounded-full pl-3 pr-1 py-1" data-dim={dim}>
+    <div
+      draggable={!!onDragStart}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      data-dim={dim}
+      className={`relative inline-flex items-center gap-1 bg-[#1B2E6B] text-white text-xs rounded-full pl-3 pr-1 py-1 ${onDragStart ? 'cursor-grab active:cursor-grabbing' : ''}`}
+    >
       <button
         onClick={() => setOpen(o => !o)}
         onBlur={() => setTimeout(() => setOpen(false), 200)}
