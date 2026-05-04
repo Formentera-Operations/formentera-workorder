@@ -638,14 +638,13 @@ export default function MaintenanceFormPage() {
                 <div key={d.id} className="rounded-lg border border-gray-200 px-3 py-2 text-xs">
                   <div className="flex items-center justify-between gap-2">
                     <div className="font-semibold text-gray-900">#{d.id} · {d.Ticket_Status}</div>
-                    <a
-                      href={`/maintenance/${d.id}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                    <button
+                      type="button"
+                      onClick={() => setPreviewTicketId(d.id)}
                       className="text-[#1B2E6B] font-medium hover:underline"
                     >
                       View ticket
-                    </a>
+                    </button>
                   </div>
                   <div className="text-gray-500 mt-0.5">
                     Opened {new Date(d.Issue_Date).toLocaleDateString()}
