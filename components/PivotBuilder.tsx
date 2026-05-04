@@ -3,7 +3,7 @@ import { useState, useEffect, useMemo } from 'react'
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from 'recharts'
-import { Download, X, Plus } from 'lucide-react'
+import { Download, X, Plus, ChevronRight, ChevronDown } from 'lucide-react'
 
 type ValueKey = 'count' | 'repair_cost' | 'estimate_cost'
 
@@ -119,6 +119,13 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
   const [result, setResult] = useState<PivotResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
+
+  // Whenever the row dim list changes, dump any collapse state — group keys
+  // from a prior layout aren't meaningful in the new shape.
+  useEffect(() => {
+    setCollapsedGroups(new Set())
+  }, [rowsDims.join('|')])
 
   const filterDimList = useMemo(() => Object.keys(dimFilters), [dimFilters])
   const usedDims = useMemo(
@@ -576,21 +583,39 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
           result={result}
           isCurrencySeries={isCurrencySeries}
           allCurrency={allCurrency}
+          collapsedGroups={collapsedGroups}
+          onToggleGroup={(key) => {
+            setCollapsedGroups(prev => {
+              const next = new Set(prev)
+              if (next.has(key)) next.delete(key)
+              else next.add(key)
+              return next
+            })
+          }}
+          onCollapseAll={() => {
+            // Outer dim group keys derived from current data
+            if (!result || result.rows.length < 2) return
+            const dim = result.rows[0]
+            const all = new Set<string>()
+            for (const r of result.data) all.add(String(r[dim] ?? ''))
+            setCollapsedGroups(all)
+          }}
+          onExpandAll={() => setCollapsedGroups(new Set())}
         />
       )}
     </div>
   )
 }
 
-// ── Pivot data table with subtotals + grand total ──
+// ── Pivot data table with hierarchy + subtotals + grand total ──
 
-type TableRowKind = 'data' | 'subtotal' | 'grand_total'
+type TableRowKind = 'header' | 'data' | 'grand_total'
 
 interface BuiltTableRow {
   kind: TableRowKind
   cells: Record<string, string | number>
   groupLabel?: string
-  isFirstOfGroup?: boolean
+  groupKey?: string
 }
 
 function totalsFor(rows: Record<string, string | number>[], seriesKeys: string[]) {
@@ -601,7 +626,7 @@ function totalsFor(rows: Record<string, string | number>[], seriesKeys: string[]
   return out
 }
 
-function buildTableRows(result: PivotResponse): BuiltTableRow[] {
+function buildTableRows(result: PivotResponse, collapsedGroups: Set<string>): BuiltTableRow[] {
   if (result.data.length === 0) return []
   const dimKeys = result.rows
   const seriesKeys = result.series.map(s => s.key)
@@ -616,7 +641,6 @@ function buildTableRows(result: PivotResponse): BuiltTableRow[] {
     return rows
   }
 
-  // Group by the OUTER row dim, preserve incoming order of first appearance.
   const order: string[] = []
   const groups = new Map<string, Record<string, string | number>[]>()
   for (const row of result.data) {
@@ -628,14 +652,15 @@ function buildTableRows(result: PivotResponse): BuiltTableRow[] {
   const rows: BuiltTableRow[] = []
   for (const groupKey of order) {
     const members = groups.get(groupKey)!
-    members.forEach((m, i) => {
-      rows.push({ kind: 'data', cells: m, isFirstOfGroup: i === 0 })
-    })
     rows.push({
-      kind: 'subtotal',
+      kind: 'header',
       cells: { ...totalsFor(members, seriesKeys), [dimKeys[0]]: groupKey },
-      groupLabel: `${groupKey} Total`,
+      groupLabel: groupKey,
+      groupKey,
     })
+    if (!collapsedGroups.has(groupKey)) {
+      for (const m of members) rows.push({ kind: 'data', cells: m })
+    }
   }
   rows.push({
     kind: 'grand_total',
@@ -649,12 +674,23 @@ function PivotTable({
   result,
   isCurrencySeries,
   allCurrency,
+  collapsedGroups,
+  onToggleGroup,
+  onCollapseAll,
+  onExpandAll,
 }: {
   result: PivotResponse
   isCurrencySeries: Record<string, boolean>
   allCurrency: boolean
+  collapsedGroups: Set<string>
+  onToggleGroup: (groupKey: string) => void
+  onCollapseAll: () => void
+  onExpandAll: () => void
 }) {
-  const tableRows = useMemo(() => buildTableRows(result), [result])
+  const tableRows = useMemo(
+    () => buildTableRows(result, collapsedGroups),
+    [result, collapsedGroups]
+  )
   const dimKeys = result.rows
   const showHierarchy = dimKeys.length > 1
   const showRowTotal = result.series.length > 1
@@ -670,6 +706,23 @@ function PivotTable({
 
   return (
     <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+      {showHierarchy && (
+        <div className="flex items-center justify-end gap-3 px-3 py-1.5 border-b border-gray-100 bg-gray-50">
+          <button
+            onClick={onExpandAll}
+            className="text-[11px] text-gray-500 hover:text-[#1B2E6B] transition-colors"
+          >
+            Expand all
+          </button>
+          <span className="text-gray-300 text-[10px]">·</span>
+          <button
+            onClick={onCollapseAll}
+            className="text-[11px] text-gray-500 hover:text-[#1B2E6B] transition-colors"
+          >
+            Collapse all
+          </button>
+        </div>
+      )}
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
           <thead className="bg-gray-50 border-b border-gray-100">
@@ -692,17 +745,18 @@ function PivotTable({
           <tbody>
             {tableRows.map((row, idx) => {
               const rowTotal = result.series.reduce((sum, s) => sum + (Number(row.cells[s.key]) || 0), 0)
+
               if (row.kind === 'data') {
                 return (
                   <tr key={idx} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/50">
                     {dimKeys.map((r, i) => {
-                      // Excel-style: blank repeating outer dim values within a group.
+                      // In hierarchy mode the outer dim is owned by the header row.
                       const isOuter = showHierarchy && i === 0
-                      const text = isOuter && !row.isFirstOfGroup ? '' : String(row.cells[r] ?? '')
-                      const indent = showHierarchy && i > 0 ? 'pl-6' : 'px-3'
+                      if (isOuter) return <td key={r} className="px-3 py-1.5"></td>
+                      const indent = showHierarchy && i === 1 ? 'pl-6 pr-3' : 'px-3'
                       return (
-                        <td key={r} className={`py-1.5 text-gray-900 whitespace-nowrap ${indent} ${i === 0 && !indent.includes('pl') ? 'pr-3' : 'pr-3'}`}>
-                          {text}
+                        <td key={r} className={`py-1.5 text-gray-900 whitespace-nowrap ${indent}`}>
+                          {String(row.cells[r] ?? '')}
                         </td>
                       )
                     })}
@@ -714,16 +768,39 @@ function PivotTable({
                 )
               }
 
-              const isGrand = row.kind === 'grand_total'
-              const baseClass = isGrand
-                ? 'bg-gray-100 border-t-2 border-gray-300 font-semibold text-gray-900'
-                : 'bg-gray-50/70 border-b border-gray-100 font-semibold text-gray-800'
+              if (row.kind === 'header') {
+                const collapsed = !!row.groupKey && collapsedGroups.has(row.groupKey)
+                return (
+                  <tr key={idx} className="bg-gray-50/70 border-b border-gray-100 font-semibold text-gray-800">
+                    <td className="px-3 py-1.5 whitespace-nowrap">
+                      <button
+                        onClick={() => row.groupKey && onToggleGroup(row.groupKey)}
+                        className="inline-flex items-center gap-1.5 text-gray-700 hover:text-[#1B2E6B] transition-colors"
+                        aria-label={collapsed ? 'Expand' : 'Collapse'}
+                      >
+                        {collapsed
+                          ? <ChevronRight size={12} />
+                          : <ChevronDown size={12} />
+                        }
+                        <span>{row.groupLabel}</span>
+                      </button>
+                    </td>
+                    {/* Inner dim columns left blank in the header row */}
+                    {dimKeys.slice(1).map(r => (
+                      <td key={r} className="px-3 py-1.5"></td>
+                    ))}
+                    {result.series.map(s =>
+                      renderValueCell(Number(row.cells[s.key]) || 0, !!isCurrencySeries[s.key], true)
+                    )}
+                    {showRowTotal && renderValueCell(rowTotal, allCurrency, true)}
+                  </tr>
+                )
+              }
+
+              // Grand total
               return (
-                <tr key={idx} className={baseClass}>
-                  <td
-                    colSpan={dimKeys.length}
-                    className="px-3 py-1.5 whitespace-nowrap"
-                  >
+                <tr key={idx} className="bg-gray-100 border-t-2 border-gray-300 font-semibold text-gray-900">
+                  <td colSpan={dimKeys.length} className="px-3 py-1.5 whitespace-nowrap">
                     {row.groupLabel}
                   </td>
                   {result.series.map(s =>
