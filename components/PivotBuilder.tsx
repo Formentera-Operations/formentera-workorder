@@ -73,6 +73,29 @@ function fmt(n: number, isCurrency: boolean): string {
   return `$${Math.round(n)}`
 }
 
+function HierarchyTick(props: Record<string, unknown>) {
+  const x = typeof props.x === 'number' ? props.x : Number(props.x) || 0
+  const y = typeof props.y === 'number' ? props.y : Number(props.y) || 0
+  const index = typeof props.index === 'number' ? props.index : 0
+  const data = (props.data as Array<Record<string, string | number | boolean>>) || []
+  const datum = data[index]
+  if (!datum) return null
+  const inner = String(datum._innerLabel ?? '')
+  const showOuter = Boolean(datum._showOuter)
+  const outer = String(datum._outerLabel ?? '')
+  return (
+    <g transform={`translate(${x},${y})`}>
+      <text dy={12} textAnchor="middle" fontSize={10} fill="#9CA3AF">{inner}</text>
+      {showOuter && (
+        <>
+          <line x1={-12} x2={12} y1={20} y2={20} stroke="#D1D5DB" strokeWidth={1} />
+          <text dy={36} textAnchor="middle" fontSize={11} fontWeight={600} fill="#374151">{outer}</text>
+        </>
+      )}
+    </g>
+  )
+}
+
 function ChartTooltip({ active, payload, label, currencyByKey }: {
   active?: boolean
   payload?: Array<{ name?: string; value?: number; color?: string; dataKey?: string }>
@@ -280,6 +303,41 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
     for (const s of result.series) map[s.key] = s.valueKey !== 'count'
     return map
   }, [result])
+
+  // For 2+ row dims: enrich each chart row with inner/outer labels and mark
+  // the center index of each outer group so we can render a two-tier x-axis.
+  const enhancedChartData = useMemo(() => {
+    if (!result || result.data.length === 0) return [] as Record<string, string | number | boolean>[]
+    if (result.rows.length < 2) {
+      return result.data.map(r => ({ ...r, _innerLabel: r._rowLabel, _outerLabel: '', _showOuter: false }))
+    }
+    const outerKey = result.rows[0]
+    const innerKey = result.rows[result.rows.length - 1]
+    type Group = { startIdx: number; endIdx: number; value: string }
+    const groups: Group[] = []
+    let curr = ''
+    for (let i = 0; i < result.data.length; i++) {
+      const v = String(result.data[i][outerKey] ?? '')
+      if (v !== curr) {
+        groups.push({ startIdx: i, endIdx: i, value: v })
+        curr = v
+      } else {
+        groups[groups.length - 1].endIdx = i
+      }
+    }
+    const centerOuter = new Map<number, string>()
+    for (const g of groups) {
+      const center = Math.floor((g.startIdx + g.endIdx) / 2)
+      centerOuter.set(center, g.value)
+    }
+    return result.data.map((row, i) => ({
+      ...row,
+      _innerLabel: String(row[innerKey] ?? ''),
+      _outerLabel: centerOuter.get(i) ?? '',
+      _showOuter: centerOuter.has(i),
+    }))
+  }, [result])
+  const showChartHierarchy = (result?.rows.length ?? 0) > 1
   const allCurrency = useMemo(
     () => valueKeys.length > 0 && valueKeys.every(v => v !== 'count'),
     [valueKeys]
@@ -547,9 +605,18 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
         ) : (
           <>
             <ResponsiveContainer width="100%" height={280}>
-              <BarChart data={result.data} margin={{ top: 4, right: 8, left: -10, bottom: 0 }}>
+              <BarChart data={enhancedChartData} margin={{ top: 4, right: 8, left: -10, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="_rowLabel" tick={{ fontSize: 10 }} interval={0} angle={-15} textAnchor="end" height={70} />
+                {showChartHierarchy ? (
+                  <XAxis
+                    dataKey="_rowLabel"
+                    interval={0}
+                    height={56}
+                    tick={(props) => <HierarchyTick {...props} data={enhancedChartData} />}
+                  />
+                ) : (
+                  <XAxis dataKey="_rowLabel" tick={{ fontSize: 10 }} interval={0} angle={-15} textAnchor="end" height={70} />
+                )}
                 <YAxis tick={{ fontSize: 10 }} tickFormatter={yAxisFormatter} />
                 <Tooltip
                   cursor={{ fill: '#F3F4F6' }}
