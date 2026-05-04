@@ -22,6 +22,13 @@ select {
   appearance: none;
 }
 
+/* Prevent iOS Safari auto-zoom on input focus (font-size must be >= 16px) */
+@media (max-width: 767px) {
+  input, textarea, select {
+    font-size: 16px !important;
+  }
+}
+
 /* Scrollbar hide for mobile feel */
 .scrollbar-hide::-webkit-scrollbar { display: none; }
 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
