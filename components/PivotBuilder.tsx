@@ -1366,6 +1366,16 @@ function MultiCheckSelect({
   onChange: (next: string[]) => void
 }) {
   const [open, setOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    if (!open) return
+    function onDocMouseDown(e: MouseEvent) {
+      const node = containerRef.current
+      if (node && e.target instanceof Node && !node.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDocMouseDown)
+    return () => document.removeEventListener('mousedown', onDocMouseDown)
+  }, [open])
   function toggle(opt: string) {
     onChange(selected.includes(opt) ? selected.filter(s => s !== opt) : [...selected, opt])
   }
@@ -1376,10 +1386,9 @@ function MultiCheckSelect({
       ? selected[0]
       : `${selected.length} ${label}s`
   return (
-    <div className="relative">
+    <div ref={containerRef} className="relative">
       <button
         onClick={() => setOpen(o => !o)}
-        onBlur={() => setTimeout(() => setOpen(false), 150)}
         className="w-full flex items-center justify-between text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-white hover:border-[#1B2E6B] focus:outline-none focus:ring-2 focus:ring-[#1B2E6B] text-left"
       >
         <span className={selected.length === 0 ? 'text-gray-400' : 'text-gray-900'}>{summary}</span>
