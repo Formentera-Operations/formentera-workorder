@@ -5,11 +5,11 @@ import {
 } from 'recharts'
 import { Download, X, Plus, ChevronRight, ChevronDown } from 'lucide-react'
 
-type ValueKey = 'count' | 'repair_cost' | 'estimate_cost'
+type ValueKey = 'count' | 'repair_cost' | 'estimate_cost' | 'savings'
 
 const DIM_OPTIONS: { key: string; label: string }[] = [
   { key: 'equipment',       label: 'Equipment' },
-  { key: 'equipment_type',  label: 'Equipment Type' },
+  { key: 'equipment_type',  label: 'Equipment Category' },
   { key: 'department',      label: 'Department' },
   { key: 'foreman',         label: 'Foreman' },
   { key: 'vendor',          label: 'Vendor' },
@@ -39,6 +39,7 @@ const VALUE_OPTIONS: { key: ValueKey; label: string }[] = [
   { key: 'count',         label: 'Ticket Count' },
   { key: 'repair_cost',   label: 'Repair Cost' },
   { key: 'estimate_cost', label: 'Estimate Cost' },
+  { key: 'savings',       label: 'Savings' },
 ]
 const VALUE_LABEL: Record<ValueKey, string> = Object.fromEntries(
   VALUE_OPTIONS.map(v => [v.key, v.label])

@@ -52,19 +52,23 @@ export const PIVOT_DIM_TRANSFORMS: Partial<Record<string, (raw: unknown) => stri
   },
 }
 
-export const PIVOT_VALUES = ['count', 'estimate_cost', 'repair_cost'] as const
+export const PIVOT_VALUES = ['count', 'estimate_cost', 'repair_cost', 'savings'] as const
 export type PivotValue = (typeof PIVOT_VALUES)[number]
 
 const VALUE_LABELS: Record<PivotValue, string> = {
   count: 'Ticket Count',
   estimate_cost: 'Estimate Cost',
   repair_cost: 'Repair Cost',
+  savings: 'Savings',
 }
 
-const VALUE_COL_MAP: Record<PivotValue, string | null> = {
-  count: null,
-  estimate_cost: 'Estimate_Cost',
-  repair_cost: 'repair_cost',
+// Columns that must be SELECTed to compute each measure. Savings is
+// derived (Estimate_Cost − repair_cost) so it pulls both.
+const VALUE_COLS_NEEDED: Record<PivotValue, string[]> = {
+  count: [],
+  estimate_cost: ['Estimate_Cost'],
+  repair_cost: ['repair_cost'],
+  savings: ['Estimate_Cost', 'repair_cost'],
 }
 
 export interface PivotFilter {
@@ -157,7 +161,7 @@ export async function runPivot(input: PivotInput): Promise<PivotResult | { error
   const rowCols = rowsKeys.map(r => PIVOT_DIM_MAP[r])
   const colCol = colsKey ? PIVOT_DIM_MAP[colsKey] : null
   const valueCols = Array.from(
-    new Set(valueKeys.map(v => VALUE_COL_MAP[v]).filter((c): c is string => !!c))
+    new Set(valueKeys.flatMap(v => VALUE_COLS_NEEDED[v]))
   )
   const selectParts: string[] = [...rowCols]
   if (colCol) selectParts.push(colCol)
@@ -258,8 +262,18 @@ export async function runPivot(input: PivotInput): Promise<PivotResult | { error
 
     let firstVal = 0
     for (const vk of valueKeys) {
-      const vc = VALUE_COL_MAP[vk]
-      const v = vc ? ((r[vc] as number) || 0) : 1
+      let v: number
+      if (vk === 'count') {
+        v = 1
+      } else if (vk === 'savings') {
+        const est = (r['Estimate_Cost'] as number) || 0
+        const rep = (r['repair_cost'] as number) || 0
+        v = est - rep
+      } else if (vk === 'estimate_cost') {
+        v = (r['Estimate_Cost'] as number) || 0
+      } else {
+        v = (r['repair_cost'] as number) || 0
+      }
       cell[vk] = (cell[vk] || 0) + v
       if (vk === firstValueKey) firstVal = v
     }
