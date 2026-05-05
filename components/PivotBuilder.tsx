@@ -951,12 +951,16 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
                     const count = enhancedChartData.length
                     if (!count) return null
                     const band = width / count
-                    const lines: number[] = []
+                    // Bracket each year group on both sides — line at the
+                    // chart's left edge, after every date-boundary tick, and
+                    // at the chart's right edge.
+                    const lines: number[] = [left]
                     for (let i = 0; i < enhancedChartData.length - 1; i++) {
                       if (enhancedChartData[i]._dateBoundary) {
                         lines.push(left + (i + 1) * band)
                       }
                     }
+                    lines.push(left + width)
                     return (
                       <g>
                         {lines.map((x, idx) => (
@@ -968,7 +972,6 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
                             y2={top + height + 30}
                             stroke="#9CA3AF"
                             strokeWidth={1}
-                            strokeDasharray="3 3"
                           />
                         ))}
                       </g>
@@ -1458,42 +1461,49 @@ function FilterPill({
             />
           </div>
           <div className="overflow-y-auto flex-1">
-            {state?.loading ? (
-              <p className="px-3 py-2 text-gray-400">Loading values…</p>
-            ) : state?.error ? (
-              <p className="px-3 py-2 text-red-600">{state.error}</p>
-            ) : (state?.values || []).length === 0 ? (
-              <p className="px-3 py-2 text-gray-400">No values found</p>
-            ) : (
-              <>
-                {selected.length > 0 && (
-                  <button
-                    onMouseDown={(e) => { e.preventDefault(); onChange([]) }}
-                    className="w-full text-left px-3 py-1.5 text-[11px] text-[#1B2E6B] hover:bg-gray-50 border-b border-gray-100"
-                  >
-                    Clear selection
-                  </button>
-                )}
-                {filteredOptions.map(opt => {
-                  const checked = selected.includes(opt)
-                  return (
+            {(() => {
+              const allValues = state?.values || []
+              const hasValues = allValues.length > 0
+              if (!hasValues && state?.loading) {
+                return <p className="px-3 py-2 text-gray-400">Loading values…</p>
+              }
+              if (!hasValues && state?.error) {
+                return <p className="px-3 py-2 text-red-600">{state.error}</p>
+              }
+              if (!hasValues) {
+                return <p className="px-3 py-2 text-gray-400">No values found</p>
+              }
+              return (
+                <>
+                  {selected.length > 0 && (
                     <button
-                      key={opt}
-                      onMouseDown={(e) => { e.preventDefault(); toggle(opt) }}
-                      className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 text-gray-700"
+                      onMouseDown={(e) => { e.preventDefault(); onChange([]) }}
+                      className="w-full text-left px-3 py-1.5 text-[11px] text-[#1B2E6B] hover:bg-gray-50 border-b border-gray-100"
                     >
-                      <span className={`w-3 h-3 border rounded flex items-center justify-center ${checked ? 'bg-[#1B2E6B] border-[#1B2E6B]' : 'border-gray-300'}`}>
-                        {checked && <svg width="8" height="8" viewBox="0 0 8 8" fill="none"><path d="M1.5 4l1.5 1.5L6.5 2" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
-                      </span>
-                      <span className="flex-1 text-left truncate" title={opt}>{opt}</span>
+                      Clear selection
                     </button>
-                  )
-                })}
-                {(state?.values || []).length > filteredOptions.length && (
-                  <p className="px-3 py-1.5 text-[10px] text-gray-400 italic">Showing first 200 — refine search to see more.</p>
-                )}
-              </>
-            )}
+                  )}
+                  {filteredOptions.map(opt => {
+                    const checked = selected.includes(opt)
+                    return (
+                      <button
+                        key={opt}
+                        onMouseDown={(e) => { e.preventDefault(); toggle(opt) }}
+                        className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 text-gray-700"
+                      >
+                        <span className={`w-3 h-3 border rounded flex items-center justify-center ${checked ? 'bg-[#1B2E6B] border-[#1B2E6B]' : 'border-gray-300'}`}>
+                          {checked && <svg width="8" height="8" viewBox="0 0 8 8" fill="none"><path d="M1.5 4l1.5 1.5L6.5 2" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                        </span>
+                        <span className="flex-1 text-left truncate" title={opt}>{opt}</span>
+                      </button>
+                    )
+                  })}
+                  {allValues.length > filteredOptions.length && (
+                    <p className="px-3 py-1.5 text-[10px] text-gray-400 italic">Showing first 200 — refine search to see more.</p>
+                  )}
+                </>
+              )
+            })()}
           </div>
         </div>
       )}
