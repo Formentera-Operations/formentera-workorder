@@ -37,8 +37,8 @@ const DIM_LABEL = Object.fromEntries(ALL_DIM_OPTIONS.map(d => [d.key, d.label]))
 
 const VALUE_OPTIONS: { key: ValueKey; label: string }[] = [
   { key: 'count',         label: 'Ticket Count' },
-  { key: 'repair_cost',   label: 'Repair Cost' },
   { key: 'estimate_cost', label: 'Estimate Cost' },
+  { key: 'repair_cost',   label: 'Repair Cost' },
   { key: 'savings',       label: 'Savings' },
 ]
 const VALUE_LABEL: Record<ValueKey, string> = Object.fromEntries(
@@ -168,6 +168,8 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
   const [dimFilters, setDimFilters] = useState<Record<string, string[]>>({})
   // Filter applied to the column dimension (constrains which series appear)
   const [colsFilter, setColsFilter] = useState<string[]>([])
+  // Per-row-dim filter values (constrains rows to those values)
+  const [rowFilters, setRowFilters] = useState<Record<string, string[]>>({})
   // Per-dim cache of distinct values + loading state
   const [dimValues, setDimValues] = useState<Record<string, { values?: string[]; loading?: boolean; error?: string }>>({})
 
@@ -260,6 +262,9 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
           ...Object.entries(dimFilters)
             .filter(([, vs]) => vs.length > 0)
             .map(([dim, vs]) => ({ dim, values: vs })),
+          ...Object.entries(rowFilters)
+            .filter(([d, vs]) => rowsDims.includes(d) && vs.length > 0)
+            .map(([dim, vs]) => ({ dim, values: vs })),
           ...(colsDim && colsFilter.length > 0 ? [{ dim: colsDim, values: colsFilter }] : []),
           ...(fieldFilter.length > 0 ? [{ dim: 'field', values: fieldFilter }] : []),
         ],
@@ -278,7 +283,7 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
       })
       .finally(() => setLoading(false))
     return () => controller.abort()
-  }, [rowsDims, colsDim, valueKeys, statusFilter, fieldFilter, dimFilters, colsFilter, startDate, endDate, userAssets])
+  }, [rowsDims, colsDim, valueKeys, statusFilter, fieldFilter, dimFilters, rowFilters, colsFilter, startDate, endDate, userAssets])
 
   // ── Helpers for zone manipulation ──
   function addToRows(dim: string) {
@@ -286,9 +291,17 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
     if (rowsDims.length >= 4) return
     setRowsDims([...rowsDims, dim])
     if (colsDim === dim) clearColumns()
+    ensureDimValues(dim)
   }
   function removeFromRows(dim: string) {
     setRowsDims(rowsDims.filter(d => d !== dim))
+    setRowFilters(prev => {
+      if (!(dim in prev)) return prev
+      const next = { ...prev }; delete next[dim]; return next
+    })
+  }
+  function setRowFilterValues(dim: string, values: string[]) {
+    setRowFilters(prev => ({ ...prev, [dim]: values }))
   }
   function setColumns(dim: string) {
     if (rowsDims.includes(dim)) return
@@ -349,9 +362,11 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
     colsDim,
     colsFilter,
     dimFilters,
+    rowFilters,
+    rowsDims,
     startDate,
     endDate,
-  }), [userAssets, statusFilter, fieldFilter, colsDim, colsFilter, dimFilters, startDate, endDate])
+  }), [userAssets, statusFilter, fieldFilter, colsDim, colsFilter, dimFilters, rowFilters, rowsDims, startDate, endDate])
   const filterCtxKey = useMemo(() => JSON.stringify(filterCtx), [filterCtx])
 
   function fetchDimValues(dim: string) {
@@ -359,6 +374,9 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
     const filters = [
       ...Object.entries(filterCtx.dimFilters)
         .filter(([d, vs]) => d !== dim && vs.length > 0)
+        .map(([d, vs]) => ({ dim: d, values: vs })),
+      ...Object.entries(filterCtx.rowFilters)
+        .filter(([d, vs]) => d !== dim && filterCtx.rowsDims.includes(d) && vs.length > 0)
         .map(([d, vs]) => ({ dim: d, values: vs })),
       ...(filterCtx.colsDim && filterCtx.colsDim !== dim && filterCtx.colsFilter.length > 0
         ? [{ dim: filterCtx.colsDim, values: filterCtx.colsFilter }] : []),
@@ -553,6 +571,7 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
     setStatusFilter([])
     setFieldFilter([])
     setDimFilters({})
+    setRowFilters({})
     setDatePreset('all')
     setCustomStart('')
     setCustomEnd('')
@@ -740,9 +759,13 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
             <EmptyZone />
           ) : (
             rowsDims.map((dim, i) => (
-              <DimPill
+              <FilterPill
                 key={dim}
+                dim={dim}
                 label={DIM_LABEL[dim] || dim}
+                state={dimValues[dim]}
+                selected={rowFilters[dim] || []}
+                onChange={(vals) => setRowFilterValues(dim, vals)}
                 index={i}
                 total={rowsDims.length}
                 onMove={(dir) => {
@@ -898,21 +921,24 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
                 <YAxis tick={{ fontSize: 10 }} tickFormatter={yAxisFormatter} />
                 {showChartHierarchy && (
                   <Customized component={(p: Record<string, unknown>) => {
-                    const xAxisMap = p.xAxisMap as Record<string, { x: number; width: number }> | undefined
-                    const yAxisMap = p.yAxisMap as Record<string, { y: number; height: number }> | undefined
-                    if (!xAxisMap || !yAxisMap) return null
-                    const xAxisKey = Object.keys(xAxisMap)[0]
-                    const yAxisKey = Object.keys(yAxisMap)[0]
-                    if (!xAxisKey || !yAxisKey) return null
-                    const xAxis = xAxisMap[xAxisKey]
-                    const yAxis = yAxisMap[yAxisKey]
+                    const offset = p.offset as
+                      | { left?: number; top?: number; width?: number; height?: number }
+                      | undefined
+                    const left = offset?.left
+                    const top = offset?.top
+                    const width = offset?.width
+                    const height = offset?.height
+                    if (typeof left !== 'number' || typeof top !== 'number'
+                      || typeof width !== 'number' || typeof height !== 'number') {
+                      return null
+                    }
                     const count = enhancedChartData.length
                     if (!count) return null
-                    const band = xAxis.width / count
+                    const band = width / count
                     const lines: number[] = []
                     for (let i = 0; i < enhancedChartData.length - 1; i++) {
                       if (enhancedChartData[i]._innerBoundary) {
-                        lines.push(xAxis.x + (i + 1) * band)
+                        lines.push(left + (i + 1) * band)
                       }
                     }
                     return (
@@ -921,9 +947,9 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
                           <line
                             key={idx}
                             x1={x}
-                            y1={yAxis.y}
+                            y1={top}
                             x2={x}
-                            y2={yAxis.y + yAxis.height + 30}
+                            y2={top + height + 30}
                             stroke="#9CA3AF"
                             strokeWidth={1}
                             strokeDasharray="3 3"
@@ -1239,104 +1265,6 @@ function EmptyZone() {
   return <p className="text-[11px] text-gray-400 italic">No fields</p>
 }
 
-function DimPill({
-  label,
-  index,
-  total,
-  onMove,
-  onSwitchToRows,
-  onSwitchToColumns,
-  onSwitchToFilters,
-  onRemove,
-  onDragStart,
-  onDragEnd,
-}: {
-  label: string
-  index?: number
-  total?: number
-  onMove?: (dir: 'up' | 'down') => void
-  onSwitchToRows?: () => void
-  onSwitchToColumns?: () => void
-  onSwitchToFilters?: () => void
-  onRemove: () => void
-  onDragStart?: (e: React.DragEvent) => void
-  onDragEnd?: () => void
-}) {
-  const [menuOpen, setMenuOpen] = useState(false)
-  return (
-    <div
-      draggable={!!onDragStart}
-      onDragStart={onDragStart}
-      onDragEnd={onDragEnd}
-      className={`relative inline-flex items-center gap-1 bg-[#1B2E6B] text-white text-xs rounded-full pl-3 pr-1 py-1 ${onDragStart ? 'cursor-grab active:cursor-grabbing' : ''}`}>
-      <span>{label}</span>
-      <button
-        onClick={() => setMenuOpen(o => !o)}
-        onBlur={() => setTimeout(() => setMenuOpen(false), 150)}
-        className="w-4 h-4 rounded-full hover:bg-white/20 flex items-center justify-center text-[10px]"
-        aria-label="Options"
-      >
-        ⋯
-      </button>
-      <button
-        onClick={onRemove}
-        className="w-4 h-4 rounded-full hover:bg-white/20 flex items-center justify-center"
-        aria-label="Remove"
-      >
-        <X size={11} />
-      </button>
-      {menuOpen && (
-        <div className="absolute top-full left-0 mt-1 z-20 bg-white border border-gray-200 rounded-lg shadow-lg text-[11px] text-gray-700 min-w-[140px] py-1">
-          {typeof index === 'number' && total && total > 1 && (
-            <>
-              {index > 0 && (
-                <button
-                  className="w-full text-left px-3 py-1.5 hover:bg-gray-50"
-                  onMouseDown={(e) => { e.preventDefault(); onMove?.('up'); setMenuOpen(false) }}
-                >
-                  ↑ Move left
-                </button>
-              )}
-              {index < total - 1 && (
-                <button
-                  className="w-full text-left px-3 py-1.5 hover:bg-gray-50"
-                  onMouseDown={(e) => { e.preventDefault(); onMove?.('down'); setMenuOpen(false) }}
-                >
-                  ↓ Move right
-                </button>
-              )}
-            </>
-          )}
-          {onSwitchToColumns && (
-            <button
-              className="w-full text-left px-3 py-1.5 hover:bg-gray-50"
-              onMouseDown={(e) => { e.preventDefault(); onSwitchToColumns(); setMenuOpen(false) }}
-            >
-              → Move to Columns
-            </button>
-          )}
-          {onSwitchToRows && (
-            <button
-              className="w-full text-left px-3 py-1.5 hover:bg-gray-50"
-              onMouseDown={(e) => { e.preventDefault(); onSwitchToRows(); setMenuOpen(false) }}
-            >
-              → Move to Rows
-            </button>
-          )}
-          {onSwitchToFilters && (
-            <button
-              className="w-full text-left px-3 py-1.5 hover:bg-gray-50"
-              onMouseDown={(e) => { e.preventDefault(); onSwitchToFilters(); setMenuOpen(false) }}
-            >
-              → Move to Filters
-            </button>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
-
 function MultiCheckSelect({
   label,
   allLabel,
@@ -1412,6 +1340,9 @@ function FilterPill({
   onSwitchToRows,
   onSwitchToColumns,
   onSwitchToFilters,
+  onMove,
+  index,
+  total,
   onRemove,
   onDragStart,
   onDragEnd,
@@ -1421,9 +1352,12 @@ function FilterPill({
   state: { values?: string[]; loading?: boolean; error?: string } | undefined
   selected: string[]
   onChange: (next: string[]) => void
-  onSwitchToRows: () => void
+  onSwitchToRows?: () => void
   onSwitchToColumns?: () => void
   onSwitchToFilters?: () => void
+  onMove?: (dir: 'up' | 'down') => void
+  index?: number
+  total?: number
   onRemove: () => void
   onDragStart?: (e: React.DragEvent) => void
   onDragEnd?: () => void
@@ -1550,12 +1484,34 @@ function FilterPill({
 
       {menuOpen && (
         <div className="absolute top-full right-0 mt-1 z-30 bg-white border border-gray-200 rounded-lg shadow-lg text-[11px] text-gray-700 min-w-[140px] py-1">
-          <button
-            className="w-full text-left px-3 py-1.5 hover:bg-gray-50"
-            onMouseDown={(e) => { e.preventDefault(); onSwitchToRows(); setMenuOpen(false) }}
-          >
-            → Move to Rows
-          </button>
+          {typeof index === 'number' && total && total > 1 && onMove && (
+            <>
+              {index > 0 && (
+                <button
+                  className="w-full text-left px-3 py-1.5 hover:bg-gray-50"
+                  onMouseDown={(e) => { e.preventDefault(); onMove('up'); setMenuOpen(false) }}
+                >
+                  ↑ Move left
+                </button>
+              )}
+              {index < total - 1 && (
+                <button
+                  className="w-full text-left px-3 py-1.5 hover:bg-gray-50"
+                  onMouseDown={(e) => { e.preventDefault(); onMove('down'); setMenuOpen(false) }}
+                >
+                  ↓ Move right
+                </button>
+              )}
+            </>
+          )}
+          {onSwitchToRows && (
+            <button
+              className="w-full text-left px-3 py-1.5 hover:bg-gray-50"
+              onMouseDown={(e) => { e.preventDefault(); onSwitchToRows(); setMenuOpen(false) }}
+            >
+              → Move to Rows
+            </button>
+          )}
           {onSwitchToColumns && (
             <button
               className="w-full text-left px-3 py-1.5 hover:bg-gray-50"
