@@ -1,8 +1,9 @@
 'use client'
 import { useState, useEffect, useMemo, useRef } from 'react'
 import {
-  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Customized,
+  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from 'recharts'
+import { usePlotArea } from 'recharts'
 import { Download, X, Plus, ChevronRight, ChevronDown } from 'lucide-react'
 
 type ValueKey = 'count' | 'repair_cost' | 'estimate_cost' | 'savings'
@@ -82,6 +83,25 @@ function formatHierarchyLabel(s: string): string {
   const m = /^(\d{4})-(\d{2})$/.exec(s)
   if (m) return MONTH_NAMES[parseInt(m[2], 10) - 1] || s
   return s
+}
+
+function YearDividers({ data }: { data: Array<Record<string, string | number | boolean>> }) {
+  const plot = usePlotArea()
+  if (!plot || data.length === 0) return null
+  const { x, y, width, height } = plot
+  const band = width / data.length
+  const lines: number[] = []
+  for (let i = 0; i < data.length - 1; i++) {
+    if (data[i]._dateBoundary) lines.push(x + (i + 1) * band)
+  }
+  if (lines.length === 0) return null
+  return (
+    <g>
+      {lines.map((lx, idx) => (
+        <line key={idx} x1={lx} y1={y} x2={lx} y2={y + height + 30} stroke="#6B7280" strokeWidth={1} />
+      ))}
+    </g>
+  )
 }
 
 function HierarchyTick(props: Record<string, unknown>) {
@@ -935,45 +955,7 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
                   <XAxis dataKey="_rowLabel" tick={{ fontSize: 10 }} interval={0} angle={-15} textAnchor="end" height={70} />
                 )}
                 <YAxis tick={{ fontSize: 10 }} tickFormatter={yAxisFormatter} />
-                {showChartHierarchy && (
-                  <Customized component={(p: Record<string, unknown>) => {
-                    const offset = p.offset as
-                      | { left?: number; top?: number; width?: number; height?: number }
-                      | undefined
-                    const left = offset?.left
-                    const top = offset?.top
-                    const width = offset?.width
-                    const height = offset?.height
-                    if (typeof left !== 'number' || typeof top !== 'number'
-                      || typeof width !== 'number' || typeof height !== 'number') {
-                      return null
-                    }
-                    const count = enhancedChartData.length
-                    if (!count) return null
-                    const band = width / count
-                    const lines: number[] = []
-                    for (let i = 0; i < enhancedChartData.length - 1; i++) {
-                      if (enhancedChartData[i]._dateBoundary) {
-                        lines.push(left + (i + 1) * band)
-                      }
-                    }
-                    return (
-                      <g>
-                        {lines.map((x, idx) => (
-                          <line
-                            key={idx}
-                            x1={x}
-                            y1={top}
-                            x2={x}
-                            y2={top + height + 30}
-                            stroke="#6B7280"
-                            strokeWidth={1}
-                          />
-                        ))}
-                      </g>
-                    )
-                  }} />
-                )}
+                {showChartHierarchy && <YearDividers data={enhancedChartData} />}
                 <Tooltip
                   cursor={{ fill: '#F3F4F6' }}
                   content={<ChartTooltip currencyByKey={isCurrencySeries} />}
