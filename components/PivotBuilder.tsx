@@ -514,8 +514,23 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
   // the center index of each outer group so we can render a two-tier x-axis.
   const enhancedChartData = useMemo(() => {
     if (!result || result.data.length === 0) return [] as Record<string, string | number | boolean>[]
+    // Coarsest date dim in rows drives the section divider. Higher number =
+    // coarser: year > quarter > month > day.
+    const DATE_GRAIN: Record<string, number> = {
+      submitted_year: 4, submitted_quarter: 3, submitted_month: 2, submitted_day: 1,
+    }
+    let boundaryDim: string | null = null
+    let bestGrain = 0
+    for (const k of result.rows) {
+      const g = DATE_GRAIN[k] || 0
+      if (g > bestGrain) { bestGrain = g; boundaryDim = k }
+    }
     if (result.rows.length < 2) {
-      return result.data.map(r => ({ ...r, _innerLabel: r._rowLabel, _outerLabel: '', _outerSpan: 0, _showOuter: false, _innerBoundary: false }))
+      return result.data.map((r, i) => {
+        const next = i < result.data.length - 1 ? result.data[i + 1] : null
+        const isBoundary = !!(boundaryDim && next && r[boundaryDim] !== next[boundaryDim])
+        return { ...r, _innerLabel: r._rowLabel, _outerLabel: '', _outerSpan: 0, _showOuter: false, _dateBoundary: isBoundary }
+      })
     }
     const outerKey = result.rows[0]
     const innerKey = result.rows[result.rows.length - 1]
@@ -539,14 +554,15 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
     return result.data.map((row, i) => {
       const c = centerOuter.get(i)
       const innerVal = String(row[innerKey] ?? '')
-      const nextInner = i < result.data.length - 1 ? String(result.data[i + 1][innerKey] ?? '') : null
+      const next = i < result.data.length - 1 ? result.data[i + 1] : null
+      const isBoundary = !!(boundaryDim && next && row[boundaryDim] !== next[boundaryDim])
       return {
         ...row,
         _innerLabel: innerVal,
         _outerLabel: c?.value ?? '',
         _outerSpan: c?.span ?? 0,
         _showOuter: !!c,
-        _innerBoundary: nextInner !== null && nextInner !== innerVal,
+        _dateBoundary: isBoundary,
       }
     })
   }, [result])
@@ -937,7 +953,7 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
                     const band = width / count
                     const lines: number[] = []
                     for (let i = 0; i < enhancedChartData.length - 1; i++) {
-                      if (enhancedChartData[i]._innerBoundary) {
+                      if (enhancedChartData[i]._dateBoundary) {
                         lines.push(left + (i + 1) * band)
                       }
                     }
