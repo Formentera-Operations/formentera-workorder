@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useMemo, useRef } from 'react'
 import {
-  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Customized,
 } from 'recharts'
 import { Download, X, Plus, ChevronRight, ChevronDown } from 'lucide-react'
 
@@ -73,6 +73,17 @@ function fmt(n: number, isCurrency: boolean): string {
   return `$${Math.round(n)}`
 }
 
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+function formatHierarchyLabel(s: string): string {
+  // YYYY-MM-DD → "Oct 15"
+  const md = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s)
+  if (md) return `${MONTH_NAMES[parseInt(md[2], 10) - 1] || md[2]} ${parseInt(md[3], 10)}`
+  // YYYY-MM → "Oct"
+  const m = /^(\d{4})-(\d{2})$/.exec(s)
+  if (m) return MONTH_NAMES[parseInt(m[2], 10) - 1] || s
+  return s
+}
+
 function HierarchyTick(props: Record<string, unknown>) {
   const x = typeof props.x === 'number' ? props.x : Number(props.x) || 0
   const y = typeof props.y === 'number' ? props.y : Number(props.y) || 0
@@ -80,9 +91,10 @@ function HierarchyTick(props: Record<string, unknown>) {
   const data = (props.data as Array<Record<string, string | number | boolean>>) || []
   const datum = data[index]
   if (!datum) return null
-  const inner = String(datum._innerLabel ?? '')
+  const inner = formatHierarchyLabel(String(datum._innerLabel ?? ''))
   const showOuter = Boolean(datum._showOuter)
-  const outer = String(datum._outerLabel ?? '')
+  const outerRaw = String(datum._outerLabel ?? '')
+  const outer = formatHierarchyLabel(outerRaw)
   const span = Number(datum._outerSpan ?? 1) || 1
   // ~7px per char at fontSize 11; budget per tick ~70px shrinks with screen width.
   const maxChars = Math.max(8, span * 10)
@@ -95,7 +107,7 @@ function HierarchyTick(props: Record<string, unknown>) {
           <line x1={-12} x2={12} y1={20} y2={20} stroke="#D1D5DB" strokeWidth={1} />
           <text dy={36} textAnchor="middle" fontSize={11} fontWeight={600} fill="#374151">
             {outerDisplay}
-            <title>{outer}</title>
+            <title>{outerRaw}</title>
           </text>
         </>
       )}
@@ -485,7 +497,7 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
   const enhancedChartData = useMemo(() => {
     if (!result || result.data.length === 0) return [] as Record<string, string | number | boolean>[]
     if (result.rows.length < 2) {
-      return result.data.map(r => ({ ...r, _innerLabel: r._rowLabel, _outerLabel: '', _showOuter: false }))
+      return result.data.map(r => ({ ...r, _innerLabel: r._rowLabel, _outerLabel: '', _outerSpan: 0, _showOuter: false, _innerBoundary: false }))
     }
     const outerKey = result.rows[0]
     const innerKey = result.rows[result.rows.length - 1]
@@ -508,12 +520,15 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
     }
     return result.data.map((row, i) => {
       const c = centerOuter.get(i)
+      const innerVal = String(row[innerKey] ?? '')
+      const nextInner = i < result.data.length - 1 ? String(result.data[i + 1][innerKey] ?? '') : null
       return {
         ...row,
-        _innerLabel: String(row[innerKey] ?? ''),
+        _innerLabel: innerVal,
         _outerLabel: c?.value ?? '',
         _outerSpan: c?.span ?? 0,
         _showOuter: !!c,
+        _innerBoundary: nextInner !== null && nextInner !== innerVal,
       }
     })
   }, [result])
@@ -881,6 +896,43 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
                   <XAxis dataKey="_rowLabel" tick={{ fontSize: 10 }} interval={0} angle={-15} textAnchor="end" height={70} />
                 )}
                 <YAxis tick={{ fontSize: 10 }} tickFormatter={yAxisFormatter} />
+                {showChartHierarchy && (
+                  <Customized component={(p: Record<string, unknown>) => {
+                    const xAxisMap = p.xAxisMap as Record<string, { x: number; width: number }> | undefined
+                    const yAxisMap = p.yAxisMap as Record<string, { y: number; height: number }> | undefined
+                    if (!xAxisMap || !yAxisMap) return null
+                    const xAxisKey = Object.keys(xAxisMap)[0]
+                    const yAxisKey = Object.keys(yAxisMap)[0]
+                    if (!xAxisKey || !yAxisKey) return null
+                    const xAxis = xAxisMap[xAxisKey]
+                    const yAxis = yAxisMap[yAxisKey]
+                    const count = enhancedChartData.length
+                    if (!count) return null
+                    const band = xAxis.width / count
+                    const lines: number[] = []
+                    for (let i = 0; i < enhancedChartData.length - 1; i++) {
+                      if (enhancedChartData[i]._innerBoundary) {
+                        lines.push(xAxis.x + (i + 1) * band)
+                      }
+                    }
+                    return (
+                      <g>
+                        {lines.map((x, idx) => (
+                          <line
+                            key={idx}
+                            x1={x}
+                            y1={yAxis.y}
+                            x2={x}
+                            y2={yAxis.y + yAxis.height + 30}
+                            stroke="#9CA3AF"
+                            strokeWidth={1}
+                            strokeDasharray="3 3"
+                          />
+                        ))}
+                      </g>
+                    )
+                  }} />
+                )}
                 <Tooltip
                   cursor={{ fill: '#F3F4F6' }}
                   content={<ChartTooltip currencyByKey={isCurrencySeries} />}
