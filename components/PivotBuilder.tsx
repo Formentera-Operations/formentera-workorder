@@ -327,19 +327,43 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
     setDimFilters({ ...dimFilters, [dim]: values })
   }
 
-  // Preload Field values so the Quick Filter dropdown is populated on first open.
-  useEffect(() => {
-    ensureDimValues('field')
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userAssets])
+  // Build the cross-filter context to send when fetching distinct values.
+  // Each filter applies to other filters' option lists EXCEPT the one being
+  // queried — that's what lets the user add/remove values within the filter.
+  const filterCtx = useMemo(() => ({
+    userAssets,
+    statusFilter,
+    fieldFilter,
+    colsDim,
+    colsFilter,
+    dimFilters,
+    startDate,
+    endDate,
+  }), [userAssets, statusFilter, fieldFilter, colsDim, colsFilter, dimFilters, startDate, endDate])
+  const filterCtxKey = useMemo(() => JSON.stringify(filterCtx), [filterCtx])
 
-  function ensureDimValues(dim: string) {
-    if (dimValues[dim]?.values || dimValues[dim]?.loading) return
-    setDimValues(prev => ({ ...prev, [dim]: { loading: true } }))
+  function fetchDimValues(dim: string) {
+    setDimValues(prev => ({ ...prev, [dim]: { ...prev[dim], loading: true } }))
+    const filters = [
+      ...Object.entries(filterCtx.dimFilters)
+        .filter(([d, vs]) => d !== dim && vs.length > 0)
+        .map(([d, vs]) => ({ dim: d, values: vs })),
+      ...(filterCtx.colsDim && filterCtx.colsDim !== dim && filterCtx.colsFilter.length > 0
+        ? [{ dim: filterCtx.colsDim, values: filterCtx.colsFilter }] : []),
+      ...(dim !== 'field' && filterCtx.fieldFilter.length > 0
+        ? [{ dim: 'field', values: filterCtx.fieldFilter }] : []),
+    ]
     fetch('/api/analysis/pivot/values', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ dim, userAssets }),
+      body: JSON.stringify({
+        dim,
+        userAssets: filterCtx.userAssets,
+        status: dim !== 'status' && filterCtx.statusFilter.length > 0 ? filterCtx.statusFilter : undefined,
+        filters,
+        start_date: filterCtx.startDate || undefined,
+        end_date: filterCtx.endDate || undefined,
+      }),
     })
       .then(async r => {
         const json = await r.json()
@@ -350,6 +374,20 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
         setDimValues(prev => ({ ...prev, [dim]: { error: e.message } }))
       })
   }
+
+  function ensureDimValues(dim: string) {
+    if (dimValues[dim]?.values || dimValues[dim]?.loading) return
+    fetchDimValues(dim)
+  }
+
+  // When the cross-filter context changes, refresh option lists for every
+  // already-loaded dim so dropdowns stay consistent with active selections.
+  useEffect(() => {
+    const loaded = Object.keys(dimValues)
+    const dims = loaded.includes('field') ? loaded : [...loaded, 'field']
+    for (const d of dims) fetchDimValues(d)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterCtxKey])
 
   // Default-zone click from field shelf: dim → rows, value → values
   function clickDimField(dim: string) {
