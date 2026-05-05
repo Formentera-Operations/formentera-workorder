@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from 'recharts'
@@ -46,7 +46,6 @@ const VALUE_LABEL: Record<ValueKey, string> = Object.fromEntries(
 ) as Record<ValueKey, string>
 
 const STATUSES = ['Open', 'In Progress', 'Backlogged', 'Awaiting Cost', 'Closed']
-const WORK_TYPES = ['LOE', 'AFE - Workover', 'AFE - Capital']
 const SERIES_COLORS = ['#1B2E6B', '#3B82F6', '#F59E0B', '#10B981', '#EF4444', '#8B5CF6']
 
 interface PivotSeriesMeta {
@@ -140,8 +139,19 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
   const [colsDim, setColsDim] = useState<string>('')
   const [valueKeys, setValueKeys] = useState<ValueKey[]>([])
   const [statusFilter, setStatusFilter] = useState<string[]>([])
-  const [workTypeFilter, setWorkTypeFilter] = useState<string[]>([])
-  const [datePreset, setDatePreset] = useState<'all' | 'ytd' | 'lastmonth' | 'thismonth'>('all')
+  const [fieldFilter, setFieldFilter] = useState<string[]>([])
+  type DatePreset =
+    | 'all'
+    | 'thisweek'
+    | 'lastweek'
+    | 'thismonth'
+    | 'lastmonth'
+    | 'thisyear'
+    | 'lastyear'
+    | 'custom'
+  const [datePreset, setDatePreset] = useState<DatePreset>('all')
+  const [customStart, setCustomStart] = useState<string>('')
+  const [customEnd, setCustomEnd] = useState<string>('')
   // Free-form filters: dim → selected values (empty list = no filter applied yet)
   const [dimFilters, setDimFilters] = useState<Record<string, string[]>>({})
   // Filter applied to the column dimension (constrains which series appear)
@@ -160,6 +170,17 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
     setCollapsedGroups(new Set())
   }, [rowsDims.join('|')])
 
+  // Hide the Asset dim for single-asset users — there's nothing to pivot on.
+  const showAssetDim = userAssets.length !== 1
+  const dimOptions = useMemo(
+    () => showAssetDim ? DIM_OPTIONS : DIM_OPTIONS.filter(d => d.key !== 'asset'),
+    [showAssetDim]
+  )
+  const allDimOptions = useMemo(
+    () => showAssetDim ? ALL_DIM_OPTIONS : ALL_DIM_OPTIONS.filter(d => d.key !== 'asset'),
+    [showAssetDim]
+  )
+
   const filterDimList = useMemo(() => Object.keys(dimFilters), [dimFilters])
   const usedDims = useMemo(
     () => new Set([...rowsDims, ...(colsDim ? [colsDim] : []), ...filterDimList]),
@@ -168,20 +189,43 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
   const usedValues = useMemo(() => new Set(valueKeys), [valueKeys])
 
   const { startDate, endDate } = useMemo(() => {
+    function ymd(d: Date) {
+      const y = d.getFullYear()
+      const m = String(d.getMonth() + 1).padStart(2, '0')
+      const day = String(d.getDate()).padStart(2, '0')
+      return `${y}-${m}-${day}`
+    }
     const today = new Date()
-    const todayStr = today.toISOString().slice(0, 10)
-    if (datePreset === 'ytd') return { startDate: `${today.getFullYear()}-01-01`, endDate: todayStr }
+    const todayStr = ymd(today)
+    // Week starts on Monday — getDay() returns 0=Sun..6=Sat.
+    const daysFromMonday = today.getDay() === 0 ? 6 : today.getDay() - 1
+    if (datePreset === 'thisweek') {
+      const start = new Date(today); start.setDate(start.getDate() - daysFromMonday)
+      return { startDate: ymd(start), endDate: todayStr }
+    }
+    if (datePreset === 'lastweek') {
+      const start = new Date(today); start.setDate(start.getDate() - daysFromMonday - 7)
+      const end = new Date(start); end.setDate(end.getDate() + 6)
+      return { startDate: ymd(start), endDate: ymd(end) }
+    }
     if (datePreset === 'thismonth') {
-      const d = new Date(today.getFullYear(), today.getMonth(), 1)
-      return { startDate: d.toISOString().slice(0, 10), endDate: todayStr }
+      return { startDate: ymd(new Date(today.getFullYear(), today.getMonth(), 1)), endDate: todayStr }
     }
     if (datePreset === 'lastmonth') {
       const start = new Date(today.getFullYear(), today.getMonth() - 1, 1)
       const end = new Date(today.getFullYear(), today.getMonth(), 0)
-      return { startDate: start.toISOString().slice(0, 10), endDate: end.toISOString().slice(0, 10) }
+      return { startDate: ymd(start), endDate: ymd(end) }
+    }
+    if (datePreset === 'thisyear') return { startDate: `${today.getFullYear()}-01-01`, endDate: todayStr }
+    if (datePreset === 'lastyear') {
+      const y = today.getFullYear() - 1
+      return { startDate: `${y}-01-01`, endDate: `${y}-12-31` }
+    }
+    if (datePreset === 'custom') {
+      return { startDate: customStart, endDate: customEnd }
     }
     return { startDate: '', endDate: '' }
-  }, [datePreset])
+  }, [datePreset, customStart, customEnd])
 
   useEffect(() => {
     if (rowsDims.length === 0 || valueKeys.length === 0) {
@@ -200,12 +244,12 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
         columns: colsDim || null,
         values: valueKeys,
         status: statusFilter.length > 0 ? statusFilter : undefined,
-        work_order_type: workTypeFilter.length > 0 ? workTypeFilter : undefined,
         filters: [
           ...Object.entries(dimFilters)
             .filter(([, vs]) => vs.length > 0)
             .map(([dim, vs]) => ({ dim, values: vs })),
           ...(colsDim && colsFilter.length > 0 ? [{ dim: colsDim, values: colsFilter }] : []),
+          ...(fieldFilter.length > 0 ? [{ dim: 'field', values: fieldFilter }] : []),
         ],
         start_date: startDate || undefined,
         end_date: endDate || undefined,
@@ -222,7 +266,7 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
       })
       .finally(() => setLoading(false))
     return () => controller.abort()
-  }, [rowsDims, colsDim, valueKeys, statusFilter, workTypeFilter, dimFilters, colsFilter, startDate, endDate, userAssets])
+  }, [rowsDims, colsDim, valueKeys, statusFilter, fieldFilter, dimFilters, colsFilter, startDate, endDate, userAssets])
 
   // ── Helpers for zone manipulation ──
   function addToRows(dim: string) {
@@ -282,6 +326,12 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
   function setFilterValues(dim: string, values: string[]) {
     setDimFilters({ ...dimFilters, [dim]: values })
   }
+
+  // Preload Field values so the Quick Filter dropdown is populated on first open.
+  useEffect(() => {
+    ensureDimValues('field')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userAssets])
 
   function ensureDimValues(dim: string) {
     if (dimValues[dim]?.values || dimValues[dim]?.loading) return
@@ -442,6 +492,29 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
   if (colsDim) titleParts.push(`by ${DIM_LABEL[colsDim]}`)
   const title = titleParts.join(' ')
 
+  function clearPivot() {
+    setRowsDims([])
+    setColsDim('')
+    setColsFilter([])
+    setValueKeys([])
+    setStatusFilter([])
+    setFieldFilter([])
+    setDimFilters({})
+    setDatePreset('all')
+    setCustomStart('')
+    setCustomEnd('')
+    setCollapsedGroups(new Set())
+  }
+
+  const hasAnySelection =
+    rowsDims.length > 0 ||
+    !!colsDim ||
+    valueKeys.length > 0 ||
+    statusFilter.length > 0 ||
+    fieldFilter.length > 0 ||
+    Object.keys(dimFilters).length > 0 ||
+    datePreset !== 'all'
+
   function exportCsv() {
     if (!result) return
     const dimHeaders = result.rows.map(r => DIM_LABEL[r] || r)
@@ -467,12 +540,22 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
     <div className="space-y-3">
       {/* Field shelf */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3">
-        <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">Available Fields</p>
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Available Fields</p>
+          <button
+            onClick={clearPivot}
+            disabled={!hasAnySelection}
+            className="flex items-center gap-1 text-[11px] text-gray-500 hover:text-[#1B2E6B] disabled:text-gray-300 disabled:cursor-not-allowed transition-colors"
+            title="Reset all rows, columns, values, and filters"
+          >
+            <X size={12} /> Clear Pivot
+          </button>
+        </div>
         <div className="space-y-2">
           <div>
             <p className="text-[10px] text-gray-500 mb-1">Dimensions (click to add to Rows · drag to any zone)</p>
             <div className="flex flex-wrap gap-1.5">
-              {DIM_OPTIONS.map(d => {
+              {dimOptions.map(d => {
                 const active = usedDims.has(d.key)
                 return (
                   <button
@@ -568,7 +651,7 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
           )}
           <FieldAdder
             label="Add filter"
-            options={ALL_DIM_OPTIONS.filter(d => !usedDims.has(d.key))}
+            options={allDimOptions.filter(d => !usedDims.has(d.key))}
             onPick={addFilterDim}
           />
         </ZoneCard>
@@ -593,7 +676,7 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
           {!colsDim && (
             <FieldAdder
               label="Set columns"
-              options={ALL_DIM_OPTIONS.filter(d => !usedDims.has(d.key))}
+              options={allDimOptions.filter(d => !usedDims.has(d.key))}
               onPick={setColumns}
             />
           )}
@@ -626,7 +709,7 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
           )}
           <FieldAdder
             label="Add dimension"
-            options={ALL_DIM_OPTIONS.filter(d => !usedDims.has(d.key))}
+            options={allDimOptions.filter(d => !usedDims.has(d.key))}
             onPick={addToRows}
             disabled={rowsDims.length >= 4}
           />
@@ -669,29 +752,54 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
         <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Quick Filters</p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
           <MultiCheckSelect
-            label="Status"
-            allLabel="All Statuses"
+            label="Ticket Status"
+            allLabel="All Ticket Statuses"
             options={STATUSES}
             selected={statusFilter}
             onChange={setStatusFilter}
           />
           <MultiCheckSelect
-            label="Work Type"
-            allLabel="All Work Types"
-            options={WORK_TYPES}
-            selected={workTypeFilter}
-            onChange={setWorkTypeFilter}
+            label="Field"
+            allLabel="All Fields"
+            options={dimValues['field']?.values || []}
+            selected={fieldFilter}
+            onChange={setFieldFilter}
           />
-          <select
-            className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-[#1B2E6B]"
-            value={datePreset}
-            onChange={e => setDatePreset(e.target.value as typeof datePreset)}
-          >
-            <option value="all">All Time</option>
-            <option value="ytd">YTD</option>
-            <option value="thismonth">This Month</option>
-            <option value="lastmonth">Last Month</option>
-          </select>
+          <div className="flex flex-col gap-1.5">
+            <select
+              className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-[#1B2E6B]"
+              value={datePreset}
+              onChange={e => setDatePreset(e.target.value as typeof datePreset)}
+            >
+              <option value="all">All Time</option>
+              <option value="thisweek">This Week</option>
+              <option value="lastweek">Last Week</option>
+              <option value="thismonth">This Month</option>
+              <option value="lastmonth">Last Month</option>
+              <option value="thisyear">This Year</option>
+              <option value="lastyear">Last Year</option>
+              <option value="custom">Custom Range…</option>
+            </select>
+            {datePreset === 'custom' && (
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="date"
+                  className="flex-1 text-xs border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-[#1B2E6B]"
+                  value={customStart}
+                  max={customEnd || undefined}
+                  onChange={e => setCustomStart(e.target.value)}
+                />
+                <span className="text-[10px] text-gray-400">to</span>
+                <input
+                  type="date"
+                  className="flex-1 text-xs border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-[#1B2E6B]"
+                  value={customEnd}
+                  min={customStart || undefined}
+                  onChange={e => setCustomEnd(e.target.value)}
+                />
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -1233,12 +1341,27 @@ function FilterPill({
   const [open, setOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [search, setSearch] = useState('')
+  const containerRef = useRef<HTMLDivElement | null>(null)
   const filteredOptions = useMemo(() => {
     const all = state?.values || []
     if (!search) return all.slice(0, 200)
     const q = search.toLowerCase()
     return all.filter(v => v.toLowerCase().includes(q)).slice(0, 200)
   }, [state, search])
+
+  // Close popovers when the user clicks outside this pill.
+  useEffect(() => {
+    if (!open && !menuOpen) return
+    function onDocMouseDown(e: MouseEvent) {
+      const node = containerRef.current
+      if (node && e.target instanceof Node && !node.contains(e.target)) {
+        setOpen(false)
+        setMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', onDocMouseDown)
+    return () => document.removeEventListener('mousedown', onDocMouseDown)
+  }, [open, menuOpen])
 
   function toggle(opt: string) {
     onChange(selected.includes(opt) ? selected.filter(s => s !== opt) : [...selected, opt])
@@ -1253,6 +1376,7 @@ function FilterPill({
 
   return (
     <div
+      ref={containerRef}
       draggable={!!onDragStart}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
@@ -1261,7 +1385,6 @@ function FilterPill({
     >
       <button
         onClick={() => setOpen(o => !o)}
-        onBlur={() => setTimeout(() => setOpen(false), 200)}
         className="text-left max-w-[220px] truncate"
         title={selected.length > 1 ? selected.join(', ') : undefined}
       >
@@ -1269,7 +1392,6 @@ function FilterPill({
       </button>
       <button
         onClick={() => setMenuOpen(o => !o)}
-        onBlur={() => setTimeout(() => setMenuOpen(false), 150)}
         className="w-4 h-4 rounded-full hover:bg-white/20 flex items-center justify-center text-[10px]"
         aria-label="Options"
       >
