@@ -196,11 +196,8 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
   // Top-N caps. "All" picks a high ceiling so the Other bucket doesn't appear.
   const [topRows, setTopRows] = useState<number>(12)
   const [topCols, setTopCols] = useState<number>(5)
-  // Chart type. Smart-default falls back to "line" when the outer row dim is
-  // a date grain; once the user picks a type the override sticks until Clear.
   type ChartType = 'bar' | 'stackedBar' | 'line' | 'horizontalBar'
   const [chartType, setChartType] = useState<ChartType>('bar')
-  const [chartTypeUserSet, setChartTypeUserSet] = useState(false)
   // Per-dim cache of distinct values + loading state
   const [dimValues, setDimValues] = useState<Record<string, { values?: string[]; loading?: boolean; error?: string }>>({})
 
@@ -606,17 +603,7 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
   )
   const yAxisFormatter = (v: number) => fmt(v, allCurrency)
 
-  // Recommended chart type: line when the outer row dim is a date grain,
-  // otherwise bar. Falls through to user override once they pick.
-  const recommendedChartType: ChartType = useMemo(() => {
-    if (rowsDims.length > 0 && rowsDims[0].startsWith('submitted_')) return 'line'
-    return 'bar'
-  }, [rowsDims])
-  const effectiveChartType: ChartType = chartTypeUserSet ? chartType : recommendedChartType
-  function pickChartType(t: ChartType) {
-    setChartType(t)
-    setChartTypeUserSet(true)
-  }
+  const effectiveChartType: ChartType = chartType
 
   const titleParts: string[] = []
   if (valueKeys.length > 0) titleParts.push(valueKeys.map(v => VALUE_LABEL[v]).join(' & '))
@@ -636,7 +623,6 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
     setTopRows(12)
     setTopCols(5)
     setChartType('bar')
-    setChartTypeUserSet(false)
     setDatePreset('all')
     setCustomStart('')
     setCustomEnd('')
@@ -954,7 +940,7 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
             {result && result.data.length > 0 && (
               <ChartTypeToggle
                 value={effectiveChartType}
-                onChange={pickChartType}
+                onChange={setChartType}
                 disabled={{
                   line: rowsDims.length === 0,
                 }}
@@ -1654,8 +1640,8 @@ function ChartTypeToggle({
   const items = [
     { key: 'bar' as const,            label: 'Bar',            Icon: BarChart3 },
     { key: 'stackedBar' as const,     label: 'Stacked Bar',    Icon: Layers },
-    { key: 'line' as const,           label: 'Line',           Icon: LineIcon },
     { key: 'horizontalBar' as const,  label: 'Horizontal Bar', Icon: BarChartHorizontal },
+    { key: 'line' as const,           label: 'Line',           Icon: LineIcon },
   ]
   return (
     <div className="inline-flex items-center bg-gray-100 rounded-lg p-0.5">
@@ -1663,22 +1649,25 @@ function ChartTypeToggle({
         const active = value === key
         const off = disabled?.[key]
         return (
-          <button
-            key={key}
-            onClick={() => !off && onChange(key)}
-            disabled={!!off}
-            title={label}
-            aria-label={label}
-            className={`p-1.5 rounded-md transition-colors ${
-              active
-                ? 'bg-white text-[#1B2E6B] shadow-sm'
-                : off
-                ? 'text-gray-300 cursor-not-allowed'
-                : 'text-gray-500 hover:text-[#1B2E6B]'
-            }`}
-          >
-            <Icon size={14} />
-          </button>
+          <div key={key} className="relative group">
+            <button
+              onClick={() => !off && onChange(key)}
+              disabled={!!off}
+              aria-label={label}
+              className={`p-1.5 rounded-md transition-colors ${
+                active
+                  ? 'bg-white text-[#1B2E6B] shadow-sm'
+                  : off
+                  ? 'text-gray-300 cursor-not-allowed'
+                  : 'text-gray-500 hover:text-[#1B2E6B]'
+              }`}
+            >
+              <Icon size={14} />
+            </button>
+            <span className="pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-1 px-2 py-0.5 rounded bg-gray-900 text-white text-[10px] whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-30">
+              {label}
+            </span>
+          </div>
         )
       })}
     </div>
