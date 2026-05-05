@@ -20,7 +20,7 @@ const DIM_OPTIONS: { key: string; label: string }[] = [
   { key: 'job_category',    label: 'Job Category' },
   { key: 'priority',        label: 'Priority' },
   { key: 'work_order_type', label: 'Work Order Type' },
-  { key: 'status',          label: 'Status' },
+  { key: 'status',          label: 'Ticket Status' },
   { key: 'description',     label: 'Description' },
   { key: 'ticket_id',       label: 'Ticket #' },
 ]
@@ -84,13 +84,20 @@ function HierarchyTick(props: Record<string, unknown>) {
   const inner = String(datum._innerLabel ?? '')
   const showOuter = Boolean(datum._showOuter)
   const outer = String(datum._outerLabel ?? '')
+  const span = Number(datum._outerSpan ?? 1) || 1
+  // ~7px per char at fontSize 11; budget per tick ~70px shrinks with screen width.
+  const maxChars = Math.max(8, span * 10)
+  const outerDisplay = outer.length > maxChars ? outer.slice(0, Math.max(1, maxChars - 1)) + '…' : outer
   return (
     <g transform={`translate(${x},${y})`}>
       <text dy={12} textAnchor="middle" fontSize={10} fill="#9CA3AF">{inner}</text>
       {showOuter && (
         <>
           <line x1={-12} x2={12} y1={20} y2={20} stroke="#D1D5DB" strokeWidth={1} />
-          <text dy={36} textAnchor="middle" fontSize={11} fontWeight={600} fill="#374151">{outer}</text>
+          <text dy={36} textAnchor="middle" fontSize={11} fontWeight={600} fill="#374151">
+            {outerDisplay}
+            <title>{outer}</title>
+          </text>
         </>
       )}
     </g>
@@ -137,6 +144,8 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
   const [datePreset, setDatePreset] = useState<'all' | 'ytd' | 'lastmonth' | 'thismonth'>('all')
   // Free-form filters: dim → selected values (empty list = no filter applied yet)
   const [dimFilters, setDimFilters] = useState<Record<string, string[]>>({})
+  // Filter applied to the column dimension (constrains which series appear)
+  const [colsFilter, setColsFilter] = useState<string[]>([])
   // Per-dim cache of distinct values + loading state
   const [dimValues, setDimValues] = useState<Record<string, { values?: string[]; loading?: boolean; error?: string }>>({})
 
@@ -192,9 +201,12 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
         values: valueKeys,
         status: statusFilter.length > 0 ? statusFilter : undefined,
         work_order_type: workTypeFilter.length > 0 ? workTypeFilter : undefined,
-        filters: Object.entries(dimFilters)
-          .filter(([, vs]) => vs.length > 0)
-          .map(([dim, vs]) => ({ dim, values: vs })),
+        filters: [
+          ...Object.entries(dimFilters)
+            .filter(([, vs]) => vs.length > 0)
+            .map(([dim, vs]) => ({ dim, values: vs })),
+          ...(colsDim && colsFilter.length > 0 ? [{ dim: colsDim, values: colsFilter }] : []),
+        ],
         start_date: startDate || undefined,
         end_date: endDate || undefined,
         userAssets,
@@ -210,14 +222,14 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
       })
       .finally(() => setLoading(false))
     return () => controller.abort()
-  }, [rowsDims, colsDim, valueKeys, statusFilter, workTypeFilter, dimFilters, startDate, endDate, userAssets])
+  }, [rowsDims, colsDim, valueKeys, statusFilter, workTypeFilter, dimFilters, colsFilter, startDate, endDate, userAssets])
 
   // ── Helpers for zone manipulation ──
   function addToRows(dim: string) {
     if (rowsDims.includes(dim)) return
     if (rowsDims.length >= 4) return
     setRowsDims([...rowsDims, dim])
-    if (colsDim === dim) setColsDim('')
+    if (colsDim === dim) clearColumns()
   }
   function removeFromRows(dim: string) {
     setRowsDims(rowsDims.filter(d => d !== dim))
@@ -225,9 +237,12 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
   function setColumns(dim: string) {
     if (rowsDims.includes(dim)) return
     setColsDim(dim)
+    setColsFilter([])
+    ensureDimValues(dim)
   }
   function clearColumns() {
     setColsDim('')
+    setColsFilter([])
   }
   function addValue(v: ValueKey) {
     if (valueKeys.includes(v)) return
@@ -239,7 +254,7 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
   }
   function moveDim(dim: string, target: 'rows' | 'columns' | 'filters') {
     if (target === 'rows') {
-      if (colsDim === dim) setColsDim('')
+      if (colsDim === dim) clearColumns()
       removeFilterDim(dim)
       addToRows(dim)
     } else if (target === 'columns') {
@@ -248,7 +263,7 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
       setColumns(dim)
     } else {
       removeFromRows(dim)
-      if (colsDim === dim) setColsDim('')
+      if (colsDim === dim) clearColumns()
       addFilterDim(dim)
     }
   }
@@ -289,7 +304,7 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
   // Default-zone click from field shelf: dim → rows, value → values
   function clickDimField(dim: string) {
     if (rowsDims.includes(dim)) removeFromRows(dim)
-    else if (colsDim === dim) setColsDim('')
+    else if (colsDim === dim) clearColumns()
     else if (dim in dimFilters) removeFilterDim(dim)
     else addToRows(dim)
   }
@@ -318,7 +333,7 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
   function removeFromSource(item: DragItem) {
     if (item.kind === 'dim') {
       if (item.from === 'rows') removeFromRows(item.key)
-      else if (item.from === 'columns') setColsDim('')
+      else if (item.from === 'columns') clearColumns()
       else if (item.from === 'filters') removeFilterDim(item.key)
     }
   }
@@ -398,17 +413,21 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
         groups[groups.length - 1].endIdx = i
       }
     }
-    const centerOuter = new Map<number, string>()
+    const centerOuter = new Map<number, { value: string; span: number }>()
     for (const g of groups) {
       const center = Math.floor((g.startIdx + g.endIdx) / 2)
-      centerOuter.set(center, g.value)
+      centerOuter.set(center, { value: g.value, span: g.endIdx - g.startIdx + 1 })
     }
-    return result.data.map((row, i) => ({
-      ...row,
-      _innerLabel: String(row[innerKey] ?? ''),
-      _outerLabel: centerOuter.get(i) ?? '',
-      _showOuter: centerOuter.has(i),
-    }))
+    return result.data.map((row, i) => {
+      const c = centerOuter.get(i)
+      return {
+        ...row,
+        _innerLabel: String(row[innerKey] ?? ''),
+        _outerLabel: c?.value ?? '',
+        _outerSpan: c?.span ?? 0,
+        _showOuter: !!c,
+      }
+    })
   }, [result])
   const showChartHierarchy = (result?.rows.length ?? 0) > 1
   const allCurrency = useMemo(
@@ -558,8 +577,12 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
           {!colsDim ? (
             <EmptyZone />
           ) : (
-            <DimPill
+            <FilterPill
+              dim={colsDim}
               label={DIM_LABEL[colsDim] || colsDim}
+              state={dimValues[colsDim]}
+              selected={colsFilter}
+              onChange={setColsFilter}
               onSwitchToRows={() => moveDim(colsDim, 'rows')}
               onSwitchToFilters={() => moveDim(colsDim, 'filters')}
               onRemove={clearColumns}
@@ -1190,6 +1213,7 @@ function FilterPill({
   onChange,
   onSwitchToRows,
   onSwitchToColumns,
+  onSwitchToFilters,
   onRemove,
   onDragStart,
   onDragEnd,
@@ -1200,7 +1224,8 @@ function FilterPill({
   selected: string[]
   onChange: (next: string[]) => void
   onSwitchToRows: () => void
-  onSwitchToColumns: () => void
+  onSwitchToColumns?: () => void
+  onSwitchToFilters?: () => void
   onRemove: () => void
   onDragStart?: (e: React.DragEvent) => void
   onDragEnd?: () => void
@@ -1319,12 +1344,22 @@ function FilterPill({
           >
             → Move to Rows
           </button>
-          <button
-            className="w-full text-left px-3 py-1.5 hover:bg-gray-50"
-            onMouseDown={(e) => { e.preventDefault(); onSwitchToColumns(); setMenuOpen(false) }}
-          >
-            → Move to Columns
-          </button>
+          {onSwitchToColumns && (
+            <button
+              className="w-full text-left px-3 py-1.5 hover:bg-gray-50"
+              onMouseDown={(e) => { e.preventDefault(); onSwitchToColumns(); setMenuOpen(false) }}
+            >
+              → Move to Columns
+            </button>
+          )}
+          {onSwitchToFilters && (
+            <button
+              className="w-full text-left px-3 py-1.5 hover:bg-gray-50"
+              onMouseDown={(e) => { e.preventDefault(); onSwitchToFilters(); setMenuOpen(false) }}
+            >
+              → Move to Filters
+            </button>
+          )}
         </div>
       )}
     </div>
