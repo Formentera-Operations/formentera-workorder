@@ -154,8 +154,8 @@ export async function runPivot(input: PivotInput): Promise<PivotResult | { error
 
   const values = valueKeys.map(k => ({ key: k, label: VALUE_LABELS[k] }))
 
-  const maxRows = Math.min(Math.max(typeof input.max_rows === 'number' ? input.max_rows : 12, 1), 20)
-  const maxCols = Math.min(Math.max(typeof input.max_columns === 'number' ? input.max_columns : 5, 1), 6)
+  const maxRows = Math.min(Math.max(typeof input.max_rows === 'number' ? input.max_rows : 12, 1), 200)
+  const maxCols = Math.min(Math.max(typeof input.max_columns === 'number' ? input.max_columns : 5, 1), 50)
 
   // Build SELECT list
   const rowCols = rowsKeys.map(r => PIVOT_DIM_MAP[r])
@@ -168,32 +168,20 @@ export async function runPivot(input: PivotInput): Promise<PivotResult | { error
   for (const vc of valueCols) selectParts.push(`"${vc}"`)
 
   const db = supabaseAdmin()
-  let query = db
-    .from('workorder_ticket_summary')
-    .select(Array.from(new Set(selectParts)).join(', '))
-    .limit(10000)
-
   const userAssets = input.user_assets || []
-  if (userAssets.length > 0) query = query.in('asset', userAssets)
-
-  // Status / work-type accept string OR string[]; treat empty array as no filter.
   const statusList = Array.isArray(input.status)
     ? input.status.filter(s => typeof s === 'string' && s)
     : (typeof input.status === 'string' && input.status ? [input.status] : [])
-  if (statusList.length === 1) query = query.eq('ticket_status', statusList[0])
-  else if (statusList.length > 1) query = query.in('ticket_status', statusList)
-
   const wotList = Array.isArray(input.work_order_type)
     ? input.work_order_type.filter(s => typeof s === 'string' && s)
     : (typeof input.work_order_type === 'string' && input.work_order_type ? [input.work_order_type] : [])
-  if (wotList.length === 1) query = query.eq('work_order_type', wotList[0])
-  else if (wotList.length > 1) query = query.in('work_order_type', wotList)
 
   // Free-form filters: any pivot dim with a list of allowed values.
   // Transform-backed dims (e.g. submitted_year) can't be filtered via SQL .in()
   // because Postgres needs date_part — apply those in JS after fetching.
   type PostFilter = { col: string; transform: (raw: unknown) => string | null; allowed: Set<string> }
   const postFilters: PostFilter[] = []
+  const sqlInFilters: Array<{ col: string; values: string[] }> = []
   if (Array.isArray(input.filters)) {
     for (const f of input.filters) {
       if (!f || typeof f.dim !== 'string') continue
@@ -202,21 +190,39 @@ export async function runPivot(input: PivotInput): Promise<PivotResult | { error
       const vals = Array.isArray(f.values) ? f.values.filter(v => typeof v === 'string') : []
       if (vals.length === 0) continue
       const transform = PIVOT_DIM_TRANSFORMS[f.dim]
-      if (transform) {
-        postFilters.push({ col: fc, transform, allowed: new Set(vals) })
-      } else {
-        query = query.in(fc, vals)
-      }
+      if (transform) postFilters.push({ col: fc, transform, allowed: new Set(vals) })
+      else sqlInFilters.push({ col: fc, values: vals })
     }
   }
 
-  if (isYmd(input.start_date)) query = query.gte('issue_date', input.start_date)
-  if (isYmd(input.end_date)) query = query.lte('issue_date', input.end_date + 'T23:59:59')
+  // Build a fresh query for each pagination call. Supabase caps each page at
+  // ~1000 rows, so we loop until a short page comes back or the safety cap
+  // hits.
+  const buildQuery = () => {
+    let q = db
+      .from('workorder_ticket_summary')
+      .select(Array.from(new Set(selectParts)).join(', '))
+    if (userAssets.length > 0) q = q.in('asset', userAssets)
+    if (statusList.length === 1) q = q.eq('ticket_status', statusList[0])
+    else if (statusList.length > 1) q = q.in('ticket_status', statusList)
+    if (wotList.length === 1) q = q.eq('work_order_type', wotList[0])
+    else if (wotList.length > 1) q = q.in('work_order_type', wotList)
+    for (const f of sqlInFilters) q = q.in(f.col, f.values)
+    if (isYmd(input.start_date)) q = q.gte('issue_date', input.start_date)
+    if (isYmd(input.end_date)) q = q.lte('issue_date', input.end_date + 'T23:59:59')
+    return q
+  }
 
-  const { data, error } = await query
-  if (error) return { error: error.message }
-
-  let rawRows = (data ?? []) as unknown as Record<string, unknown>[]
+  const PAGE = 1000
+  const HARD_CAP = 100000
+  let rawRows: Record<string, unknown>[] = []
+  for (let start = 0; start < HARD_CAP; start += PAGE) {
+    const { data, error } = await buildQuery().range(start, start + PAGE - 1)
+    if (error) return { error: error.message }
+    const page = (data ?? []) as unknown as Record<string, unknown>[]
+    rawRows.push(...page)
+    if (page.length < PAGE) break
+  }
   if (postFilters.length > 0) {
     rawRows = rawRows.filter(r => postFilters.every(pf => {
       const bucket = pf.transform(r[pf.col])

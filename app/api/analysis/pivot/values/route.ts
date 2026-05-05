@@ -53,20 +53,27 @@ export async function POST(req: NextRequest) {
 
     const selectCols = new Set<string>([col, ...postFilters.map(p => p.col)])
 
-    let q = supabaseAdmin()
-      .from('workorder_ticket_summary')
-      .select(Array.from(selectCols).join(', '))
-      .limit(transform || postFilters.length > 0 ? 20000 : 5000)
+    const buildQuery = () => {
+      let q = supabaseAdmin()
+        .from('workorder_ticket_summary')
+        .select(Array.from(selectCols).join(', '))
+      if (userAssets.length > 0) q = q.in('asset', userAssets)
+      for (const f of sqlFilters) q = q.in(f.col, f.values)
+      if (startDate) q = q.gte('issue_date', startDate)
+      if (endDate) q = q.lte('issue_date', endDate + 'T23:59:59')
+      return q
+    }
 
-    if (userAssets.length > 0) q = q.in('asset', userAssets)
-    for (const f of sqlFilters) q = q.in(f.col, f.values)
-    if (startDate) q = q.gte('issue_date', startDate)
-    if (endDate) q = q.lte('issue_date', endDate + 'T23:59:59')
-
-    const { data, error } = await q
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
-    let rawRows = (data ?? []) as unknown as Record<string, unknown>[]
+    const PAGE = 1000
+    const HARD_CAP = 100000
+    let rawRows: Record<string, unknown>[] = []
+    for (let start = 0; start < HARD_CAP; start += PAGE) {
+      const { data, error } = await buildQuery().range(start, start + PAGE - 1)
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+      const page = (data ?? []) as unknown as Record<string, unknown>[]
+      rawRows.push(...page)
+      if (page.length < PAGE) break
+    }
     if (postFilters.length > 0) {
       rawRows = rawRows.filter(r => postFilters.every(pf => {
         const bucket = pf.transform(r[pf.col])

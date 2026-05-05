@@ -190,6 +190,9 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
   const [colsFilter, setColsFilter] = useState<string[]>([])
   // Per-row-dim filter values (constrains rows to those values)
   const [rowFilters, setRowFilters] = useState<Record<string, string[]>>({})
+  // Top-N caps. "All" picks a high ceiling so the Other bucket doesn't appear.
+  const [topRows, setTopRows] = useState<number>(12)
+  const [topCols, setTopCols] = useState<number>(5)
   // Per-dim cache of distinct values + loading state
   const [dimValues, setDimValues] = useState<Record<string, { values?: string[]; loading?: boolean; error?: string }>>({})
 
@@ -277,6 +280,8 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
         rows: rowsDims,
         columns: colsDim || null,
         values: valueKeys,
+        max_rows: topRows,
+        max_columns: topCols,
         status: statusFilter.length > 0 ? statusFilter : undefined,
         filters: [
           ...Object.entries(dimFilters)
@@ -303,7 +308,7 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
       })
       .finally(() => setLoading(false))
     return () => controller.abort()
-  }, [rowsDims, colsDim, valueKeys, statusFilter, fieldFilter, dimFilters, rowFilters, colsFilter, startDate, endDate, userAssets])
+  }, [rowsDims, colsDim, valueKeys, statusFilter, fieldFilter, dimFilters, rowFilters, colsFilter, startDate, endDate, userAssets, topRows, topCols])
 
   // ── Helpers for zone manipulation ──
   function addToRows(dim: string) {
@@ -608,6 +613,8 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
     setFieldFilter([])
     setDimFilters({})
     setRowFilters({})
+    setTopRows(12)
+    setTopCols(5)
     setDatePreset('all')
     setCustomStart('')
     setCustomEnd('')
@@ -653,10 +660,10 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
           <button
             onClick={clearPivot}
             disabled={!hasAnySelection}
-            className="flex items-center gap-1 text-[11px] text-gray-500 hover:text-[#1B2E6B] disabled:text-gray-300 disabled:cursor-not-allowed transition-colors"
+            className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-red-200 text-red-600 bg-red-50 hover:bg-red-100 hover:border-red-300 disabled:bg-gray-50 disabled:border-gray-200 disabled:text-gray-300 disabled:cursor-not-allowed transition-colors"
             title="Reset all rows, columns, values, and filters"
           >
-            <X size={12} /> Clear Pivot
+            <X size={14} /> Clear Pivot
           </button>
         </div>
         <div className="space-y-2">
@@ -788,6 +795,7 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
               onPick={setColumns}
             />
           )}
+          {colsDim && <TopNSelect label="Show top" value={topCols} onChange={setTopCols} options={[5, 10, 15, 50]} allValue={50} />}
         </ZoneCard>
 
         <ZoneCard title="Rows" hint="Drag dimensions here. Multiple rows nest left-to-right." {...zoneDropProps('dim', dropOnRows)}>
@@ -825,6 +833,7 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
             onPick={addToRows}
             disabled={rowsDims.length >= 4}
           />
+          {rowsDims.length > 0 && <TopNSelect label="Show top" value={topRows} onChange={setTopRows} options={[12, 20, 50, 200]} allValue={200} />}
         </ZoneCard>
 
         <ZoneCard title="Values" hint="Each value renders as its own bar series." {...zoneDropProps('value', dropOnValues)}>
@@ -1535,6 +1544,35 @@ function FilterPill({
         </div>
       )}
     </div>
+  )
+}
+
+function TopNSelect({
+  label,
+  value,
+  onChange,
+  options,
+  allValue,
+}: {
+  label: string
+  value: number
+  onChange: (n: number) => void
+  options: number[]
+  allValue: number
+}) {
+  return (
+    <label className="inline-flex items-center gap-1 text-[10px] text-gray-500">
+      <span>{label}</span>
+      <select
+        value={value}
+        onChange={e => onChange(Number(e.target.value))}
+        className="text-[11px] border border-gray-200 rounded px-1.5 py-0.5 bg-white focus:outline-none focus:ring-1 focus:ring-[#1B2E6B] text-gray-700"
+      >
+        {options.map(n => (
+          <option key={n} value={n}>{n === allValue ? 'All' : n}</option>
+        ))}
+      </select>
+    </label>
   )
 }
 
