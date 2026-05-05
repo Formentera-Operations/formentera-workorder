@@ -951,16 +951,12 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
                     const count = enhancedChartData.length
                     if (!count) return null
                     const band = width / count
-                    // Bracket each year group on both sides — line at the
-                    // chart's left edge, after every date-boundary tick, and
-                    // at the chart's right edge.
-                    const lines: number[] = [left]
+                    const lines: number[] = []
                     for (let i = 0; i < enhancedChartData.length - 1; i++) {
                       if (enhancedChartData[i]._dateBoundary) {
                         lines.push(left + (i + 1) * band)
                       }
                     }
-                    lines.push(left + width)
                     return (
                       <g>
                         {lines.map((x, idx) => (
@@ -970,7 +966,7 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
                             y1={top}
                             x2={x}
                             y2={top + height + 30}
-                            stroke="#9CA3AF"
+                            stroke="#6B7280"
                             strokeWidth={1}
                           />
                         ))}
