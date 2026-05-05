@@ -1,10 +1,13 @@
 'use client'
 import { useState, useEffect, useMemo, useRef } from 'react'
 import {
-  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+  ResponsiveContainer, BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from 'recharts'
 import { usePlotArea } from 'recharts'
-import { Download, X, Plus, ChevronRight, ChevronDown } from 'lucide-react'
+import {
+  Download, X, Plus, ChevronRight, ChevronDown,
+  BarChart3, BarChartHorizontal, LineChart as LineIcon, Layers,
+} from 'lucide-react'
 
 type ValueKey = 'count' | 'repair_cost' | 'estimate_cost' | 'savings'
 
@@ -193,6 +196,11 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
   // Top-N caps. "All" picks a high ceiling so the Other bucket doesn't appear.
   const [topRows, setTopRows] = useState<number>(12)
   const [topCols, setTopCols] = useState<number>(5)
+  // Chart type. Smart-default falls back to "line" when the outer row dim is
+  // a date grain; once the user picks a type the override sticks until Clear.
+  type ChartType = 'bar' | 'stackedBar' | 'line' | 'horizontalBar'
+  const [chartType, setChartType] = useState<ChartType>('bar')
+  const [chartTypeUserSet, setChartTypeUserSet] = useState(false)
   // Per-dim cache of distinct values + loading state
   const [dimValues, setDimValues] = useState<Record<string, { values?: string[]; loading?: boolean; error?: string }>>({})
 
@@ -598,6 +606,18 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
   )
   const yAxisFormatter = (v: number) => fmt(v, allCurrency)
 
+  // Recommended chart type: line when the outer row dim is a date grain,
+  // otherwise bar. Falls through to user override once they pick.
+  const recommendedChartType: ChartType = useMemo(() => {
+    if (rowsDims.length > 0 && rowsDims[0].startsWith('submitted_')) return 'line'
+    return 'bar'
+  }, [rowsDims])
+  const effectiveChartType: ChartType = chartTypeUserSet ? chartType : recommendedChartType
+  function pickChartType(t: ChartType) {
+    setChartType(t)
+    setChartTypeUserSet(true)
+  }
+
   const titleParts: string[] = []
   if (valueKeys.length > 0) titleParts.push(valueKeys.map(v => VALUE_LABEL[v]).join(' & '))
   if (rowsDims.length > 0) titleParts.push(`by ${rowsDims.map(r => DIM_LABEL[r]).join(' › ')}`)
@@ -615,6 +635,8 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
     setRowFilters({})
     setTopRows(12)
     setTopCols(5)
+    setChartType('bar')
+    setChartTypeUserSet(false)
     setDatePreset('all')
     setCustomStart('')
     setCustomEnd('')
@@ -928,14 +950,25 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3">
         <div className="flex items-center justify-between mb-2 gap-2">
           <p className="text-xs font-semibold text-gray-700 truncate">{title || 'Pivot'}</p>
-          {result && result.data.length > 0 && (
-            <button
-              onClick={exportCsv}
-              className="flex items-center gap-1 text-[11px] text-gray-500 hover:text-[#1B2E6B] transition-colors flex-shrink-0"
-            >
-              <Download size={12} /> Export CSV
-            </button>
-          )}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {result && result.data.length > 0 && (
+              <ChartTypeToggle
+                value={effectiveChartType}
+                onChange={pickChartType}
+                disabled={{
+                  line: rowsDims.length === 0,
+                }}
+              />
+            )}
+            {result && result.data.length > 0 && (
+              <button
+                onClick={exportCsv}
+                className="flex items-center gap-1 text-[11px] text-gray-500 hover:text-[#1B2E6B] transition-colors"
+              >
+                <Download size={12} /> Export CSV
+              </button>
+            )}
+          </div>
         </div>
 
         {rowsDims.length === 0 || valueKeys.length === 0 ? (
@@ -950,37 +983,99 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
           <div className="h-[260px] flex items-center justify-center text-xs text-gray-400">No data for these filters.</div>
         ) : (
           <>
-            <ResponsiveContainer width="100%" height={280}>
-              <BarChart data={enhancedChartData} margin={{ top: 4, right: 8, left: -10, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                {showChartHierarchy ? (
-                  <XAxis
-                    dataKey="_rowLabel"
-                    interval={0}
-                    height={56}
-                    tick={(props) => <HierarchyTick {...props} data={enhancedChartData} />}
+            <ResponsiveContainer
+              width="100%"
+              height={effectiveChartType === 'horizontalBar'
+                ? Math.max(280, enhancedChartData.length * 28 + 80)
+                : 280}
+            >
+              {effectiveChartType === 'line' ? (
+                <LineChart data={enhancedChartData} margin={{ top: 4, right: 8, left: -10, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  {showChartHierarchy ? (
+                    <XAxis
+                      dataKey="_rowLabel"
+                      interval={0}
+                      height={56}
+                      tick={(props) => <HierarchyTick {...props} data={enhancedChartData} />}
+                    />
+                  ) : (
+                    <XAxis dataKey="_rowLabel" tick={{ fontSize: 10 }} interval={0} angle={-15} textAnchor="end" height={70} />
+                  )}
+                  <YAxis tick={{ fontSize: 10 }} tickFormatter={yAxisFormatter} />
+                  {showChartHierarchy && <YearDividers data={enhancedChartData} />}
+                  <Tooltip
+                    content={<ChartTooltip currencyByKey={isCurrencySeries} />}
+                    wrapperStyle={{ outline: 'none', zIndex: 50 }}
                   />
-                ) : (
-                  <XAxis dataKey="_rowLabel" tick={{ fontSize: 10 }} interval={0} angle={-15} textAnchor="end" height={70} />
-                )}
-                <YAxis tick={{ fontSize: 10 }} tickFormatter={yAxisFormatter} />
-                {showChartHierarchy && <YearDividers data={enhancedChartData} />}
-                <Tooltip
-                  cursor={{ fill: '#F3F4F6' }}
-                  content={<ChartTooltip currencyByKey={isCurrencySeries} />}
-                  wrapperStyle={{ outline: 'none', zIndex: 50 }}
-                />
-                {result.series.length > 1 && <Legend wrapperStyle={{ fontSize: 11 }} />}
-                {result.series.map((s, i) => (
-                  <Bar
-                    key={s.key}
-                    dataKey={s.key}
-                    name={s.label}
-                    fill={s.columnGroup === 'Other' ? '#9CA3AF' : SERIES_COLORS[i % SERIES_COLORS.length]}
-                    radius={[3, 3, 0, 0]}
+                  {result.series.length > 1 && <Legend wrapperStyle={{ fontSize: 11 }} />}
+                  {result.series.map((s, i) => (
+                    <Line
+                      key={s.key}
+                      type="monotone"
+                      dataKey={s.key}
+                      name={s.label}
+                      stroke={s.columnGroup === 'Other' ? '#9CA3AF' : SERIES_COLORS[i % SERIES_COLORS.length]}
+                      strokeWidth={2}
+                      dot={{ r: 3 }}
+                      activeDot={{ r: 5 }}
+                    />
+                  ))}
+                </LineChart>
+              ) : effectiveChartType === 'horizontalBar' ? (
+                <BarChart data={enhancedChartData} layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={yAxisFormatter} />
+                  <YAxis type="category" dataKey="_rowLabel" tick={{ fontSize: 10 }} width={140} interval={0} />
+                  <Tooltip
+                    cursor={{ fill: '#F3F4F6' }}
+                    content={<ChartTooltip currencyByKey={isCurrencySeries} />}
+                    wrapperStyle={{ outline: 'none', zIndex: 50 }}
                   />
-                ))}
-              </BarChart>
+                  {result.series.length > 1 && <Legend wrapperStyle={{ fontSize: 11 }} />}
+                  {result.series.map((s, i) => (
+                    <Bar
+                      key={s.key}
+                      dataKey={s.key}
+                      name={s.label}
+                      fill={s.columnGroup === 'Other' ? '#9CA3AF' : SERIES_COLORS[i % SERIES_COLORS.length]}
+                      radius={[0, 3, 3, 0]}
+                    />
+                  ))}
+                </BarChart>
+              ) : (
+                <BarChart data={enhancedChartData} margin={{ top: 4, right: 8, left: -10, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  {showChartHierarchy ? (
+                    <XAxis
+                      dataKey="_rowLabel"
+                      interval={0}
+                      height={56}
+                      tick={(props) => <HierarchyTick {...props} data={enhancedChartData} />}
+                    />
+                  ) : (
+                    <XAxis dataKey="_rowLabel" tick={{ fontSize: 10 }} interval={0} angle={-15} textAnchor="end" height={70} />
+                  )}
+                  <YAxis tick={{ fontSize: 10 }} tickFormatter={yAxisFormatter} />
+                  {showChartHierarchy && <YearDividers data={enhancedChartData} />}
+                  <Tooltip
+                    cursor={{ fill: '#F3F4F6' }}
+                    content={<ChartTooltip currencyByKey={isCurrencySeries} />}
+                    wrapperStyle={{ outline: 'none', zIndex: 50 }}
+                  />
+                  {result.series.length > 1 && <Legend wrapperStyle={{ fontSize: 11 }} />}
+                  {result.series.map((s, i) => (
+                    <Bar
+                      key={s.key}
+                      dataKey={s.key}
+                      name={s.label}
+                      stackId={effectiveChartType === 'stackedBar' ? 'a' : undefined}
+                      fill={s.columnGroup === 'Other' ? '#9CA3AF' : SERIES_COLORS[i % SERIES_COLORS.length]}
+                      radius={effectiveChartType === 'stackedBar' ? 0 : [3, 3, 0, 0]}
+                    />
+                  ))}
+                </BarChart>
+              )}
             </ResponsiveContainer>
             {result.total_row_groups > result.data.length && (
               <p className="mt-2 text-[10px] text-gray-400">
@@ -1543,6 +1638,49 @@ function FilterPill({
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+function ChartTypeToggle({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: 'bar' | 'stackedBar' | 'line' | 'horizontalBar'
+  onChange: (t: 'bar' | 'stackedBar' | 'line' | 'horizontalBar') => void
+  disabled?: Partial<Record<'bar' | 'stackedBar' | 'line' | 'horizontalBar', boolean>>
+}) {
+  const items = [
+    { key: 'bar' as const,            label: 'Bar',            Icon: BarChart3 },
+    { key: 'stackedBar' as const,     label: 'Stacked Bar',    Icon: Layers },
+    { key: 'line' as const,           label: 'Line',           Icon: LineIcon },
+    { key: 'horizontalBar' as const,  label: 'Horizontal Bar', Icon: BarChartHorizontal },
+  ]
+  return (
+    <div className="inline-flex items-center bg-gray-100 rounded-lg p-0.5">
+      {items.map(({ key, label, Icon }) => {
+        const active = value === key
+        const off = disabled?.[key]
+        return (
+          <button
+            key={key}
+            onClick={() => !off && onChange(key)}
+            disabled={!!off}
+            title={label}
+            aria-label={label}
+            className={`p-1.5 rounded-md transition-colors ${
+              active
+                ? 'bg-white text-[#1B2E6B] shadow-sm'
+                : off
+                ? 'text-gray-300 cursor-not-allowed'
+                : 'text-gray-500 hover:text-[#1B2E6B]'
+            }`}
+          >
+            <Icon size={14} />
+          </button>
+        )
+      })}
     </div>
   )
 }
