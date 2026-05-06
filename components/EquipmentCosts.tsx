@@ -29,6 +29,47 @@ interface PivotResponse {
   error?: string
 }
 
+interface TicketRow {
+  ticket_id: number
+  department: string | null
+  work_order_type: string | null
+  location_type: string | null
+  field: string | null
+  well: string | null
+  facility: string | null
+  equipment_name: string | null
+  issue_description: string | null
+  ticket_status: string | null
+  issue_date: string | null
+  repair_date_closed: string | null
+  Estimate_Cost: number | null
+  repair_cost: number | null
+}
+
+const STATUS_COLORS: Record<string, string> = {
+  Open: 'bg-blue-50 text-blue-700',
+  'In Progress': 'bg-yellow-50 text-yellow-700',
+  Backlogged: 'bg-gray-100 text-gray-700',
+  'Awaiting Cost': 'bg-orange-50 text-orange-700',
+  Closed: 'bg-green-50 text-green-700',
+}
+
+function fmtDate(d: string | null | undefined): string {
+  if (!d) return '—'
+  const slice = d.slice(0, 10)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(slice)) return slice
+  const [y, m, day] = slice.split('-')
+  return `${parseInt(m, 10)}/${parseInt(day, 10)}/${y.slice(2)}`
+}
+function fmtMoney(n: number | null | undefined): string {
+  if (n == null || n === 0) return '—'
+  return `$${Math.round(n).toLocaleString()}`
+}
+function fmtSavings(n: number): string {
+  const sign = n < 0 ? '-' : ''
+  return `${sign}$${Math.round(Math.abs(n)).toLocaleString()}`
+}
+
 function fmtCurrency(n: number): string {
   if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`
   if (n >= 1_000) return `$${Math.round(n / 1_000)}K`
@@ -202,6 +243,10 @@ export default function EquipmentCosts({ userAssets }: { userAssets: string[] })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const [tickets, setTickets] = useState<TicketRow[]>([])
+  const [ticketsLoading, setTicketsLoading] = useState(false)
+  const [ticketsCapped, setTicketsCapped] = useState(false)
+
   // Derive start/end date from preset (Mon–Sun weeks).
   const { startDate, endDate } = useMemo(() => {
     function ymd(d: Date) {
@@ -308,6 +353,35 @@ export default function EquipmentCosts({ userAssets }: { userAssets: string[] })
       .finally(() => setLoading(false))
     return () => controller.abort()
   }, [costType, equipCategoryFilter, fieldFilter, startDate, endDate, userAssets])
+
+  // Fetch ticket-level rows for the table below the chart.
+  useEffect(() => {
+    const controller = new AbortController()
+    setTicketsLoading(true)
+    fetch('/api/analysis/equipment-costs/tickets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
+      body: JSON.stringify({
+        userAssets,
+        equipCategories: equipCategoryFilter,
+        fields: fieldFilter,
+        start_date: startDate || undefined,
+        end_date: endDate || undefined,
+      }),
+    })
+      .then(async r => {
+        const json = await r.json()
+        if (!r.ok || json.error) throw new Error(json.error || `HTTP ${r.status}`)
+        setTickets(json.rows || [])
+        setTicketsCapped(!!json.capped)
+      })
+      .catch((e: Error) => {
+        if (e.name !== 'AbortError') setTickets([])
+      })
+      .finally(() => setTicketsLoading(false))
+    return () => controller.abort()
+  }, [equipCategoryFilter, fieldFilter, startDate, endDate, userAssets])
 
   // Enrich chart data with two-tier x-axis labels and year boundaries.
   const enhancedData = useMemo(() => {
@@ -505,6 +579,85 @@ export default function EquipmentCosts({ userAssets }: { userAssets: string[] })
               ))}
             </BarChart>
           </ResponsiveContainer>
+        )}
+      </div>
+
+      {/* Ticket detail table */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3">
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-xs font-semibold text-gray-700">
+            Tickets {ticketsLoading ? '' : `(${tickets.length}${ticketsCapped ? '+' : ''})`}
+          </p>
+        </div>
+        {ticketsLoading && tickets.length === 0 ? (
+          <div className="h-[120px] flex items-center justify-center text-xs text-gray-400">Loading…</div>
+        ) : tickets.length === 0 ? (
+          <div className="h-[120px] flex items-center justify-center text-xs text-gray-400">No tickets match these filters.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs border-collapse">
+              <thead>
+                <tr className="border-b border-gray-200">
+                  {[
+                    'Ticket #', 'Department', 'Work Type', 'Location Type', 'Field',
+                    'Location', 'Equipment', 'Description', 'Status',
+                    'Submitted', 'Closed', 'Est. Cost', 'Repair Cost', 'Savings',
+                  ].map(h => (
+                    <th
+                      key={h}
+                      className={`px-2 py-2 font-medium text-gray-500 whitespace-nowrap ${
+                        h === 'Est. Cost' || h === 'Repair Cost' || h === 'Savings' ? 'text-right' : 'text-left'
+                      }`}
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {tickets.map(t => {
+                  const isFacility = (t.location_type || '').toLowerCase().includes('facility')
+                  const location = isFacility ? (t.facility || '—') : (t.well || t.facility || '—')
+                  const est = t.Estimate_Cost || 0
+                  const rep = t.repair_cost || 0
+                  const savings = est - rep
+                  const showSavings = est > 0 || rep > 0
+                  const statusClass = t.ticket_status ? STATUS_COLORS[t.ticket_status] || 'bg-gray-100 text-gray-700' : 'bg-gray-100 text-gray-700'
+                  return (
+                    <tr key={t.ticket_id} className="border-b border-gray-100 hover:bg-gray-50">
+                      <td className="px-2 py-2 font-medium text-[#1B2E6B] whitespace-nowrap">#{t.ticket_id}</td>
+                      <td className="px-2 py-2 text-gray-700 whitespace-nowrap">{t.department || '—'}</td>
+                      <td className="px-2 py-2 text-gray-700 whitespace-nowrap">{t.work_order_type || '—'}</td>
+                      <td className="px-2 py-2 text-gray-700 whitespace-nowrap">{t.location_type || '—'}</td>
+                      <td className="px-2 py-2 text-gray-700 whitespace-nowrap">{t.field || '—'}</td>
+                      <td className="px-2 py-2 text-gray-700 whitespace-nowrap">{location}</td>
+                      <td className="px-2 py-2 text-gray-700 whitespace-nowrap">{t.equipment_name || '—'}</td>
+                      <td className="px-2 py-2 text-gray-700 max-w-[260px] truncate" title={t.issue_description || ''}>
+                        {t.issue_description || '—'}
+                      </td>
+                      <td className="px-2 py-2 whitespace-nowrap">
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${statusClass}`}>
+                          {t.ticket_status || '—'}
+                        </span>
+                      </td>
+                      <td className="px-2 py-2 text-gray-700 whitespace-nowrap tabular-nums">{fmtDate(t.issue_date)}</td>
+                      <td className="px-2 py-2 text-gray-700 whitespace-nowrap tabular-nums">{fmtDate(t.repair_date_closed)}</td>
+                      <td className="px-2 py-2 text-right text-gray-700 whitespace-nowrap tabular-nums">{fmtMoney(t.Estimate_Cost)}</td>
+                      <td className="px-2 py-2 text-right text-gray-700 whitespace-nowrap tabular-nums">{fmtMoney(t.repair_cost)}</td>
+                      <td className={`px-2 py-2 text-right font-medium whitespace-nowrap tabular-nums ${
+                        !showSavings ? 'text-gray-400' : savings >= 0 ? 'text-green-700' : 'text-red-600'
+                      }`}>
+                        {showSavings ? fmtSavings(savings) : '—'}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+            {ticketsCapped && (
+              <p className="mt-2 text-[10px] text-gray-400 italic">Showing first 10,000 tickets — narrow your filters to see more.</p>
+            )}
+          </div>
         )}
       </div>
     </div>
