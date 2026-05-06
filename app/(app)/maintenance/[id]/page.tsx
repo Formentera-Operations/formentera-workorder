@@ -9,6 +9,7 @@ import SearchableSelect from '@/components/ui/SearchableSelect'
 import { useAuth } from '@/components/AuthProvider'
 import { formatDate, formatDateShort, DEPARTMENTS, LOCATION_TYPES, WORK_ORDER_DECISIONS, FINAL_STATUSES, PRIORITY_OPTIONS } from '@/lib/utils'
 import CommentsSection from '@/components/ui/CommentsSection'
+import { queuedMutate } from '@/lib/queued-mutate'
 import type { LocationType } from '@/types'
 
 type Tab = 'Summary' | 'Initial Report' | 'Dispatch' | 'Repairs / Closeout'
@@ -222,10 +223,10 @@ export default function MaintenanceTicketPage() {
   async function saveInitialReport() {
     setSaving(true)
     try {
-      await fetch(`/api/tickets/${id}`, {
+      const result = await queuedMutate(`/api/tickets/${id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        description: `Update ticket #${id}`,
+        body: {
           Department: irForm.Department,
           Location_Type: irForm.Location_Type,
           Asset: irForm.Asset, Field: irForm.Field,
@@ -238,20 +239,28 @@ export default function MaintenanceTicketPage() {
           assigned_foreman: irForm.assigned_foreman,
           Estimate_Cost: irForm.Estimate_Cost ? parseFloat(irForm.Estimate_Cost as string) : null,
           Issue_Photos: irPhotos,
-        }),
+        },
       })
-      await refreshData()
-      toast.success('Initial report updated.', { duration: 5000 })
+      if (!result.ok) {
+        toast.error(result.error || 'Could not save initial report.', { duration: 6000 })
+        return
+      }
+      if (result.queued) {
+        toast.message('Saved offline — will sync when you\'re back online.', { duration: 5000 })
+      } else {
+        await refreshData()
+        toast.success('Initial report updated.', { duration: 5000 })
+      }
     } finally { setSaving(false) }
   }
 
   async function saveDispatch() {
     setSaving(true)
     try {
-      await fetch('/api/dispatch', {
+      const result = await queuedMutate('/api/dispatch', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        description: `Dispatch ticket #${id}`,
+        body: {
           ticket_id: id,
           work_order_decision: dispForm.work_order_decision,
           Estimate_Cost: dispForm.Estimate_Cost,
@@ -259,12 +268,18 @@ export default function MaintenanceTicketPage() {
           production_foreman: dispForm.additional_assignee || null,
           date_assigned: dispForm.date_assigned,
           current_user_email: userEmail,
-        }),
+        },
       })
+      if (!result.ok) {
+        toast.error(result.error || 'Could not dispatch ticket.', { duration: 6000 })
+        return
+      }
       const decision = String(dispForm.work_order_decision || '')
       const isBacklog = decision.toLowerCase().startsWith('backlog')
       const hdr = ((data?.ticket as Record<string, unknown>)?.Well || (data?.ticket as Record<string, unknown>)?.Facility || `Ticket #${id}`) as string
-      if (isBacklog) {
+      if (result.queued) {
+        toast.message(`Saved offline — ${hdr} will dispatch when you\'re back online.`, { duration: 5000 })
+      } else if (isBacklog) {
         toast.warning(`${hdr} is Backlogged • #${id} • ${decision}`, { duration: 5000 })
       } else {
         toast.success(`${hdr} - Dispatched`, { duration: 5000 })
@@ -304,10 +319,10 @@ export default function MaintenanceTicketPage() {
         ? new Date().toISOString()
         : repForm.date_completed || null
     try {
-      const res = await fetch('/api/repairs', {
+      const result = await queuedMutate('/api/repairs', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        description: `Repairs / Closeout for ticket #${id}`,
+        body: {
           ticket_id: id,
           ...repForm,
           final_status: effectiveFinalStatus,
@@ -318,16 +333,17 @@ export default function MaintenanceTicketPage() {
           current_user_email: userEmail,
           assigned_foreman: dispatch.maintenance_foreman || dispatch.production_foreman || null,
           production_foreman: dispatch.production_foreman || null,
-        }),
+        },
       })
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        toast.error(`Failed to save: ${body.error || res.statusText}`, { duration: 8000 })
+      if (!result.ok) {
+        toast.error(`Failed to save: ${result.error || 'unknown error'}`, { duration: 8000 })
         return
       }
       const hdr = ((data?.ticket as Record<string, unknown>)?.Well || (data?.ticket as Record<string, unknown>)?.Facility || `Ticket #${id}`) as string
       const CLOSED_STATUSES = new Set(['Repaired - Returned to Service', 'No Action - Returned to Service', 'Decommissioned / Retired'])
-      if (effectiveFinalStatus === 'Repaired - Awaiting Final Cost') {
+      if (result.queued) {
+        toast.message(`Saved offline — ${hdr} will sync when you\'re back online.`, { duration: 5000 })
+      } else if (effectiveFinalStatus === 'Repaired - Awaiting Final Cost') {
         toast.info(`${hdr} - Awaiting Cost`, { duration: 5000 })
       } else if (CLOSED_STATUSES.has(effectiveFinalStatus)) {
         toast.success(`${hdr} is Closed`, { duration: 5000 })

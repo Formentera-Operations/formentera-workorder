@@ -29,3 +29,11 @@ yarn-error.log*
 
 # Retool data exports (one-time migration, may contain sensitive data)
 retool-export/
+
+# next-pwa generated artifacts (regenerated on every build)
+public/sw.js
+public/sw.js.map
+public/swe-worker-*.js
+public/workbox-*.js
+public/workbox-*.js.map
+public/fallback-*.js
