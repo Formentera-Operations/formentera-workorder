@@ -2,12 +2,12 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
-import { LogOut } from 'lucide-react'
+import { LogOut, PanelLeftClose } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/components/AuthProvider'
 import { NAV_ITEMS, ROLE_PERMISSIONS } from '@/lib/nav-config'
 
-export default function Sidebar() {
+export default function Sidebar({ hidden, onToggle }: { hidden?: boolean; onToggle?: () => void }) {
   const pathname = usePathname()
   const router = useRouter()
   const { userName, role, signOut } = useAuth()
@@ -27,20 +27,35 @@ export default function Sidebar() {
   }
 
   return (
-    <aside className="hidden lg:flex lg:flex-col lg:w-64 lg:fixed lg:inset-y-0 bg-white border-r border-gray-200 z-30">
-      {/* Logo */}
-      <div className="px-5 py-5 border-b border-gray-100">
-        <div className="flex items-center gap-2.5">
-          <Image
-            src="/formentera_logo.jpg"
-            alt="Formentera"
-            width={36}
-            height={36}
-            className="rounded"
-          />
-          <span className="text-lg font-bold tracking-widest text-[#1B2E6B]">FORMENTERA</span>
+    <aside className={cn(
+      'lg:flex-col lg:w-64 lg:fixed lg:inset-y-0 bg-white border-r border-gray-200 z-30',
+      hidden ? 'hidden' : 'hidden lg:flex'
+    )}>
+      {/* Logo + collapse toggle */}
+      <div className="px-5 py-5 border-b border-gray-100 flex items-start gap-2">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2.5">
+            <Image
+              src="/formentera_logo.jpg"
+              alt="Formentera"
+              width={36}
+              height={36}
+              className="rounded"
+            />
+            <span className="text-lg font-bold tracking-widest text-[#1B2E6B]">FORMENTERA</span>
+          </div>
+          <p className="text-[11px] text-gray-400 mt-1 pl-0.5">Work Order App</p>
         </div>
-        <p className="text-[11px] text-gray-400 mt-1 pl-0.5">Work Order App</p>
+        {onToggle && (
+          <button
+            onClick={onToggle}
+            className="hidden lg:flex w-7 h-7 items-center justify-center rounded-md text-gray-400 hover:text-[#1B2E6B] hover:bg-gray-100 transition-colors -mt-0.5"
+            title="Hide sidebar"
+            aria-label="Hide sidebar"
+          >
+            <PanelLeftClose size={16} />
+          </button>
+        )}
       </div>
 
       {/* Nav links */}

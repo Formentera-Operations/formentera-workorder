@@ -4,7 +4,8 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
 import SearchableSelect from '@/components/ui/SearchableSelect'
 import PivotBuilder from '@/components/PivotBuilder'
-import { Search, ChevronDown, ChevronUp, X, BarChart2, Table2, List, Download, ChevronRight, MessageSquare, Send, LayoutGrid } from 'lucide-react'
+import EquipmentCosts from '@/components/EquipmentCosts'
+import { Search, ChevronDown, ChevronUp, X, BarChart2, Table2, List, Download, ChevronRight, MessageSquare, Send, LayoutGrid, DollarSign } from 'lucide-react'
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   LineChart, Line, PieChart, Pie, Cell,
@@ -120,11 +121,12 @@ interface TableRow {
 }
 
 const TABS = [
-  { key: 'overview', label: 'Overview', icon: BarChart2 },
-  { key: 'tables',   label: 'Tables',   icon: Table2 },
-  { key: 'tickets',  label: 'Tickets',  icon: List },
-  { key: 'pivot',    label: 'Pivot',    icon: LayoutGrid },
-  { key: 'chat',     label: 'Ask AI',   icon: MessageSquare },
+  { key: 'overview',     label: 'Overview',        icon: BarChart2 },
+  { key: 'tables',       label: 'Tables',          icon: Table2 },
+  { key: 'tickets',      label: 'Tickets',         icon: List },
+  { key: 'equipCosts',   label: 'Equipment Costs', icon: DollarSign },
+  { key: 'pivot',        label: 'Pivot',           icon: LayoutGrid },
+  { key: 'chat',         label: 'Ask AI',          icon: MessageSquare },
 ] as const
 
 const CHART_COLORS_LIST = ['#1B2E6B', '#3B82F6', '#F59E0B', '#10B981', '#EF4444', '#8B5CF6']
@@ -155,7 +157,7 @@ export default function AnalysisPage() {
   const router = useRouter()
   const { role, assets, loading, userName } = useAuth()
 
-  const [tab, setTab] = useState<'overview' | 'tables' | 'tickets' | 'pivot' | 'chat'>('overview')
+  const [tab, setTab] = useState<'overview' | 'tables' | 'tickets' | 'equipCosts' | 'pivot' | 'chat'>('overview')
   const [aggData, setAggData] = useState<AggData | null>(null)
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null)
   const [deptFilter, setDeptFilter] = useState('All')
@@ -453,7 +455,7 @@ export default function AnalysisPage() {
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 lg:px-32">
 
         {/* ── DATE RANGE FILTER ── */}
-        {tab !== 'chat' && tab !== 'pivot' && (
+        {tab !== 'chat' && tab !== 'pivot' && tab !== 'equipCosts' && (
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3">
           <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">Date Range</p>
           <div className="flex gap-1.5 flex-wrap">
@@ -1370,6 +1372,11 @@ export default function AnalysisPage() {
               </button>
             )}
           </div>
+        )}
+
+        {/* ── Equipment Costs Tab ── */}
+        {tab === 'equipCosts' && (
+          <EquipmentCosts userAssets={assets} />
         )}
 
         {/* ── Pivot Tab ── */}
