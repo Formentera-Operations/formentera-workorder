@@ -17,7 +17,7 @@ const SERIES_COLORS = ['#1B2E6B', '#3B82F6', '#F59E0B', '#10B981', '#EF4444', '#
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 type DatePreset =
-  | 'all' | 'thisweek' | 'lastweek' | 'thismonth' | 'lastmonth' | 'thisyear' | 'lastyear'
+  | 'all' | 'thisweek' | 'lastweek' | 'thismonth' | 'lastmonth' | 'thisyear' | 'lastyear' | 'custom'
 
 interface PivotResponse {
   rows: string[]
@@ -192,6 +192,8 @@ export default function EquipmentCosts({ userAssets }: { userAssets: string[] })
   const [equipCategoryFilter, setEquipCategoryFilter] = useState<string[]>([])
   const [fieldFilter, setFieldFilter] = useState<string[]>([])
   const [datePreset, setDatePreset] = useState<DatePreset>('all')
+  const [customStart, setCustomStart] = useState<string>('')
+  const [customEnd, setCustomEnd] = useState<string>('')
 
   const [equipCategoryOptions, setEquipCategoryOptions] = useState<string[]>([])
   const [fieldOptions, setFieldOptions] = useState<string[]>([])
@@ -233,8 +235,11 @@ export default function EquipmentCosts({ userAssets }: { userAssets: string[] })
       const y = today.getFullYear() - 1
       return { startDate: `${y}-01-01`, endDate: `${y}-12-31` }
     }
+    if (datePreset === 'custom') {
+      return { startDate: customStart, endDate: customEnd }
+    }
     return { startDate: '', endDate: '' }
-  }, [datePreset])
+  }, [datePreset, customStart, customEnd])
 
   // Preload filter options. Self-exclusion only matters when both filters are
   // active — the dim being queried is excluded so its dropdown stays usable.
@@ -360,6 +365,8 @@ export default function EquipmentCosts({ userAssets }: { userAssets: string[] })
     setEquipCategoryFilter([])
     setFieldFilter([])
     setDatePreset('all')
+    setCustomStart('')
+    setCustomEnd('')
   }
 
   return (
@@ -409,19 +416,41 @@ export default function EquipmentCosts({ userAssets }: { userAssets: string[] })
             selected={fieldFilter}
             onChange={setFieldFilter}
           />
-          <select
-            className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-[#1B2E6B]"
-            value={datePreset}
-            onChange={e => setDatePreset(e.target.value as DatePreset)}
-          >
-            <option value="all">All Time</option>
-            <option value="thisweek">This Week</option>
-            <option value="lastweek">Last Week</option>
-            <option value="thismonth">This Month</option>
-            <option value="lastmonth">Last Month</option>
-            <option value="thisyear">This Year</option>
-            <option value="lastyear">Last Year</option>
-          </select>
+          <div className="flex flex-col gap-1.5">
+            <select
+              className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-[#1B2E6B]"
+              value={datePreset}
+              onChange={e => setDatePreset(e.target.value as DatePreset)}
+            >
+              <option value="all">All Time</option>
+              <option value="thisweek">This Week</option>
+              <option value="lastweek">Last Week</option>
+              <option value="thismonth">This Month</option>
+              <option value="lastmonth">Last Month</option>
+              <option value="thisyear">This Year</option>
+              <option value="lastyear">Last Year</option>
+              <option value="custom">Custom Range…</option>
+            </select>
+            {datePreset === 'custom' && (
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="date"
+                  className="flex-1 text-xs border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-[#1B2E6B]"
+                  value={customStart}
+                  max={customEnd || undefined}
+                  onChange={e => setCustomStart(e.target.value)}
+                />
+                <span className="text-[10px] text-gray-400">to</span>
+                <input
+                  type="date"
+                  className="flex-1 text-xs border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-[#1B2E6B]"
+                  value={customEnd}
+                  min={customStart || undefined}
+                  onChange={e => setCustomEnd(e.target.value)}
+                />
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
