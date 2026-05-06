@@ -1,21 +1,15 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { PanelLeftOpen } from 'lucide-react'
 import Sidebar from './Sidebar'
 import BottomNav from './BottomNav'
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
+  // Sidebar starts visible on every page load; collapsing it only persists
+  // for the current session.
   const [sidebarHidden, setSidebarHidden] = useState(false)
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    setSidebarHidden(localStorage.getItem('sidebarHidden') === '1')
-  }, [])
   function toggleSidebar() {
-    setSidebarHidden(prev => {
-      const next = !prev
-      try { localStorage.setItem('sidebarHidden', next ? '1' : '0') } catch {}
-      return next
-    })
+    setSidebarHidden(prev => !prev)
   }
   return (
     <div className="flex min-h-screen">
