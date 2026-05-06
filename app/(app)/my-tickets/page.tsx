@@ -5,6 +5,7 @@ import { ChevronDown, ChevronUp, Search, Calendar, SlidersHorizontal } from 'luc
 import TicketCard from '@/components/ui/TicketCard'
 import { useAuth } from '@/components/AuthProvider'
 import { TICKET_STATUSES, STATUS_EMOJI } from '@/lib/utils'
+import { cachedFetch } from '@/lib/cached-fetch'
 import type { TicketStatus } from '@/types'
 
 const PAGE_SIZE = 20
@@ -39,13 +40,16 @@ export default function MyTicketsPage() {
       userName,
     })
     if (userAssets.length > 0) params.set('userAssets', userAssets.join(','))
-    fetch(`/api/tickets/options?${params}`)
-      .then(r => r.json())
-      .then(json => {
-        setAssets(json.assets || [])
-        setDepartments(json.departments || [])
-        setEquipments(json.equipments || [])
+    cachedFetch<{ assets?: string[]; departments?: string[]; equipments?: string[] }>(
+      `/api/tickets/options?${params}`,
+      { cacheKey: `my-tickets:options:${userEmail || userName}:${userAssets.join(',')}` }
+    )
+      .then(({ data }) => {
+        setAssets(data.assets || [])
+        setDepartments(data.departments || [])
+        setEquipments(data.equipments || [])
       })
+      .catch(() => {})
   }, [userEmail, userName, userAssets])
 
   useEffect(() => {
@@ -64,12 +68,19 @@ export default function MyTicketsPage() {
       pageSize: String(PAGE_SIZE),
     })
     if (userAssets.length > 0) params.set('userAssets', userAssets.join(','))
-    fetch(`/api/tickets?${params}`)
-      .then(res => res.json())
-      .then(json => {
+    // Cache key intentionally excludes the search/filter state — the cache
+    // covers the unfiltered "my tickets" view so it's available offline.
+    // When online, we still fetch with the current filters; on offline cache
+    // hit, the user sees their last-seen list.
+    const cacheKey = `my-tickets:list:${userEmail || userName}:${userAssets.join(',')}:${page}:${ticketId}:${search}:${startDate}:${endDate}:${assetFilter}:${deptFilter}:${equipFilter}:${statusFilter}`
+    cachedFetch<{ data?: Record<string, unknown>[]; count?: number }>(
+      `/api/tickets?${params}`,
+      { cacheKey }
+    )
+      .then(({ data }) => {
         if (!cancelled) {
-          setTickets(json.data || [])
-          setTotalCount(json.count ?? 0)
+          setTickets(data.data || [])
+          setTotalCount(data.count ?? 0)
         }
       })
       .catch(() => {})
