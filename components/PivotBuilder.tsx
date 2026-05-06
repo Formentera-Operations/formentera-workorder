@@ -194,8 +194,8 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
   // Per-row-dim filter values (constrains rows to those values)
   const [rowFilters, setRowFilters] = useState<Record<string, string[]>>({})
   // Top-N caps. "All" picks a high ceiling so the Other bucket doesn't appear.
-  const [topRows, setTopRows] = useState<number>(12)
-  const [topCols, setTopCols] = useState<number>(5)
+  const [topRows, setTopRows] = useState<number>(200)
+  const [topCols, setTopCols] = useState<number>(50)
   type ChartType = 'bar' | 'stackedBar' | 'line' | 'horizontalBar'
   const [chartType, setChartType] = useState<ChartType>('bar')
   // Per-dim cache of distinct values + loading state
@@ -620,8 +620,8 @@ export default function PivotBuilder({ userAssets }: { userAssets: string[] }) {
     setFieldFilter([])
     setDimFilters({})
     setRowFilters({})
-    setTopRows(12)
-    setTopCols(5)
+    setTopRows(200)
+    setTopCols(50)
     setChartType('bar')
     setDatePreset('all')
     setCustomStart('')
