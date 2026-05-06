@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import {
   ResponsiveContainer, BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from 'recharts'
@@ -1366,16 +1366,6 @@ function MultiCheckSelect({
   onChange: (next: string[]) => void
 }) {
   const [open, setOpen] = useState(false)
-  const containerRef = useRef<HTMLDivElement | null>(null)
-  useEffect(() => {
-    if (!open) return
-    function onDocMouseDown(e: MouseEvent) {
-      const node = containerRef.current
-      if (node && e.target instanceof Node && !node.contains(e.target)) setOpen(false)
-    }
-    document.addEventListener('mousedown', onDocMouseDown)
-    return () => document.removeEventListener('mousedown', onDocMouseDown)
-  }, [open])
   function toggle(opt: string) {
     onChange(selected.includes(opt) ? selected.filter(s => s !== opt) : [...selected, opt])
   }
@@ -1386,7 +1376,7 @@ function MultiCheckSelect({
       ? selected[0]
       : `${selected.length} ${label}s`
   return (
-    <div ref={containerRef} className="relative">
+    <div className="relative">
       <button
         onClick={() => setOpen(o => !o)}
         className="w-full flex items-center justify-between text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-white hover:border-[#1B2E6B] focus:outline-none focus:ring-2 focus:ring-[#1B2E6B] text-left"
@@ -1464,27 +1454,12 @@ function FilterPill({
   const [open, setOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [search, setSearch] = useState('')
-  const containerRef = useRef<HTMLDivElement | null>(null)
   const filteredOptions = useMemo(() => {
     const all = state?.values || []
     if (!search) return all.slice(0, 200)
     const q = search.toLowerCase()
     return all.filter(v => v.toLowerCase().includes(q)).slice(0, 200)
   }, [state, search])
-
-  // Close popovers when the user clicks outside this pill.
-  useEffect(() => {
-    if (!open && !menuOpen) return
-    function onDocMouseDown(e: MouseEvent) {
-      const node = containerRef.current
-      if (node && e.target instanceof Node && !node.contains(e.target)) {
-        setOpen(false)
-        setMenuOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', onDocMouseDown)
-    return () => document.removeEventListener('mousedown', onDocMouseDown)
-  }, [open, menuOpen])
 
   function toggle(opt: string) {
     onChange(selected.includes(opt) ? selected.filter(s => s !== opt) : [...selected, opt])
@@ -1499,7 +1474,6 @@ function FilterPill({
 
   return (
     <div
-      ref={containerRef}
       draggable={!!onDragStart}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
