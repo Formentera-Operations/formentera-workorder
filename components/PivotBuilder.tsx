@@ -1397,7 +1397,10 @@ function MultiCheckSelect({
         </svg>
       </button>
       {open && (
-        <div className="absolute top-full left-0 right-0 mt-1 z-20 bg-white border border-gray-200 rounded-lg shadow-lg text-xs max-h-64 overflow-y-auto">
+        <div
+          className="absolute top-full left-0 right-0 mt-1 z-20 bg-white border border-gray-200 rounded-lg shadow-lg text-xs max-h-64 overflow-y-auto"
+          onMouseDown={(e) => e.stopPropagation()}
+        >
           {selected.length > 0 && (
             <button
               onMouseDown={(e) => { e.preventDefault(); onChange([]) }}
@@ -1526,7 +1529,10 @@ function FilterPill({
       </button>
 
       {open && (
-        <div className="absolute top-full left-0 mt-1 z-30 bg-white border border-gray-200 rounded-lg shadow-lg text-xs min-w-[220px] max-h-72 overflow-hidden flex flex-col">
+        <div
+          className="absolute top-full left-0 mt-1 z-30 bg-white border border-gray-200 rounded-lg shadow-lg text-xs min-w-[220px] max-h-72 overflow-hidden flex flex-col"
+          onMouseDown={(e) => e.stopPropagation()}
+        >
           <div className="px-2 py-1.5 border-b border-gray-100">
             <input
               type="text"
@@ -1586,7 +1592,10 @@ function FilterPill({
       )}
 
       {menuOpen && (
-        <div className="absolute top-full right-0 mt-1 z-30 bg-white border border-gray-200 rounded-lg shadow-lg text-[11px] text-gray-700 min-w-[140px] py-1">
+        <div
+          className="absolute top-full right-0 mt-1 z-30 bg-white border border-gray-200 rounded-lg shadow-lg text-[11px] text-gray-700 min-w-[140px] py-1"
+          onMouseDown={(e) => e.stopPropagation()}
+        >
           {typeof index === 'number' && total && total > 1 && onMove && (
             <>
               {index > 0 && (
