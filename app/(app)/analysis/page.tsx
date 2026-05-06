@@ -1148,12 +1148,12 @@ export default function AnalysisPage() {
                 </div>
               </div>
 
-              {/* Department */}
-              {departments.length > 0 && (
+              {/* Department — sorted by total ticket count, descending */}
+              {departmentsByCount.length > 0 && (
                 <div>
                   <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Department</p>
                   <div className="flex gap-1.5 overflow-x-auto pb-2 scrollbar-thin-pills">
-                    {['All', ...departments].map(d => (
+                    {['All', ...departmentsByCount].map(d => (
                       <button
                         key={d}
                         className={`px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors shrink-0 ${tableDeptFilter === d ? 'bg-[#1B2E6B] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
