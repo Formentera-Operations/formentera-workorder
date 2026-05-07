@@ -61,14 +61,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
   const supabase = createSupabaseBrowserClient()
 
+  // Only swap state when content changes — otherwise every onAuthStateChange
+  // (token refresh, app foreground, reconnection) creates a fresh array
+  // reference for `assets` and consumers using userAssets in useEffect deps
+  // refetch in a loop while the outbox is syncing.
+  function setAssetsIfChanged(next: string[]) {
+    setAssets(prev => (prev.length === next.length && prev.every((v, i) => v === next[i])) ? prev : next)
+  }
+  function setRoleIfChanged(next: string) {
+    setRole(prev => prev === next ? prev : next)
+  }
+
   async function loadEmployeeProfile(email: string) {
     // Prime from localStorage first so offline reloads still know who the
     // foreman is (their role + asset assignments). Otherwise the new-ticket
     // form falls into multi-asset mode and the well dropdown is empty.
     const cached = readProfileCache(email)
     if (cached) {
-      setRole(cached.role || 'field_user')
-      setAssets(cached.assets || [])
+      setRoleIfChanged(cached.role || 'field_user')
+      setAssetsIfChanged(cached.assets || [])
     }
     try {
       const { data } = await supabase
@@ -77,8 +88,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .ilike('work_email', email)
         .single()
       if (data) {
-        setRole(data.role || 'field_user')
-        setAssets(data.assets || [])
+        setRoleIfChanged(data.role || 'field_user')
+        setAssetsIfChanged(data.assets || [])
         writeProfileCache(email, { role: data.role || 'field_user', assets: data.assets || [] })
       }
     } catch {
