@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 import { ArrowLeft, ChevronDown, Camera, X, AlertTriangle } from 'lucide-react'
 import LocationDropdowns from '@/components/forms/LocationDropdowns'
 import SearchableSelect from '@/components/ui/SearchableSelect'
-import { DEPARTMENTS, LOCATION_TYPES } from '@/lib/utils'
+import { DEPARTMENTS, LOCATION_TYPES, newRequestId } from '@/lib/utils'
 import { useAuth } from '@/components/AuthProvider'
 import { cachedFetch } from '@/lib/cached-fetch'
 import { queuedMutate } from '@/lib/queued-mutate'
@@ -123,6 +123,10 @@ export default function MaintenanceFormPage() {
       Created_by_Name: userName,
       Self_Dispatch_Assignee: form.Self_Dispatch ? userName : null,
       Estimate_Cost: form.Estimate_Cost ? parseFloat(form.Estimate_Cost) : null,
+      // Server-side idempotency key — stable for this submit attempt and
+      // any retries (offline replay, network blips). The server returns
+      // the existing row instead of inserting again if it sees this id.
+      client_request_id: newRequestId(),
       // The duplicate check still runs at sync time when offline — if the
       // server detects a duplicate then, the failed-sync review surface
       // gives the foreman a "Submit anyway" option.

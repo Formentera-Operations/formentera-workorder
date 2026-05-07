@@ -96,6 +96,19 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const db = supabaseAdmin()
 
+    // Idempotency: if the client supplied a stable request id (one UUID per
+    // submit attempt), check for an existing row first. Catches retries from
+    // the offline replay path, double-submits across tabs, and anything that
+    // slipped past the read-then-insert race in the duplicate guard below.
+    if (typeof body.client_request_id === 'string' && body.client_request_id) {
+      const { data: existing } = await db
+        .from('Maintenance_Form_Submission')
+        .select('*')
+        .eq('client_request_id', body.client_request_id)
+        .maybeSingle()
+      if (existing) return NextResponse.json(existing, { status: 200 })
+    }
+
     // Duplicate guard: if an active ticket exists on the same Well+Equipment
     // (or Facility+Equipment) and the user hasn't acknowledged it
     // (force !== true), return 409 with the matches.
@@ -115,7 +128,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const { data, error } = await db
+    const insertResult = await db
       .from('Maintenance_Form_Submission')
       .insert([{
         Department: body.Department,
@@ -139,11 +152,27 @@ export async function POST(req: NextRequest) {
         Self_Dispatch_Assignee: body.Self_Dispatch_Assignee || null,
         assigned_foreman: body.assigned_foreman || null,
         Estimate_Cost: body.Estimate_Cost != null ? body.Estimate_Cost : null,
+        client_request_id: typeof body.client_request_id === 'string' ? body.client_request_id : null,
       }])
       .select()
       .single()
 
+    let { data, error } = insertResult
+
+    // Concurrent insert with same idempotency key — the unique partial index
+    // rejects the second one. Fetch and return the row that won the race so
+    // the client treats it as a successful submit.
+    if (error && (error as { code?: string }).code === '23505' && body.client_request_id) {
+      const { data: winner } = await db
+        .from('Maintenance_Form_Submission')
+        .select('*')
+        .eq('client_request_id', body.client_request_id)
+        .maybeSingle()
+      if (winner) return NextResponse.json(winner, { status: 200 })
+    }
+
     if (error) throw error
+    if (!data) throw new Error('Insert returned no data')
 
     // Scenario 1: no foreman, no self-dispatch — send new ticket email
     if (!body.assigned_foreman && !body.Self_Dispatch_Assignee) {

@@ -4,6 +4,7 @@ import { X, AlertTriangle, RotateCcw, Trash2 } from 'lucide-react'
 import { useOutbox } from '@/lib/use-outbox'
 import { enqueue, remove, update, type OutboxAction } from '@/lib/outbox'
 import { flushOutbox } from '@/lib/sync-worker'
+import { newRequestId } from '@/lib/utils'
 import TicketSummaryPreview from './ui/TicketSummaryPreview'
 
 function meaningfulDescription(s: string | null | undefined): string | null {
@@ -20,10 +21,11 @@ function isCreateTicketAction(a: OutboxAction): boolean {
 
 async function submitAnyway(action: OutboxAction) {
   if (!isCreateTicketAction(action)) return
-  // Re-queue the same payload with force: true so the server skips the
-  // duplicate check this time.
+  // Re-queue the same payload with force: true (skip the dup check) and a
+  // fresh client_request_id (server idempotency would otherwise return the
+  // already-conflicting row instead of inserting a new ticket).
   const body = (action.body && typeof action.body === 'object')
-    ? { ...(action.body as Record<string, unknown>), force: true }
+    ? { ...(action.body as Record<string, unknown>), force: true, client_request_id: newRequestId() }
     : action.body
   await enqueue({
     url: action.url,

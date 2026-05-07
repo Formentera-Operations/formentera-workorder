@@ -6,6 +6,16 @@ export function cn(...inputs: ClassValue[]) {
   return clsx(inputs)
 }
 
+// Stable per-submit identifier used as the server-side idempotency key
+// for ticket inserts. crypto.randomUUID is widely supported on the
+// platforms we target; the fallback covers anything missing it.
+export function newRequestId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  return `req-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+}
+
 export function formatDate(dateStr: string | null | undefined, fmt = 'MMM d, yyyy, h:mm a'): string {
   if (!dateStr) return '—'
   try {
