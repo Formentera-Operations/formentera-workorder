@@ -10,6 +10,9 @@ import { useAuth } from '@/components/AuthProvider'
 import { formatDate, formatDateShort, DEPARTMENTS, LOCATION_TYPES, WORK_ORDER_DECISIONS, FINAL_STATUSES, PRIORITY_OPTIONS } from '@/lib/utils'
 import CommentsSection from '@/components/ui/CommentsSection'
 import { queuedMutate } from '@/lib/queued-mutate'
+import { uploadPhoto } from '@/lib/upload-photo'
+import { isPhotoRef, deletePhoto, refToId } from '@/lib/offline-photos'
+import PhotoImg from '@/components/ui/PhotoImg'
 import type { LocationType } from '@/types'
 
 type Tab = 'Summary' | 'Initial Report' | 'Dispatch' | 'Repairs / Closeout'
@@ -429,7 +432,7 @@ export default function MaintenanceTicketPage() {
                   className="relative w-full h-52 rounded-xl overflow-hidden cursor-pointer"
                   onClick={() => router.push(`/maintenance/${id}/issue-photos`)}
                 >
-                  <img src={(ticket.Issue_Photos as string[])[0]} alt="Issue" className="w-full h-full object-cover" />
+                  <PhotoImg url={(ticket.Issue_Photos as string[])[0]} alt="Issue" className="w-full h-full object-cover" />
                   {(ticket.Issue_Photos as string[]).length > 1 && (
                     <div className="absolute top-2 right-2 flex items-center gap-1 px-2 py-1 bg-black/60 text-white text-xs font-medium rounded-full backdrop-blur-sm">
                       <Camera size={12} />
@@ -527,7 +530,7 @@ export default function MaintenanceTicketPage() {
                       className="relative w-full h-48 rounded-xl overflow-hidden cursor-pointer"
                       onClick={() => router.push(`/maintenance/${id}/repair-images`)}
                     >
-                      <img src={(repairs.repair_images as string[])[0]} alt="Repair" className="w-full h-full object-cover" />
+                      <PhotoImg url={(repairs.repair_images as string[])[0]} alt="Repair" className="w-full h-full object-cover" />
                       {(repairs.repair_images as string[]).length > 1 && (
                         <div className="absolute top-2 right-2 flex items-center gap-1 px-2 py-1 bg-black/60 text-white text-xs font-medium rounded-full backdrop-blur-sm">
                           <Camera size={12} />
@@ -727,14 +730,7 @@ export default function MaintenanceTicketPage() {
                       if (!files.length) return
                       setUploadingPhotos(true)
                       try {
-                        const urls = await Promise.all(files.map(async (file) => {
-                          const fd = new FormData()
-                          fd.append('file', file)
-                          const res = await fetch('/api/upload', { method: 'POST', body: fd })
-                          if (!res.ok) throw new Error('Upload failed')
-                          const { url } = await res.json()
-                          return url as string
-                        }))
+                        const urls = await Promise.all(files.map(file => uploadPhoto(file)))
                         setIrPhotos(prev => [...prev, ...urls])
                       } catch {
                         toast.error('Failed to upload photo. Please try again.')
@@ -747,9 +743,8 @@ export default function MaintenanceTicketPage() {
                     <div className="flex gap-2 mt-2 flex-wrap">
                       {irPhotos.map((url, i) => (
                         <div key={i} className="relative">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={url}
+                          <PhotoImg
+                            url={url}
                             alt="Issue photo"
                             className="w-20 h-20 object-cover rounded-lg cursor-pointer"
                             onClick={() => setPreviewUrl(url)}
@@ -823,11 +818,16 @@ export default function MaintenanceTicketPage() {
                   const updated = irPhotos.filter((_, j) => j !== deletePhotoIdx)
                   setIrPhotos(updated)
                   setDeletePhotoIdx(null)
-                  await fetch('/api/upload', {
-                    method: 'DELETE',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ url }),
-                  }).catch(err => console.error('Storage delete failed:', err))
+                  if (isPhotoRef(url)) {
+                    // Photo never made it to Supabase yet — just drop the IDB blob.
+                    await deletePhoto(refToId(url))
+                  } else {
+                    await fetch('/api/upload', {
+                      method: 'DELETE',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ url }),
+                    }).catch(err => console.error('Storage delete failed:', err))
+                  }
                   await fetch(`/api/tickets/${id}`, {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
@@ -862,11 +862,15 @@ export default function MaintenanceTicketPage() {
                   const updated = repairPhotos.filter((_, j) => j !== deleteRepairPhotoIdx)
                   setRepairPhotos(updated)
                   setDeleteRepairPhotoIdx(null)
-                  await fetch('/api/upload', {
-                    method: 'DELETE',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ url }),
-                  }).catch(err => console.error('Storage delete failed:', err))
+                  if (isPhotoRef(url)) {
+                    await deletePhoto(refToId(url))
+                  } else {
+                    await fetch('/api/upload', {
+                      method: 'DELETE',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ url }),
+                    }).catch(err => console.error('Storage delete failed:', err))
+                  }
                   await fetch('/api/repairs', {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
@@ -900,9 +904,8 @@ export default function MaintenanceTicketPage() {
             >
               <X size={24} />
             </button>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={previewUrl}
+            <PhotoImg
+              url={previewUrl}
               alt="Preview"
               className="max-w-full max-h-full rounded-lg object-contain"
               onClick={e => e.stopPropagation()}
@@ -1182,14 +1185,7 @@ export default function MaintenanceTicketPage() {
                     if (!files.length) return
                     setUploadingRepairPhotos(true)
                     try {
-                      const urls = await Promise.all(files.map(async (file) => {
-                        const fd = new FormData()
-                        fd.append('file', file)
-                        const res = await fetch('/api/upload', { method: 'POST', body: fd })
-                        if (!res.ok) throw new Error('Upload failed')
-                        const { url } = await res.json()
-                        return url as string
-                      }))
+                      const urls = await Promise.all(files.map(file => uploadPhoto(file)))
                       setRepairPhotos(prev => [...prev, ...urls])
                     } catch {
                       toast.error('Failed to upload photo. Please try again.')
@@ -1202,9 +1198,8 @@ export default function MaintenanceTicketPage() {
                   <div className="flex gap-2 mt-2 flex-wrap">
                     {repairPhotos.map((url, i) => (
                       <div key={i} className="relative">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={url}
+                        <PhotoImg
+                          url={url}
                           alt="Repair photo"
                           className="w-20 h-20 object-cover rounded-lg cursor-pointer"
                           onClick={() => setPreviewUrl(url)}

@@ -1,5 +1,6 @@
 import { ImageIcon } from 'lucide-react'
 import StatusBadge from './StatusBadge'
+import PhotoImg from './PhotoImg'
 import type { TicketStatus } from '@/types'
 
 const STATUS_BG: Record<string, string> = {
@@ -36,8 +37,7 @@ export default function TicketCard({
       {/* Thumbnail */}
       <div className="w-14 h-14 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0 overflow-hidden">
         {hasPhoto ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={Issue_Photos[0]} alt="Issue" className="w-full h-full object-cover rounded-lg" />
+          <PhotoImg url={Issue_Photos[0]} alt="Issue" className="w-full h-full object-cover rounded-lg" />
         ) : (
           <ImageIcon size={24} className="text-gray-300" />
         )}

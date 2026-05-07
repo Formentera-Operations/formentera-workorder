@@ -1,18 +1,99 @@
 import { getAll, remove, update, type OutboxAction } from './outbox'
+import { deletePhoto, getPhoto, isPhotoRef, refToId } from './offline-photos'
 
 const MAX_RETRIES = 5
 
 let flushing = false
 
+// Walk an unknown JSON-shaped value, calling `fn` on every string leaf.
+function walkStrings(v: unknown, fn: (s: string) => void): void {
+  if (typeof v === 'string') fn(v)
+  else if (Array.isArray(v)) for (const item of v) walkStrings(item, fn)
+  else if (v && typeof v === 'object') for (const item of Object.values(v as Record<string, unknown>)) walkStrings(item, fn)
+}
+
+// Return a structurally-identical value with every string replaced via `fn`.
+function mapStrings<T>(v: T, fn: (s: string) => string): T {
+  if (typeof v === 'string') return fn(v) as unknown as T
+  if (Array.isArray(v)) return v.map(item => mapStrings(item, fn)) as unknown as T
+  if (v && typeof v === 'object') {
+    const out: Record<string, unknown> = {}
+    for (const [k, val] of Object.entries(v as Record<string, unknown>)) out[k] = mapStrings(val, fn)
+    return out as T
+  }
+  return v
+}
+
+// Walk the action body for `idb://photo-{id}` refs; upload each blob to
+// /api/upload, persist the swapped body back to the outbox after each
+// success (so a retry doesn't re-upload), then drop the IDB blob.
+async function resolvePhotoRefs(action: OutboxAction): Promise<{ body: unknown } | { error: string }> {
+  let body = action.body
+  if (body === undefined) return { body }
+
+  const refs = new Set<string>()
+  walkStrings(body, s => { if (isPhotoRef(s)) refs.add(s) })
+  if (refs.size === 0) return { body }
+
+  for (const ref of refs) {
+    const id = refToId(ref)
+    const rec = await getPhoto(id)
+    if (!rec) {
+      // Blob is gone — likely already uploaded on a prior retry but the
+      // body wasn't persisted, or the user wiped storage. Either way the
+      // ref is dead; drop it from the body so the request can proceed.
+      body = mapStrings(body, s => (s === ref ? '' : s))
+      // Strip empty strings out of arrays (Issue_Photos shouldn't carry blanks).
+      body = stripEmptyArrayStrings(body)
+      continue
+    }
+    try {
+      const fd = new FormData()
+      const ext = rec.mimeType === 'image/jpeg' ? 'jpg' : rec.mimeType.split('/')[1] || 'jpg'
+      fd.append('file', new File([rec.blob], `${id}.${ext}`, { type: rec.mimeType || 'image/jpeg' }))
+      const res = await fetch('/api/upload', { method: 'POST', body: fd })
+      if (!res.ok) return { error: `Photo upload failed (${res.status})` }
+      const { url } = (await res.json()) as { url?: string }
+      if (typeof url !== 'string') return { error: 'Photo upload returned no URL' }
+      body = mapStrings(body, s => (s === ref ? url : s))
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : 'Photo upload network error' }
+    }
+    // Persist the swapped body so a later retry only handles whatever's left.
+    await update(action.id, { body })
+    await deletePhoto(id)
+  }
+
+  return { body }
+}
+
+function stripEmptyArrayStrings<T>(v: T): T {
+  if (Array.isArray(v)) return v.filter(x => x !== '').map(x => stripEmptyArrayStrings(x)) as unknown as T
+  if (v && typeof v === 'object') {
+    const out: Record<string, unknown> = {}
+    for (const [k, val] of Object.entries(v as Record<string, unknown>)) out[k] = stripEmptyArrayStrings(val)
+    return out as T
+  }
+  return v
+}
+
 async function replayOne(action: OutboxAction): Promise<
   | { ok: true }
   | { ok: false; status?: number; message: string; permanent: boolean; meta?: OutboxAction['meta'] }
 > {
+  // Step 1: upload any locally-stored photos referenced from the body and
+  // swap in real URLs. Network-style failures here are transient.
+  const resolved = await resolvePhotoRefs(action)
+  if ('error' in resolved) {
+    return { ok: false, message: resolved.error, permanent: false }
+  }
+  const body = resolved.body
+
   try {
     const res = await fetch(action.url, {
       method: action.method,
       headers: { 'Content-Type': 'application/json', ...(action.headers || {}) },
-      body: action.body !== undefined ? JSON.stringify(action.body) : undefined,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
     })
     if (res.ok) return { ok: true }
     // 4xx (except 408/429) is the server saying "this won't ever succeed" —

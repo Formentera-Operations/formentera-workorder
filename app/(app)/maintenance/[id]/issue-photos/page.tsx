@@ -3,9 +3,11 @@ import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { ArrowLeft, ImageIcon, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react'
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch'
+import { usePhotoSrc } from '@/lib/use-photo-src'
 
 function ZoomablePhoto({ url, alt }: { url: string; alt: string }) {
   const [scale, setScale] = useState(1)
+  const resolvedUrl = usePhotoSrc(url)
   return (
     <TransformWrapper
       initialScale={1}
@@ -20,7 +22,7 @@ function ZoomablePhoto({ url, alt }: { url: string; alt: string }) {
         <div className="relative bg-gray-100 rounded-xl overflow-hidden">
           <TransformComponent wrapperClass="!w-full" contentClass="!w-full">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={url} alt={alt} className="w-full max-h-[70vh] object-contain select-none" draggable={false} />
+            <img src={resolvedUrl} alt={alt} className="w-full max-h-[70vh] object-contain select-none" draggable={false} />
           </TransformComponent>
           <div className="absolute bottom-2 right-2 flex items-center gap-1 bg-black/60 backdrop-blur-sm rounded-full p-1">
             <button

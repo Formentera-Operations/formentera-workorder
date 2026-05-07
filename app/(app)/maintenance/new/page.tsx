@@ -9,6 +9,8 @@ import { DEPARTMENTS, LOCATION_TYPES } from '@/lib/utils'
 import { useAuth } from '@/components/AuthProvider'
 import { cachedFetch } from '@/lib/cached-fetch'
 import { queuedMutate } from '@/lib/queued-mutate'
+import { uploadPhoto } from '@/lib/upload-photo'
+import PhotoImg from '@/components/ui/PhotoImg'
 import type { LocationType } from '@/types'
 
 function TicketSummaryPreview({ ticketId, onClose }: { ticketId: number; onClose: () => void }) {
@@ -534,14 +536,10 @@ export default function MaintenanceFormPage() {
                   if (!files.length) return
                   setUploadingPhotos(true)
                   try {
-                    const urls = await Promise.all(files.map(async (file) => {
-                      const fd = new FormData()
-                      fd.append('file', file)
-                      const res = await fetch('/api/upload', { method: 'POST', body: fd })
-                      if (!res.ok) throw new Error('Upload failed')
-                      const { url } = await res.json()
-                      return url as string
-                    }))
+                    // uploadPhoto handles online (real /api/upload) AND offline
+                    // (compress + stash in IDB, return idb:// ref) — sync worker
+                    // resolves the ref when connectivity returns.
+                    const urls = await Promise.all(files.map(file => uploadPhoto(file)))
                     set('Issue_Photos', [...form.Issue_Photos, ...urls])
                   } catch {
                     alert('Failed to upload photo. Please try again.')
@@ -554,9 +552,8 @@ export default function MaintenanceFormPage() {
                 <div className="flex gap-2 mt-2 flex-wrap">
                   {form.Issue_Photos.map((url, i) => (
                     <div key={i} className="relative">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={url}
+                      <PhotoImg
+                        url={url}
                         alt="Issue photo"
                         className="w-20 h-20 object-cover rounded-lg cursor-pointer"
                         onClick={() => setPreviewUrl(url)}
@@ -586,9 +583,8 @@ export default function MaintenanceFormPage() {
                   >
                     <X size={24} />
                   </button>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={previewUrl}
+                  <PhotoImg
+                    url={previewUrl}
                     alt="Preview"
                     className="max-w-full max-h-full rounded-lg object-contain"
                     onClick={e => e.stopPropagation()}
