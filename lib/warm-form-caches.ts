@@ -11,22 +11,13 @@ const LOCATION_TYPES = ['Well', 'Facility'] as const
 export async function warmFormCaches(userAssets: string[]): Promise<void> {
   if (typeof navigator !== 'undefined' && !navigator.onLine) return
 
+  // Asset-independent + per-asset prefetches all run in parallel.
   const tasks: Promise<unknown>[] = []
 
   // Well/facility tree — used by the location dropdowns.
   tasks.push(
     cachedFetch('/api/well-facility', { cacheKey: 'well-facility' }).catch(() => null)
   )
-
-  // Equipment-type lists per location type (small, only 2 calls).
-  for (const lt of LOCATION_TYPES) {
-    tasks.push(
-      cachedFetch(
-        `/api/equipment?type=types&locationMatch=${encodeURIComponent(lt)}`,
-        { cacheKey: `equipment-types:${lt}` }
-      ).catch(() => null)
-    )
-  }
 
   // Wells and foremen vary by asset — prefetch one of each per assigned asset.
   for (const asset of userAssets) {
@@ -49,6 +40,35 @@ export async function warmFormCaches(userAssets: string[]): Promise<void> {
   tasks.push(
     cachedFetch('/api/employees?', { cacheKey: 'employees:' }).catch(() => null)
   )
+
+  // Equipment is two-tier: types (per location), then names (per location +
+  // type). We chain these so each location's per-type equipment lists fire
+  // as soon as we know what types exist.
+  for (const lt of LOCATION_TYPES) {
+    tasks.push(
+      (async () => {
+        try {
+          const { data } = await cachedFetch<Array<{ equipment_type?: string }>>(
+            `/api/equipment?type=types&locationMatch=${encodeURIComponent(lt)}`,
+            { cacheKey: `equipment-types:${lt}` }
+          )
+          const types = (Array.isArray(data) ? data : [])
+            .map(r => r?.equipment_type)
+            .filter((t): t is string => typeof t === 'string' && t.length > 0)
+          await Promise.all(
+            types.map(t =>
+              cachedFetch(
+                `/api/equipment?type=equipment&equipmentType=${encodeURIComponent(t)}&locationMatch=${lt}`,
+                { cacheKey: `equipment:${lt}:${t}` }
+              ).catch(() => null)
+            )
+          )
+        } catch {
+          /* ignore — best-effort warm */
+        }
+      })()
+    )
+  }
 
   await Promise.all(tasks)
 }

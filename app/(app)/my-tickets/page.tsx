@@ -55,11 +55,15 @@ export default function MyTicketsPage() {
   }, [userEmail, userName, userAssets])
 
   // Pre-warm the new-ticket form's reference data so it works offline the
-  // first time a foreman opens it (otherwise wells/foremen/equipment-types
-  // would be empty until they'd visited the form online once).
+  // first time a foreman opens it. Also re-warm whenever connectivity
+  // returns — covers the case where the foreman went offline mid-prefetch
+  // and missed one of the parallel fetches.
   useEffect(() => {
     if (userAssets.length === 0) return
     void warmFormCaches(userAssets)
+    const onOnline = () => { void warmFormCaches(userAssets) }
+    window.addEventListener('online', onOnline)
+    return () => window.removeEventListener('online', onOnline)
   }, [userAssets])
 
   useEffect(() => {

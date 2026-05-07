@@ -59,10 +59,15 @@ function MaintenancePageContent() {
       .catch(() => {})
   }, [userAssets])
 
-  // Pre-warm new-ticket form reference data so it works offline.
+  // Pre-warm new-ticket form reference data so it works offline. Also
+  // re-fires on the online event to recover from any fetches that lost
+  // the race when the foreman first went offline.
   useEffect(() => {
     if (userAssets.length === 0) return
     void warmFormCaches(userAssets)
+    const onOnline = () => { void warmFormCaches(userAssets) }
+    window.addEventListener('online', onOnline)
+    return () => window.removeEventListener('online', onOnline)
   }, [userAssets])
 
   useEffect(() => {
