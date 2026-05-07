@@ -41,6 +41,18 @@ export async function warmFormCaches(userAssets: string[]): Promise<void> {
     cachedFetch('/api/employees?', { cacheKey: 'employees:' }).catch(() => null)
   )
 
+  // Active tickets across the foreman's assets — used by the offline
+  // duplicate check in the new-ticket form. Keyed off the comma-joined
+  // assets so multi-asset users get all their tickets in one cache entry.
+  if (userAssets.length > 0) {
+    tasks.push(
+      cachedFetch(
+        `/api/tickets/active?userAssets=${encodeURIComponent(userAssets.join(','))}`,
+        { cacheKey: `active-tickets:${userAssets.join(',')}` }
+      ).catch(() => null)
+    )
+  }
+
   // Equipment is two-tier: types (per location), then names (per location +
   // type). We chain these so each location's per-type equipment lists fire
   // as soon as we know what types exist.

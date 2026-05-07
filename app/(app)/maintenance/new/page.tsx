@@ -31,6 +31,9 @@ export default function MaintenanceFormPage() {
     Created_by_Name: string | null
     Issue_Description: string | null
     assigned_foreman: string | null
+    Equipment?: string
+    Well?: string | null
+    Facility?: string | null
   }
   const [duplicates, setDuplicates] = useState<DuplicateTicket[]>([])
   const [duplicateBannerDismissed, setDuplicateBannerDismissed] = useState(false)
@@ -101,17 +104,43 @@ export default function MaintenanceFormPage() {
       setDuplicateBannerDismissed(false)
       return
     }
-    const params = new URLSearchParams({ equipment: form.Equipment })
-    if (form.Well) params.set('well', form.Well)
-    else if (form.Facility) params.set('facility', form.Facility)
-    fetch(`/api/tickets/check-duplicates?${params}`)
-      .then(r => r.json())
-      .then(d => {
-        setDuplicates(d.duplicates || [])
+    const isOnline = typeof navigator === 'undefined' || navigator.onLine
+    if (isOnline) {
+      const params = new URLSearchParams({ equipment: form.Equipment })
+      if (form.Well) params.set('well', form.Well)
+      else if (form.Facility) params.set('facility', form.Facility)
+      fetch(`/api/tickets/check-duplicates?${params}`)
+        .then(r => r.json())
+        .then(d => {
+          setDuplicates(d.duplicates || [])
+          setDuplicateBannerDismissed(false)
+        })
+        .catch(() => setDuplicates([]))
+      return
+    }
+    // Offline: filter the pre-cached active-tickets list locally so the
+    // foreman still sees a duplicate warning before they submit. The
+    // cache is warmed on My Tickets / Maintenance load.
+    if (userAssets.length === 0) { setDuplicates([]); return }
+    cachedFetch<{ tickets?: DuplicateTicket[] }>(
+      `/api/tickets/active?userAssets=${encodeURIComponent(userAssets.join(','))}`,
+      { cacheKey: `active-tickets:${userAssets.join(',')}` }
+    )
+      .then(({ data }) => {
+        const active = data.tickets || []
+        const matches = active
+          .filter(t => {
+            if (t.Equipment !== form.Equipment) return false
+            if (form.Well && t.Well !== form.Well) return false
+            if (form.Facility && t.Facility !== form.Facility) return false
+            return t.Ticket_Status !== 'Closed'
+          })
+          .slice(0, 5)
+        setDuplicates(matches)
         setDuplicateBannerDismissed(false)
       })
       .catch(() => setDuplicates([]))
-  }, [form.Equipment, form.Well, form.Facility])
+  }, [form.Equipment, form.Well, form.Facility, userAssets])
 
   const set = (key: string, val: unknown) => setForm(f => ({ ...f, [key]: val }))
 
