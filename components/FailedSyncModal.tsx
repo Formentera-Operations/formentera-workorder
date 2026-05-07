@@ -1,9 +1,10 @@
 'use client'
-import Link from 'next/link'
+import { useState } from 'react'
 import { X, AlertTriangle, RotateCcw, Trash2 } from 'lucide-react'
 import { useOutbox } from '@/lib/use-outbox'
 import { enqueue, remove, update, type OutboxAction } from '@/lib/outbox'
 import { flushOutbox } from '@/lib/sync-worker'
+import TicketSummaryPreview from './ui/TicketSummaryPreview'
 
 function meaningfulDescription(s: string | null | undefined): string | null {
   if (!s) return null
@@ -46,6 +47,7 @@ async function discard(action: OutboxAction) {
 
 export default function FailedSyncModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { actions } = useOutbox()
+  const [previewTicketId, setPreviewTicketId] = useState<number | null>(null)
   const failed = actions.filter(a => a.status === 'failed')
   if (!open) return null
   return (
@@ -89,13 +91,13 @@ export default function FailedSyncModal({ open, onClose }: { open: boolean; onCl
                           <div className="font-semibold text-gray-900">
                             #{d.id}{d.Ticket_Status ? ` · ${d.Ticket_Status}` : ''}
                           </div>
-                          <Link
-                            href={`/maintenance/${d.id}`}
-                            onClick={onClose}
+                          <button
+                            type="button"
+                            onClick={() => setPreviewTicketId(d.id)}
                             className="text-[#1B2E6B] font-medium hover:underline"
                           >
                             View ticket
-                          </Link>
+                          </button>
                         </div>
                         <div className="text-gray-500 mt-0.5">
                           {d.Issue_Date ? `Opened ${new Date(d.Issue_Date).toLocaleDateString()}` : ''}
@@ -140,6 +142,12 @@ export default function FailedSyncModal({ open, onClose }: { open: boolean; onCl
           })}
         </div>
       </div>
+      {previewTicketId !== null && (
+        <TicketSummaryPreview
+          ticketId={previewTicketId}
+          onClose={() => setPreviewTicketId(null)}
+        />
+      )}
     </div>
   )
 }
