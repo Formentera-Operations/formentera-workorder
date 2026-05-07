@@ -3,11 +3,13 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ChevronDown, ChevronUp, Search, Calendar, SlidersHorizontal } from 'lucide-react'
 import TicketCard from '@/components/ui/TicketCard'
+import QueuedTicketCard from '@/components/ui/QueuedTicketCard'
 import { useAuth } from '@/components/AuthProvider'
 import { TICKET_STATUSES, STATUS_EMOJI } from '@/lib/utils'
 import { cachedFetch } from '@/lib/cached-fetch'
 import { prefetchForOffline } from '@/lib/prefetch-for-offline'
 import { warmFormCaches } from '@/lib/warm-form-caches'
+import { useOutbox } from '@/lib/use-outbox'
 import type { TicketStatus } from '@/types'
 
 const PAGE_SIZE = 20
@@ -15,6 +17,7 @@ const PAGE_SIZE = 20
 export default function MyTicketsPage() {
   const router = useRouter()
   const { userEmail, userName, assets: userAssets } = useAuth()
+  const { actions: outboxActions } = useOutbox()
   const [tickets, setTickets] = useState<Record<string, unknown>[]>([])
   const [loading, setLoading] = useState(true)
   const [filtersOpen, setFiltersOpen] = useState(false)
@@ -257,9 +260,36 @@ export default function MyTicketsPage() {
 
       {/* Ticket list */}
       <div className="flex-1 overflow-y-auto px-4 pt-3 pb-4 space-y-3 lg:px-32">
+        {/* Optimistic placeholders for tickets queued offline. Show only on
+            page 0 (don't repeat across pagination), and hide failed actions
+            since they're already surfaced via the failed-sync banner. */}
+        {page === 0 && outboxActions
+          .filter(a => a.method === 'POST' && a.url === '/api/tickets' && a.status !== 'failed')
+          .sort((a, b) => b.createdAt - a.createdAt)
+          .map(a => {
+            const body = (a.body && typeof a.body === 'object' ? a.body : {}) as Record<string, unknown>
+            const type = String(body.Location_Type ?? '').trim()
+            const fac  = String(body.Facility ?? '').trim()
+            const well = String(body.Well ?? '').trim()
+            const blank = (v: string) => !v || v.toLowerCase() === 'null'
+            const locationLabel =
+              type === 'Facility' ? `Facility: ${blank(fac) ? '—' : fac}` :
+              type === 'Well'     ? `Well: ${blank(well) ? '—' : well}` :
+              !blank(fac)         ? `Facility: ${fac}` :
+              !blank(well)        ? `Well: ${well}` : '—'
+            return (
+              <QueuedTicketCard
+                key={a.id}
+                asset={(body.Asset as string) || '—'}
+                locationLabel={locationLabel}
+                equipment={(body.Equipment as string) || '—'}
+                issuePhotos={body.Issue_Photos as string[] | undefined}
+              />
+            )
+          })}
         {loading ? (
           <div className="py-8 text-center text-sm text-gray-400">Loading tickets…</div>
-        ) : tickets.length === 0 ? (
+        ) : tickets.length === 0 && !(page === 0 && outboxActions.some(a => a.method === 'POST' && a.url === '/api/tickets' && a.status !== 'failed')) ? (
           <div className="py-8 text-center text-sm text-gray-400">No tickets found.</div>
         ) : (
           tickets.map((t) => {

@@ -1,10 +1,11 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { PanelLeftOpen } from 'lucide-react'
 import Sidebar from './Sidebar'
 import BottomNav from './BottomNav'
 import OfflineBanner from '../OfflineBanner'
 import UpdatePrompt from '../UpdatePrompt'
+import { requestPersistentStorage } from '@/lib/persist-storage'
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   // Sidebar starts visible on every page load; collapsing it only persists
@@ -13,6 +14,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   function toggleSidebar() {
     setSidebarHidden(prev => !prev)
   }
+
+  // One-shot ask the browser to mark our IDB/cache/photo storage as
+  // persistent so iOS doesn't evict it under pressure. No-op for installed
+  // PWAs (already implicitly persistent).
+  useEffect(() => {
+    void requestPersistentStorage()
+  }, [])
   return (
     <div className="flex min-h-screen">
       {/* Sidebar — desktop only */}
