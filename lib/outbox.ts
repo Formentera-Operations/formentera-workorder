@@ -22,8 +22,21 @@ export interface OutboxAction {
   error?: string
   // Optional metadata captured from server responses — used by the failed
   // sync review UI. Currently only `duplicates` (array of conflicting
-  // tickets) is set, when a queued create hits a 409 at sync time.
-  meta?: { duplicates?: Array<{ id: number; equipment?: string; well?: string; facility?: string; issue_date?: string }> }
+  // tickets) is set, when a queued create hits a 409 at sync time. Field
+  // names mirror the server payload from POST /api/tickets.
+  meta?: {
+    duplicates?: Array<{
+      id: number
+      Ticket_Status?: string
+      Issue_Date?: string
+      Created_by_Name?: string
+      assigned_foreman?: string
+      Equipment?: string
+      Well?: string
+      Facility?: string
+      Issue_Description?: string
+    }>
+  }
 }
 
 let dbPromise: Promise<IDBDatabase> | null = null

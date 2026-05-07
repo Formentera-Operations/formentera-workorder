@@ -1,8 +1,17 @@
 'use client'
+import Link from 'next/link'
 import { X, AlertTriangle, RotateCcw, Trash2 } from 'lucide-react'
 import { useOutbox } from '@/lib/use-outbox'
 import { enqueue, remove, update, type OutboxAction } from '@/lib/outbox'
 import { flushOutbox } from '@/lib/sync-worker'
+
+function meaningfulDescription(s: string | null | undefined): string | null {
+  if (!s) return null
+  const trimmed = s.trim()
+  if (!trimmed) return null
+  if (['none', 'n/a', 'na', '-', '--'].includes(trimmed.toLowerCase())) return null
+  return trimmed
+}
 
 function isCreateTicketAction(a: OutboxAction): boolean {
   return a.method === 'POST' && a.url === '/api/tickets'
@@ -73,14 +82,32 @@ export default function FailedSyncModal({ open, onClose }: { open: boolean; onCl
                 </div>
 
                 {isDup && (
-                  <div className="bg-gray-50 rounded-lg p-2 space-y-1">
+                  <div className="space-y-2">
                     {dupes.map(d => (
-                      <p key={d.id} className="text-[11px] text-gray-700">
-                        <span className="font-medium">#{d.id}</span>
-                        {d.well || d.facility ? ` · ${d.well || d.facility}` : ''}
-                        {d.equipment ? ` · ${d.equipment}` : ''}
-                        {d.issue_date ? ` · ${String(d.issue_date).slice(0, 10)}` : ''}
-                      </p>
+                      <div key={d.id} className="rounded-lg bg-white border border-amber-200 px-3 py-2 text-xs">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="font-semibold text-gray-900">
+                            #{d.id}{d.Ticket_Status ? ` · ${d.Ticket_Status}` : ''}
+                          </div>
+                          <Link
+                            href={`/maintenance/${d.id}`}
+                            onClick={onClose}
+                            className="text-[#1B2E6B] font-medium hover:underline"
+                          >
+                            View ticket
+                          </Link>
+                        </div>
+                        <div className="text-gray-500 mt-0.5">
+                          {d.Issue_Date ? `Opened ${new Date(d.Issue_Date).toLocaleDateString()}` : ''}
+                          {d.Created_by_Name ? ` by ${d.Created_by_Name}` : ''}
+                          {d.assigned_foreman ? ` · Assigned to ${d.assigned_foreman}` : ''}
+                        </div>
+                        {meaningfulDescription(d.Issue_Description) && (
+                          <div className="text-gray-700 mt-1 line-clamp-2">
+                            {meaningfulDescription(d.Issue_Description)}
+                          </div>
+                        )}
+                      </div>
                     ))}
                   </div>
                 )}
