@@ -129,38 +129,49 @@ export async function flushOutbox(): Promise<{ synced: number; failed: number }>
   if (flushing) return { synced: 0, failed: 0 }
   if (typeof navigator !== 'undefined' && !navigator.onLine) return { synced: 0, failed: 0 }
   flushing = true
+  // navigator.locks serializes across tabs (and the service worker if it's
+  // also running). Without it, two tabs can both pick up the same queued
+  // POST and fire it concurrently — the cause of the user-reported triple
+  // ticket. Falls through to no lock when the API isn't available.
+  const runWithLock = (typeof navigator !== 'undefined' && navigator.locks?.request)
+    ? <T,>(fn: () => Promise<T>) => navigator.locks.request('outbox-flush', { mode: 'exclusive' }, fn)
+    : <T,>(fn: () => Promise<T>) => fn()
   let synced = 0
   let failed = 0
   try {
-    const pending = (await getAll()).filter(a => a.status !== 'failed')
-    for (const action of pending) {
-      await update(action.id, { status: 'syncing' })
-      const result = await replayOne(action)
-      if (result.ok) {
-        await remove(action.id)
-        synced++
-      } else if (result.permanent || action.retries + 1 >= MAX_RETRIES) {
-        await update(action.id, {
-          status: 'failed',
-          error: result.message,
-          retries: action.retries + 1,
-          meta: result.meta,
-        })
-        failed++
-      } else {
-        // Transient failure — bump retry count and leave it pending for the
-        // next flush cycle.
-        await update(action.id, {
-          status: 'pending',
-          error: result.message,
-          retries: action.retries + 1,
-          meta: result.meta,
-        })
-        failed++
-        // If the network just went down, stop the loop early.
-        if (typeof navigator !== 'undefined' && !navigator.onLine) break
+    await runWithLock(async () => {
+      // Only pick up actions in 'pending'. Skip 'syncing' so a flush from
+      // another context (other tab, SW) that's mid-fetch isn't double-fired.
+      const pending = (await getAll()).filter(a => a.status === 'pending')
+      for (const action of pending) {
+        await update(action.id, { status: 'syncing' })
+        const result = await replayOne(action)
+        if (result.ok) {
+          await remove(action.id)
+          synced++
+        } else if (result.permanent || action.retries + 1 >= MAX_RETRIES) {
+          await update(action.id, {
+            status: 'failed',
+            error: result.message,
+            retries: action.retries + 1,
+            meta: result.meta,
+          })
+          failed++
+        } else {
+          // Transient failure — bump retry count and leave it pending for the
+          // next flush cycle.
+          await update(action.id, {
+            status: 'pending',
+            error: result.message,
+            retries: action.retries + 1,
+            meta: result.meta,
+          })
+          failed++
+          // If the network just went down, stop the loop early.
+          if (typeof navigator !== 'undefined' && !navigator.onLine) break
+        }
       }
-    }
+    })
   } finally {
     flushing = false
   }

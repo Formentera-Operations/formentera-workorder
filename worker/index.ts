@@ -204,7 +204,7 @@ async function resolvePhotoRefs(
   return { body }
 }
 
-async function replayOutbox(): Promise<void> {
+async function replayOutboxInner(): Promise<void> {
   const db = await openDb()
   const pending = await getAllPending(db)
   for (const action of pending) {
@@ -246,6 +246,21 @@ async function replayOutbox(): Promise<void> {
     } catch {
       // Network error — leave action in place for the next sync.
     }
+  }
+}
+
+// Wraps replayOutboxInner in two guards:
+//   1. Skip entirely if any window/tab is open — that page already runs its
+//      own flushOutbox and would race with us, producing duplicates.
+//   2. Web Lock so two SW lifecycles or a SW + a tab can't both fire at once.
+async function replayOutbox(): Promise<void> {
+  const clients = await sw.clients.matchAll({ type: 'window' })
+  if (clients.length > 0) return
+  const locks = (self as unknown as { navigator?: { locks?: { request?: (name: string, opts: object, fn: () => Promise<void>) => Promise<void> } } }).navigator?.locks
+  if (locks?.request) {
+    await locks.request('outbox-flush', { mode: 'exclusive' }, () => replayOutboxInner())
+  } else {
+    await replayOutboxInner()
   }
 }
 
