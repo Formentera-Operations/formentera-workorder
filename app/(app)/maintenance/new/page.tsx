@@ -9,6 +9,7 @@ import { DEPARTMENTS, LOCATION_TYPES, newRequestId } from '@/lib/utils'
 import { useAuth } from '@/components/AuthProvider'
 import { cachedFetch } from '@/lib/cached-fetch'
 import { queuedMutate } from '@/lib/queued-mutate'
+import { warmFormCaches } from '@/lib/warm-form-caches'
 import { uploadPhoto } from '@/lib/upload-photo'
 import PhotoImg from '@/components/ui/PhotoImg'
 import TicketSummaryPreview from '@/components/ui/TicketSummaryPreview'
@@ -97,6 +98,14 @@ export default function MaintenanceFormPage() {
         .catch(() => {})
     }
   }, [form.Equipment_Type, form.Location_Type])
+
+  // Warm the active-tickets cache (and the rest of the form's reference
+  // data) on mount when online — covers foremen who navigate straight to
+  // the new-ticket form without first visiting My Tickets / Maintenance.
+  useEffect(() => {
+    if (userAssets.length === 0) return
+    void warmFormCaches(userAssets)
+  }, [userAssets])
 
   useEffect(() => {
     if (!form.Equipment || (!form.Well && !form.Facility)) {
