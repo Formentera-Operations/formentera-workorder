@@ -7,6 +7,8 @@ import LocationDropdowns from '@/components/forms/LocationDropdowns'
 import SearchableSelect from '@/components/ui/SearchableSelect'
 import { DEPARTMENTS, LOCATION_TYPES } from '@/lib/utils'
 import { useAuth } from '@/components/AuthProvider'
+import { cachedFetch } from '@/lib/cached-fetch'
+import { queuedMutate } from '@/lib/queued-mutate'
 import type { LocationType } from '@/types'
 
 function TicketSummaryPreview({ ticketId, onClose }: { ticketId: number; onClose: () => void }) {
@@ -201,22 +203,35 @@ export default function MaintenanceFormPage() {
     const params = new URLSearchParams()
     const asset = form.Asset || (userAssets.length === 1 ? userAssets[0] : '')
     if (asset) params.set('asset', asset)
-    fetch(`/api/employees?${params}`).then(r => r.json()).then(setEmployees)
+    cachedFetch<typeof employees>(
+      `/api/employees?${params}`,
+      { cacheKey: `employees:${asset}` }
+    )
+      .then(({ data }) => setEmployees(data))
+      .catch(() => {})
   }, [form.Asset, userAssets])
 
   useEffect(() => {
     if (form.Location_Type) {
       setEquipmentTypes([])
       setEquipment([])
-      fetch(`/api/equipment?type=types&locationMatch=${encodeURIComponent(form.Location_Type)}`)
-        .then(r => r.json()).then(setEquipmentTypes)
+      cachedFetch<typeof equipmentTypes>(
+        `/api/equipment?type=types&locationMatch=${encodeURIComponent(form.Location_Type)}`,
+        { cacheKey: `equipment-types:${form.Location_Type}` }
+      )
+        .then(({ data }) => setEquipmentTypes(data))
+        .catch(() => {})
     }
   }, [form.Location_Type])
 
   useEffect(() => {
     if (form.Equipment_Type && form.Location_Type) {
-      fetch(`/api/equipment?type=equipment&equipmentType=${encodeURIComponent(form.Equipment_Type)}&locationMatch=${form.Location_Type}`)
-        .then(r => r.json()).then(setEquipment)
+      cachedFetch<typeof equipment>(
+        `/api/equipment?type=equipment&equipmentType=${encodeURIComponent(form.Equipment_Type)}&locationMatch=${form.Location_Type}`,
+        { cacheKey: `equipment:${form.Location_Type}:${form.Equipment_Type}` }
+      )
+        .then(({ data }) => setEquipment(data))
+        .catch(() => {})
     }
   }, [form.Equipment_Type, form.Location_Type])
 
@@ -240,18 +255,35 @@ export default function MaintenanceFormPage() {
 
   const set = (key: string, val: unknown) => setForm(f => ({ ...f, [key]: val }))
 
-  async function submitTicket(force: boolean): Promise<{ conflict: true; duplicates: DuplicateTicket[] } | { conflict: false }> {
+  async function submitTicket(force: boolean): Promise<{ conflict: true; duplicates: DuplicateTicket[] } | { conflict: false; queued?: boolean }> {
+    const isOnline = typeof navigator === 'undefined' || navigator.onLine
+    const body = {
+      ...form,
+      Created_by_Email: userEmail,
+      Created_by_Name: userName,
+      Self_Dispatch_Assignee: form.Self_Dispatch ? userName : null,
+      Estimate_Cost: form.Estimate_Cost ? parseFloat(form.Estimate_Cost) : null,
+      // The duplicate check still runs at sync time when offline — if the
+      // server detects a duplicate then, the failed-sync review surface
+      // gives the foreman a "Submit anyway" option.
+      force,
+    }
+
+    if (!isOnline) {
+      const label = form.Well || form.Facility || form.Equipment || 'new'
+      const result = await queuedMutate('/api/tickets', {
+        method: 'POST',
+        description: `Submit new ticket — ${label}`,
+        body,
+      })
+      if (!result.ok) throw new Error(result.error || 'Could not save ticket locally')
+      return { conflict: false, queued: true }
+    }
+
     const res = await fetch('/api/tickets', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ...form,
-        Created_by_Email: userEmail,
-        Created_by_Name: userName,
-        Self_Dispatch_Assignee: form.Self_Dispatch ? userName : null,
-        Estimate_Cost: form.Estimate_Cost ? parseFloat(form.Estimate_Cost) : null,
-        force,
-      }),
+      body: JSON.stringify(body),
     })
     if (res.status === 409) {
       const body = await res.json().catch(() => ({ duplicates: [] }))
@@ -287,7 +319,11 @@ export default function MaintenanceFormPage() {
         setConfirmDuplicates(result.duplicates)
         return
       }
-      toast.info('Maintenance Form Successfully Submitted', { duration: 5000 })
+      if (result.queued) {
+        toast.message('Saved offline — will submit when you\'re back online.', { duration: 5000 })
+      } else {
+        toast.info('Maintenance Form Successfully Submitted', { duration: 5000 })
+      }
       router.push('/my-tickets')
     } catch {
       toast.error('Failed to submit ticket. Please try again.')
@@ -303,8 +339,12 @@ export default function MaintenanceFormPage() {
     submitLock.current = true
     setSubmitting(true)
     try {
-      await submitTicket(true)
-      toast.info('Maintenance Form Successfully Submitted', { duration: 5000 })
+      const result = await submitTicket(true)
+      if (result.conflict === false && result.queued) {
+        toast.message('Saved offline — will submit when you\'re back online.', { duration: 5000 })
+      } else {
+        toast.info('Maintenance Form Successfully Submitted', { duration: 5000 })
+      }
       router.push('/my-tickets')
     } catch {
       toast.error('Failed to submit ticket. Please try again.')

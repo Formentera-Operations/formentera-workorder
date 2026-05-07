@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { filterOptions } from '@/lib/utils'
 import SearchableSelect from '@/components/ui/SearchableSelect'
 import WellSearchPicker from '@/components/forms/WellSearchPicker'
+import { cachedFetch } from '@/lib/cached-fetch'
 
 interface LocationDropdownsProps {
   locationType: 'Well' | 'Facility' | ''
@@ -30,9 +31,8 @@ export default function LocationDropdowns({ locationType, onChange, initialValue
   const [facility, setFacility] = useState(initialValues?.facility || '')
 
   useEffect(() => {
-    fetch('/api/well-facility')
-      .then(r => r.json())
-      .then(d => { setWfData(d); setLoading(false) })
+    cachedFetch<WFData>('/api/well-facility', { cacheKey: 'well-facility' })
+      .then(({ data }) => { setWfData(data); setLoading(false) })
       .catch(() => setLoading(false))
   }, [])
 

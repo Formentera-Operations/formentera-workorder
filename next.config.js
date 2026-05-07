@@ -5,10 +5,17 @@ const withPWA = require('@ducanh2912/next-pwa').default({
   register: true,
   cacheOnFrontEndNav: true,
   aheadOfTimeCaching: true,
+  // Custom snippet appended to the generated SW (handles SKIP_WAITING so
+  // the client-side update prompt can activate a waiting worker).
+  customWorkerSrc: 'worker',
   fallbacks: {
     document: '/offline',
   },
   workboxOptions: {
+    // Don't auto-activate a new SW. Foremen could be mid-form when a deploy
+    // lands; we surface an "Update ready" prompt instead so they choose
+    // when to reload.
+    skipWaiting: false,
     // Network-first for everything: when online, always fetch fresh; when
     // offline, fall back to whatever was last cached. Keeps the app from
     // serving stale data unnecessarily.

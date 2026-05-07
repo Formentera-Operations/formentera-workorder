@@ -4,7 +4,10 @@ const MAX_RETRIES = 5
 
 let flushing = false
 
-async function replayOne(action: OutboxAction): Promise<{ ok: true } | { ok: false; status?: number; message: string; permanent: boolean }> {
+async function replayOne(action: OutboxAction): Promise<
+  | { ok: true }
+  | { ok: false; status?: number; message: string; permanent: boolean; meta?: OutboxAction['meta'] }
+> {
   try {
     const res = await fetch(action.url, {
       method: action.method,
@@ -16,13 +19,22 @@ async function replayOne(action: OutboxAction): Promise<{ ok: true } | { ok: fal
     // mark failed and stop retrying so the user can address it.
     const permanent = res.status >= 400 && res.status < 500 && res.status !== 408 && res.status !== 429
     let msg = `${res.status}`
+    let meta: OutboxAction['meta']
     try {
       const data = await res.json()
-      if (data && typeof data === 'object' && typeof (data as { error?: unknown }).error === 'string') {
-        msg = (data as { error: string }).error
+      if (data && typeof data === 'object') {
+        const errVal = (data as { error?: unknown }).error
+        if (typeof errVal === 'string') msg = errVal
+        // POST /api/tickets returns 409 with a `duplicates` payload — keep it
+        // around so the failed-sync UI can show "looks like a duplicate of #N".
+        if (res.status === 409 && Array.isArray((data as { duplicates?: unknown }).duplicates)) {
+          const dupes = (data as { duplicates: NonNullable<OutboxAction['meta']>['duplicates'] }).duplicates
+          meta = { duplicates: dupes }
+          if (!msg || msg === '409') msg = 'Looks like a duplicate'
+        }
       }
     } catch { /* response wasn't JSON */ }
-    return { ok: false, status: res.status, message: msg, permanent }
+    return { ok: false, status: res.status, message: msg, permanent, meta }
   } catch (err) {
     return {
       ok: false,
@@ -47,12 +59,22 @@ export async function flushOutbox(): Promise<{ synced: number; failed: number }>
         await remove(action.id)
         synced++
       } else if (result.permanent || action.retries + 1 >= MAX_RETRIES) {
-        await update(action.id, { status: 'failed', error: result.message, retries: action.retries + 1 })
+        await update(action.id, {
+          status: 'failed',
+          error: result.message,
+          retries: action.retries + 1,
+          meta: result.meta,
+        })
         failed++
       } else {
         // Transient failure — bump retry count and leave it pending for the
         // next flush cycle.
-        await update(action.id, { status: 'pending', error: result.message, retries: action.retries + 1 })
+        await update(action.id, {
+          status: 'pending',
+          error: result.message,
+          retries: action.retries + 1,
+          meta: result.meta,
+        })
         failed++
         // If the network just went down, stop the loop early.
         if (typeof navigator !== 'undefined' && !navigator.onLine) break

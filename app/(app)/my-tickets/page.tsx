@@ -6,6 +6,7 @@ import TicketCard from '@/components/ui/TicketCard'
 import { useAuth } from '@/components/AuthProvider'
 import { TICKET_STATUSES, STATUS_EMOJI } from '@/lib/utils'
 import { cachedFetch } from '@/lib/cached-fetch'
+import { prefetchForOffline } from '@/lib/prefetch-for-offline'
 import type { TicketStatus } from '@/types'
 
 const PAGE_SIZE = 20
@@ -77,10 +78,24 @@ export default function MyTicketsPage() {
       `/api/tickets?${params}`,
       { cacheKey }
     )
-      .then(({ data }) => {
-        if (!cancelled) {
-          setTickets(data.data || [])
-          setTotalCount(data.count ?? 0)
+      .then(({ data, fromCache }) => {
+        if (cancelled) return
+        const rows = data.data || []
+        setTickets(rows)
+        setTotalCount(data.count ?? 0)
+        // Silent offline prefetch: when we got a fresh network response,
+        // warm the SW cache for active tickets so navigating to them
+        // works offline without the user having to tap each one first.
+        if (!fromCache && typeof navigator !== 'undefined' && navigator.onLine) {
+          const ACTIVE = new Set(['Open', 'In Progress', 'Backlogged', 'Awaiting Cost'])
+          const urls = rows
+            .filter(r => {
+              const s = String((r as { Ticket_Status?: string }).Ticket_Status || '')
+              return ACTIVE.has(s)
+            })
+            .map(r => `/maintenance/${(r as { id: string | number }).id}`)
+            .filter(Boolean)
+          if (urls.length > 0) void prefetchForOffline(urls, { concurrency: 4 })
         }
       })
       .catch(() => {})

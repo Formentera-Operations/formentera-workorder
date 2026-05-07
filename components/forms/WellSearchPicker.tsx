@@ -1,6 +1,7 @@
 'use client'
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { ChevronDown, Search, X } from 'lucide-react'
+import { cachedFetch } from '@/lib/cached-fetch'
 
 export interface WellSearchResult {
   well: string
@@ -44,44 +45,59 @@ export default function WellSearchPicker({
 }: WellSearchPickerProps) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
-  const [rows, setRows] = useState<ApiRow[]>([])
-  const [loading, setLoading] = useState(false)
+  const [allRows, setAllRows] = useState<ApiRow[]>([])
+  const [allRowsLoading, setAllRowsLoading] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
-  const requestIdRef = useRef(0)
 
-  const runSearch = useCallback(async (q: string) => {
-    // Server requires at least an asset filter when q is empty/short.
-    if (!q.trim() && !assetFilter) {
-      setRows([])
-      setLoading(false)
-      return
-    }
-    const rid = ++requestIdRef.current
-    setLoading(true)
-    try {
-      const params = new URLSearchParams()
-      if (q.trim()) params.set('q', q.trim())
-      if (assetFilter) params.set('asset', assetFilter)
-      if (fieldFilter) params.set('field', fieldFilter)
-      const res = await fetch(`/api/wells/search?${params.toString()}`)
-      const data = await res.json()
-      if (rid !== requestIdRef.current) return
-      setRows(Array.isArray(data) ? data : [])
-    } catch {
-      if (rid === requestIdRef.current) setRows([])
-    } finally {
-      if (rid === requestIdRef.current) setLoading(false)
-    }
-  }, [assetFilter, fieldFilter])
-
-  // Debounce query → search; fire immediately when dropdown opens
+  // Pull the full well list for the foreman's asset once (cached in IDB so
+  // it works offline). Re-fetches when the asset changes.
   useEffect(() => {
-    if (!open) return
-    const delay = query.trim().length === 0 ? 0 : 300
-    const t = setTimeout(() => runSearch(query), delay)
-    return () => clearTimeout(t)
-  }, [query, open, runSearch])
+    if (!assetFilter) { setAllRows([]); return }
+    let cancelled = false
+    setAllRowsLoading(true)
+    cachedFetch<ApiRow[]>(
+      `/api/wells/all?asset=${encodeURIComponent(assetFilter)}`,
+      { cacheKey: `wells:all:${assetFilter}` }
+    )
+      .then(({ data }) => {
+        if (!cancelled) setAllRows(Array.isArray(data) ? data : [])
+      })
+      .catch(() => { if (!cancelled) setAllRows([]) })
+      .finally(() => { if (!cancelled) setAllRowsLoading(false) })
+    return () => { cancelled = true }
+  }, [assetFilter])
+
+  // Local search that mirrors the server's tokenize-and-match logic so
+  // online and offline results behave the same.
+  const rows = useMemo(() => {
+    if (!assetFilter) return []
+    let pool = allRows
+    if (fieldFilter) pool = pool.filter(r => r.FIELD === fieldFilter)
+    const tokens = query
+      .toLowerCase()
+      .split(/\s+/)
+      .map(t => t.replace(/[^a-z0-9]+/g, ''))
+      .filter(t => t.length >= 1)
+      .slice(0, 10)
+    if (tokens.length === 0) return pool.slice(0, 50)
+    return pool.filter(r => {
+      const blob = [r.WELLNAME, r.NAME, r.UNITIDA, r.FIELD, r.Asset, r.Area, r.ROUTENAME]
+        .filter(Boolean).join(' ').toLowerCase()
+      let pos = 0
+      for (const t of tokens) {
+        const idx = blob.indexOf(t, pos)
+        if (idx === -1) return false
+        pos = idx + t.length
+      }
+      return true
+    }).slice(0, 50)
+  }, [allRows, query, assetFilter, fieldFilter])
+
+  const loading = allRowsLoading
+  // runSearch retained for compatibility; no-op since filtering is reactive.
+  const runSearch = useCallback((_q: string) => {}, [])
+  void runSearch
 
   // Close on outside click
   useEffect(() => {

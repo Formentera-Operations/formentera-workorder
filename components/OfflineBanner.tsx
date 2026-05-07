@@ -1,13 +1,15 @@
 'use client'
-import { useEffect } from 'react'
-import { WifiOff, CloudOff, CheckCircle2, AlertTriangle } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { WifiOff, CloudOff, CheckCircle2, AlertTriangle, ChevronRight } from 'lucide-react'
 import { useOnline } from '@/lib/use-online'
 import { useOutbox } from '@/lib/use-outbox'
 import { startSyncWorker, flushOutbox } from '@/lib/sync-worker'
+import FailedSyncModal from './FailedSyncModal'
 
 export default function OfflineBanner() {
   const online = useOnline()
   const { pending, failed } = useOutbox()
+  const [reviewOpen, setReviewOpen] = useState(false)
 
   // Boot the sync worker once on first mount of the shell.
   useEffect(() => {
@@ -36,10 +38,17 @@ export default function OfflineBanner() {
 
   if (failed > 0) {
     return (
-      <div className="bg-red-50 border-b border-red-200 text-red-800 text-xs px-4 py-2 flex items-center justify-center gap-2">
-        <AlertTriangle size={14} />
-        <span>{failed} change{failed === 1 ? '' : 's'} failed to sync. Open the affected ticket to retry.</span>
-      </div>
+      <>
+        <button
+          onClick={() => setReviewOpen(true)}
+          className="w-full bg-red-50 border-b border-red-200 text-red-800 text-xs px-4 py-2 flex items-center justify-center gap-2 hover:bg-red-100 transition-colors"
+        >
+          <AlertTriangle size={14} />
+          <span>{failed} change{failed === 1 ? '' : 's'} failed to sync. Tap to review.</span>
+          <ChevronRight size={14} />
+        </button>
+        <FailedSyncModal open={reviewOpen} onClose={() => setReviewOpen(false)} />
+      </>
     )
   }
 

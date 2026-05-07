@@ -4,6 +4,7 @@ import { PanelLeftOpen } from 'lucide-react'
 import Sidebar from './Sidebar'
 import BottomNav from './BottomNav'
 import OfflineBanner from '../OfflineBanner'
+import UpdatePrompt from '../UpdatePrompt'
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   // Sidebar starts visible on every page load; collapsing it only persists
@@ -31,6 +32,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* Main content area */}
       <div className={`flex-1 flex flex-col min-w-0 ${sidebarHidden ? 'lg:pl-14' : 'lg:pl-64'}`}>
+        <UpdatePrompt />
         <OfflineBanner />
         <div className="flex-1 max-w-lg lg:max-w-none mx-auto lg:mx-0 w-full bg-white shadow-sm lg:shadow-none">
           <div className="pb-16 lg:pb-0">

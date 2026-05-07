@@ -20,6 +20,10 @@ export interface OutboxAction {
   status: OutboxStatus
   retries: number
   error?: string
+  // Optional metadata captured from server responses — used by the failed
+  // sync review UI. Currently only `duplicates` (array of conflicting
+  // tickets) is set, when a queued create hits a 409 at sync time.
+  meta?: { duplicates?: Array<{ id: number; equipment?: string; well?: string; facility?: string; issue_date?: string }> }
 }
 
 let dbPromise: Promise<IDBDatabase> | null = null
@@ -55,6 +59,23 @@ export function subscribeOutbox(fn: () => void): () => void {
   return () => listeners.delete(fn)
 }
 
+async function registerBackgroundSync(): Promise<void> {
+  // Best-effort: ask the browser to wake our SW and replay the outbox even
+  // if the app tab is closed. Falls through silently when the API isn't
+  // available (Safari, in-app browsers, etc.); the in-app sync worker keeps
+  // covering those cases while the app is open.
+  if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return
+  try {
+    const reg = await navigator.serviceWorker.ready
+    const sync = (reg as unknown as { sync?: { register: (tag: string) => Promise<void> } }).sync
+    if (sync && typeof sync.register === 'function') {
+      await sync.register('outbox-sync')
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
 export async function enqueue(input: Omit<OutboxAction, 'id' | 'createdAt' | 'status' | 'retries'>): Promise<OutboxAction> {
   const action: OutboxAction = {
     ...input,
@@ -77,6 +98,7 @@ export async function enqueue(input: Omit<OutboxAction, 'id' | 'createdAt' | 'st
     // caller can show a user-facing message instead of silently dropping work.
     throw new Error('Could not save your change locally — please try again with a connection.')
   }
+  void registerBackgroundSync()
   return action
 }
 

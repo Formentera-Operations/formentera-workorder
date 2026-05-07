@@ -6,6 +6,8 @@ import { ChevronDown, ChevronUp, Search, Calendar, Wrench, SlidersHorizontal } f
 import TicketCard from '@/components/ui/TicketCard'
 import { useAuth } from '@/components/AuthProvider'
 import { TICKET_STATUSES, STATUS_EMOJI } from '@/lib/utils'
+import { cachedFetch } from '@/lib/cached-fetch'
+import { prefetchForOffline } from '@/lib/prefetch-for-offline'
 import type { TicketStatus } from '@/types'
 
 const PAGE_SIZE = 20
@@ -39,15 +41,21 @@ function MaintenancePageContent() {
   useEffect(() => {
     const params = new URLSearchParams({ mode: 'all' })
     if (userAssets.length > 0) params.set('userAssets', userAssets.join(','))
-    fetch(`/api/tickets/options?${params}`)
-      .then(r => r.json())
-      .then(json => {
-        setAssets(json.assets || [])
-        setDepartments(json.departments || [])
-        setEquipments(json.equipments || [])
-        setForemans(json.foremans || [])
-        setSubmitters(json.submitters || [])
+    cachedFetch<{
+      assets?: string[]; departments?: string[]; equipments?: string[];
+      foremans?: string[]; submitters?: string[]
+    }>(
+      `/api/tickets/options?${params}`,
+      { cacheKey: `maintenance:options:${userAssets.join(',')}` }
+    )
+      .then(({ data }) => {
+        setAssets(data.assets || [])
+        setDepartments(data.departments || [])
+        setEquipments(data.equipments || [])
+        setForemans(data.foremans || [])
+        setSubmitters(data.submitters || [])
       })
+      .catch(() => {})
   }, [userAssets])
 
   useEffect(() => {
@@ -64,12 +72,22 @@ function MaintenancePageContent() {
       pageSize: String(PAGE_SIZE),
     })
     if (userAssets.length > 0) params.set('userAssets', userAssets.join(','))
-    fetch(`/api/tickets?${params}`)
-      .then(res => res.json())
-      .then(json => {
-        if (!cancelled) {
-          setTickets(json.data || [])
-          setTotalCount(json.count ?? 0)
+    const cacheKey = `maintenance:list:${userAssets.join(',')}:${page}:${ticketId}:${search}:${startDate}:${endDate}:${assetFilter}:${deptFilter}:${equipFilter}:${statusFilter}:${foremanFilter}:${submittedByFilter}`
+    cachedFetch<{ data?: Record<string, unknown>[]; count?: number }>(
+      `/api/tickets?${params}`,
+      { cacheKey }
+    )
+      .then(({ data, fromCache }) => {
+        if (cancelled) return
+        const rows = data.data || []
+        setTickets(rows)
+        setTotalCount(data.count ?? 0)
+        if (!fromCache && typeof navigator !== 'undefined' && navigator.onLine) {
+          const ACTIVE = new Set(['Open', 'In Progress', 'Backlogged', 'Awaiting Cost'])
+          const urls = rows
+            .filter(r => ACTIVE.has(String((r as { Ticket_Status?: string }).Ticket_Status || '')))
+            .map(r => `/maintenance/${(r as { id: string | number }).id}`)
+          if (urls.length > 0) void prefetchForOffline(urls, { concurrency: 4 })
         }
       })
       .catch(() => {})
