@@ -7,6 +7,7 @@ import { useAuth } from '@/components/AuthProvider'
 import { TICKET_STATUSES, STATUS_EMOJI } from '@/lib/utils'
 import { cachedFetch } from '@/lib/cached-fetch'
 import { prefetchForOffline } from '@/lib/prefetch-for-offline'
+import { warmFormCaches } from '@/lib/warm-form-caches'
 import type { TicketStatus } from '@/types'
 
 const PAGE_SIZE = 20
@@ -52,6 +53,14 @@ export default function MyTicketsPage() {
       })
       .catch(() => {})
   }, [userEmail, userName, userAssets])
+
+  // Pre-warm the new-ticket form's reference data so it works offline the
+  // first time a foreman opens it (otherwise wells/foremen/equipment-types
+  // would be empty until they'd visited the form online once).
+  useEffect(() => {
+    if (userAssets.length === 0) return
+    void warmFormCaches(userAssets)
+  }, [userAssets])
 
   useEffect(() => {
     if (!userEmail && !userName) return

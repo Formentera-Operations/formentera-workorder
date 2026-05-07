@@ -3,6 +3,34 @@ import { createContext, useContext, useEffect, useState } from 'react'
 import type { User, Session } from '@supabase/supabase-js'
 import { createSupabaseBrowserClient } from '@/lib/supabase-browser'
 
+interface ProfileCache { role: string; assets: string[] }
+
+function profileKey(email: string): string {
+  return `auth:profile:${email.toLowerCase()}`
+}
+
+function readProfileCache(email: string): ProfileCache | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = window.localStorage.getItem(profileKey(email))
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as ProfileCache
+    if (typeof parsed?.role !== 'string' || !Array.isArray(parsed?.assets)) return null
+    return parsed
+  } catch {
+    return null
+  }
+}
+
+function writeProfileCache(email: string, profile: ProfileCache): void {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.setItem(profileKey(email), JSON.stringify(profile))
+  } catch {
+    /* quota / private mode — ignore */
+  }
+}
+
 interface AuthContextType {
   user: User | null
   session: Session | null
@@ -34,14 +62,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const supabase = createSupabaseBrowserClient()
 
   async function loadEmployeeProfile(email: string) {
-    const { data } = await supabase
-      .from('employees')
-      .select('role, assets')
-      .ilike('work_email', email)
-      .single()
-    if (data) {
-      setRole(data.role || 'field_user')
-      setAssets(data.assets || [])
+    // Prime from localStorage first so offline reloads still know who the
+    // foreman is (their role + asset assignments). Otherwise the new-ticket
+    // form falls into multi-asset mode and the well dropdown is empty.
+    const cached = readProfileCache(email)
+    if (cached) {
+      setRole(cached.role || 'field_user')
+      setAssets(cached.assets || [])
+    }
+    try {
+      const { data } = await supabase
+        .from('employees')
+        .select('role, assets')
+        .ilike('work_email', email)
+        .single()
+      if (data) {
+        setRole(data.role || 'field_user')
+        setAssets(data.assets || [])
+        writeProfileCache(email, { role: data.role || 'field_user', assets: data.assets || [] })
+      }
+    } catch {
+      // Offline / network error — leave cached values in place.
     }
   }
 

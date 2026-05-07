@@ -8,6 +8,7 @@ import { useAuth } from '@/components/AuthProvider'
 import { TICKET_STATUSES, STATUS_EMOJI } from '@/lib/utils'
 import { cachedFetch } from '@/lib/cached-fetch'
 import { prefetchForOffline } from '@/lib/prefetch-for-offline'
+import { warmFormCaches } from '@/lib/warm-form-caches'
 import type { TicketStatus } from '@/types'
 
 const PAGE_SIZE = 20
@@ -56,6 +57,12 @@ function MaintenancePageContent() {
         setSubmitters(data.submitters || [])
       })
       .catch(() => {})
+  }, [userAssets])
+
+  // Pre-warm new-ticket form reference data so it works offline.
+  useEffect(() => {
+    if (userAssets.length === 0) return
+    void warmFormCaches(userAssets)
   }, [userAssets])
 
   useEffect(() => {
