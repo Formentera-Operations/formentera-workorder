@@ -140,8 +140,16 @@ export async function flushOutbox(): Promise<{ synced: number; failed: number }>
   let failed = 0
   try {
     await runWithLock(async () => {
-      // Only pick up actions in 'pending'. Skip 'syncing' so a flush from
-      // another context (other tab, SW) that's mid-fetch isn't double-fired.
+      // Under the lock, no other context can be mid-flight, so any action
+      // still in 'syncing' is from a crashed previous attempt (page closed
+      // mid-fetch, etc.). Reset those to 'pending' so they get retried —
+      // server-side dedup catches anything that already landed.
+      const all = await getAll()
+      for (const a of all) {
+        if (a.status === 'syncing') {
+          await update(a.id, { status: 'pending' })
+        }
+      }
       const pending = (await getAll()).filter(a => a.status === 'pending')
       for (const action of pending) {
         await update(action.id, { status: 'syncing' })
