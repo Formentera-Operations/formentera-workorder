@@ -7,7 +7,7 @@ import Accordion from '@/components/ui/Accordion'
 import LocationDropdowns from '@/components/forms/LocationDropdowns'
 import SearchableSelect from '@/components/ui/SearchableSelect'
 import { useAuth } from '@/components/AuthProvider'
-import { formatDate, formatDateShort, DEPARTMENTS, LOCATION_TYPES, WORK_ORDER_DECISIONS, FINAL_STATUSES, PRIORITY_OPTIONS, utcToLocalInput, localInputToUtc } from '@/lib/utils'
+import { formatDate, formatDateShort, DEPARTMENTS, LOCATION_TYPES, WORK_ORDER_DECISIONS, FINAL_STATUSES, PRIORITY_OPTIONS, utcToLocalInput, localInputToUtc, diffEqual } from '@/lib/utils'
 import CommentsSection from '@/components/ui/CommentsSection'
 import { queuedMutate } from '@/lib/queued-mutate'
 import { uploadPhoto } from '@/lib/upload-photo'
@@ -226,30 +226,46 @@ export default function MaintenanceTicketPage() {
   async function saveInitialReport() {
     setSaving(true)
     try {
-      // Stamp the request with the version of the ticket we loaded — the
-      // server rejects with 412 if the row has moved on since, so stale
-      // offline edits can't silently overwrite a fresher change. Reads
-      // the base table's updated_at (auto-bumped by trigger on every
-      // change, including cascading dispatch / repairs updates).
       const loadedTs = ((data?.ticket as Record<string, unknown> | undefined)?.updated_at as string | undefined) || null
+      const loaded = (data?.ticket || {}) as Record<string, unknown>
+
+      // Proposed values for every Initial-Report field. We compare each to
+      // the loaded snapshot and only PATCH the ones that actually changed —
+      // so a stale offline edit can't overwrite unrelated columns somebody
+      // else touched (Equipment, foreman, etc.) and Apply anyway in the
+      // failed-sync modal is genuinely safe.
+      const proposed: Record<string, unknown> = {
+        Department: irForm.Department,
+        Location_Type: irForm.Location_Type,
+        Asset: irForm.Asset,
+        Field: irForm.Field,
+        Well: irForm.Well || null,
+        Facility: irForm.Facility || null,
+        Area: irForm.Area,
+        Route: irForm.Route,
+        Equipment_Type: irForm.Equipment_Type,
+        Equipment: irForm.Equipment,
+        Issue_Description: irForm.Issue_Description,
+        Troubleshooting_Conducted: irForm.Troubleshooting_Conducted,
+        assigned_foreman: irForm.assigned_foreman,
+        Estimate_Cost: irForm.Estimate_Cost ? parseFloat(irForm.Estimate_Cost as string) : null,
+        Issue_Photos: irPhotos,
+      }
+
+      const diff: Record<string, unknown> = {}
+      for (const [k, v] of Object.entries(proposed)) {
+        if (!diffEqual(loaded[k], v)) diff[k] = v
+      }
+
+      if (Object.keys(diff).length === 0) {
+        toast.message('No changes to save.', { duration: 4000 })
+        return
+      }
+
       const result = await queuedMutate(`/api/tickets/${id}`, {
         method: 'PATCH',
         description: `Update ticket #${id}`,
-        body: {
-          Department: irForm.Department,
-          Location_Type: irForm.Location_Type,
-          Asset: irForm.Asset, Field: irForm.Field,
-          Well: irForm.Well || null, Facility: irForm.Facility || null,
-          Area: irForm.Area, Route: irForm.Route,
-          Equipment_Type: irForm.Equipment_Type,
-          Equipment: irForm.Equipment,
-          Issue_Description: irForm.Issue_Description,
-          Troubleshooting_Conducted: irForm.Troubleshooting_Conducted,
-          assigned_foreman: irForm.assigned_foreman,
-          Estimate_Cost: irForm.Estimate_Cost ? parseFloat(irForm.Estimate_Cost as string) : null,
-          Issue_Photos: irPhotos,
-          client_updated_at: loadedTs,
-        },
+        body: { ...diff, client_updated_at: loadedTs },
       })
       if (result.status === 412) {
         toast.error('This ticket was changed by someone else. Reloading to show the latest version — your edits weren\'t saved.', { duration: 7000 })

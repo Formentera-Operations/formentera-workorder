@@ -38,6 +38,22 @@ export function localInputToUtc(local: string | null | undefined): string | null
   return d.toISOString()
 }
 
+// Field-level equality used to build diff-only PATCH bodies. Treats
+// '', null, undefined as the same empty value (so a freshly-loaded null
+// column doesn't show up as a "change" when the form has ''), and
+// compares arrays element-wise so an unchanged photo list doesn't trip
+// the diff. Everything else falls through to strict equality.
+export function diffEqual(a: unknown, b: unknown): boolean {
+  const norm = (v: unknown) => (v === '' || v === undefined ? null : v)
+  const na = norm(a)
+  const nb = norm(b)
+  if (Array.isArray(na) && Array.isArray(nb)) {
+    if (na.length !== nb.length) return false
+    return na.every((v, i) => v === nb[i])
+  }
+  return na === nb
+}
+
 export function formatDate(dateStr: string | null | undefined, fmt = 'MMM d, yyyy, h:mm a'): string {
   if (!dateStr) return '—'
   try {

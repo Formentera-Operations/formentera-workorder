@@ -43,6 +43,29 @@ async function retry(action: OutboxAction) {
   void flushOutbox()
 }
 
+async function applyAnyway(action: OutboxAction) {
+  // For 412 conflicts: re-queue without the client_updated_at stamp so the
+  // server skips the guard. The PATCH only carries fields the foreman
+  // actually edited (description, photos, etc. — never Ticket_Status), so
+  // unrelated changes someone else made online are preserved.
+  if (action.method !== 'PATCH') return
+  const body = (action.body && typeof action.body === 'object')
+    ? { ...(action.body as Record<string, unknown>) }
+    : action.body
+  if (body && typeof body === 'object') {
+    delete (body as Record<string, unknown>).client_updated_at
+  }
+  await enqueue({
+    url: action.url,
+    method: action.method,
+    headers: action.headers,
+    body,
+    description: action.description,
+  })
+  await remove(action.id)
+  void flushOutbox()
+}
+
 async function discard(action: OutboxAction) {
   await remove(action.id)
 }
@@ -156,12 +179,20 @@ export default function FailedSyncModal({ open, onClose }: { open: boolean; onCl
                       Submit anyway
                     </button>
                   ) : isConflict ? (
-                    <button
-                      onClick={() => setPreviewTicketId(conflict.ticketId)}
-                      className="flex-1 text-xs font-medium px-3 py-1.5 rounded-lg bg-[#1B2E6B] text-white hover:bg-[#162456] transition-colors"
-                    >
-                      View latest
-                    </button>
+                    <>
+                      <button
+                        onClick={() => setPreviewTicketId(conflict.ticketId)}
+                        className="flex-1 text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors"
+                      >
+                        View latest
+                      </button>
+                      <button
+                        onClick={() => void applyAnyway(a)}
+                        className="flex-1 text-xs font-medium px-3 py-1.5 rounded-lg bg-[#1B2E6B] text-white hover:bg-[#162456] transition-colors"
+                      >
+                        Apply anyway
+                      </button>
+                    </>
                   ) : (
                     <button
                       onClick={() => void retry(a)}
