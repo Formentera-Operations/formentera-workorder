@@ -153,7 +153,10 @@ export default function MaintenanceFormPage() {
 
   const set = (key: string, val: unknown) => setForm(f => ({ ...f, [key]: val }))
 
-  async function submitTicket(force: boolean): Promise<{ conflict: true; duplicates: DuplicateTicket[] } | { conflict: false; queued?: boolean }> {
+  async function submitTicket(force: boolean): Promise<
+    | { conflict: true; duplicates: DuplicateTicket[] }
+    | { conflict: false; queued?: boolean; ticket?: Record<string, unknown> | null }
+  > {
     const isOnline = typeof navigator === 'undefined' || navigator.onLine
     const body = {
       ...form,
@@ -192,7 +195,19 @@ export default function MaintenanceFormPage() {
       return { conflict: true, duplicates: (body.duplicates || []) as DuplicateTicket[] }
     }
     if (!res.ok) throw new Error('Submit failed')
-    return { conflict: false }
+    const created = await res.json().catch(() => null) as Record<string, unknown> | null
+    return { conflict: false, ticket: created }
+  }
+
+  // After an online submit, stash the new row so /my-tickets can show it
+  // immediately on landing instead of waiting for its own NetworkFirst
+  // fetch (which can briefly serve a stale cached list on slow connections,
+  // making the just-submitted ticket appear missing until a manual refresh).
+  function stashRecentSubmit(ticket: Record<string, unknown> | null | undefined) {
+    if (!ticket || typeof window === 'undefined') return
+    try {
+      sessionStorage.setItem('formentera:recent-submit', JSON.stringify(ticket))
+    } catch { /* quota / private mode — non-fatal */ }
   }
 
   async function handleSubmit() {
@@ -225,6 +240,7 @@ export default function MaintenanceFormPage() {
         toast.message('Saved offline — will submit when you\'re back online.', { duration: 5000 })
       } else {
         toast.info('Maintenance Form Successfully Submitted', { duration: 5000 })
+        stashRecentSubmit(result.ticket)
       }
       router.push('/my-tickets')
     } catch {
@@ -246,6 +262,7 @@ export default function MaintenanceFormPage() {
         toast.message('Saved offline — will submit when you\'re back online.', { duration: 5000 })
       } else {
         toast.info('Maintenance Form Successfully Submitted', { duration: 5000 })
+        if (result.conflict === false) stashRecentSubmit(result.ticket)
       }
       router.push('/my-tickets')
     } catch {

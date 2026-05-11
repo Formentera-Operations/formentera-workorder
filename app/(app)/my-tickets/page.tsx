@@ -24,6 +24,23 @@ export default function MyTicketsPage() {
   const [page, setPage] = useState(0)
   const [totalCount, setTotalCount] = useState(0)
 
+  // Optimistically prepend a ticket the user just submitted online — see
+  // /maintenance/new for the matching stash. Covers the case where the SW's
+  // NetworkFirst strategy serves a brief stale cached list (or any other
+  // cache-layer lag) and the just-submitted row would otherwise be invisible
+  // until the user manually refreshes.
+  const [recentSubmit, setRecentSubmit] = useState<Record<string, unknown> | null>(null)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      const raw = sessionStorage.getItem('formentera:recent-submit')
+      if (!raw) return
+      sessionStorage.removeItem('formentera:recent-submit')
+      const parsed = JSON.parse(raw)
+      if (parsed && typeof parsed === 'object') setRecentSubmit(parsed)
+    } catch { /* ignore */ }
+  }, [])
+
   const [ticketId, setTicketId] = useState('')
   const [search, setSearch] = useState('')
   const [startDate, setStartDate] = useState('')
@@ -287,12 +304,25 @@ export default function MyTicketsPage() {
               />
             )
           })}
-        {loading ? (
-          <div className="py-8 text-center text-sm text-gray-400">Loading tickets…</div>
-        ) : tickets.length === 0 && !(page === 0 && outboxActions.some(a => a.method === 'POST' && a.url === '/api/tickets' && a.status !== 'failed')) ? (
-          <div className="py-8 text-center text-sm text-gray-400">No tickets found.</div>
-        ) : (
-          tickets.map((t) => {
+        {(() => {
+          // Prepend the just-submitted ticket (if any) when it's not yet in
+          // the fetched list — covers the brief window where the SW or
+          // browser HTTP cache hasn't refreshed yet. De-dupes by id once
+          // the network response catches up.
+          const recentId = (recentSubmit as { id?: number } | null)?.id
+          const recentInList = typeof recentId === 'number' && tickets.some(t => (t as { id?: number }).id === recentId)
+          const displayedTickets = recentSubmit && !recentInList && page === 0
+            ? [recentSubmit, ...tickets]
+            : tickets
+          const hasOptimisticQueued = page === 0 && outboxActions.some(a => a.method === 'POST' && a.url === '/api/tickets' && a.status !== 'failed')
+          const hasOptimisticRecent = !!recentSubmit && !recentInList && page === 0
+          if (loading && !hasOptimisticRecent) {
+            return <div className="py-8 text-center text-sm text-gray-400">Loading tickets…</div>
+          }
+          if (displayedTickets.length === 0 && !hasOptimisticQueued) {
+            return <div className="py-8 text-center text-sm text-gray-400">No tickets found.</div>
+          }
+          return displayedTickets.map((t) => {
             const ticket = t as Record<string, unknown>
             const type = String(ticket.Location_Type ?? '').trim()
             const fac  = String(ticket.Facility ?? '').trim()
@@ -316,7 +346,7 @@ export default function MyTicketsPage() {
               />
             )
           })
-        )}
+        })()}
 
         {!loading && totalCount > 0 && (
           <div className="flex items-center justify-between pt-3 pb-2 border-t border-gray-100 mt-1">
