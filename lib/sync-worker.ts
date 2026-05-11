@@ -157,6 +157,9 @@ export async function flushOutbox(): Promise<{ synced: number; failed: number }>
     : <T,>(fn: () => Promise<T>) => fn()
   let synced = 0
   let failed = 0
+  // Collected so we can fire a window event once at the end — the toast
+  // listener subscribes and pops a "✓ X synced" notification per item.
+  const syncedDescriptions: string[] = []
   try {
     await runWithLock(async () => {
       // Under the lock, no other context can be mid-flight, so any action
@@ -174,6 +177,7 @@ export async function flushOutbox(): Promise<{ synced: number; failed: number }>
         await update(action.id, { status: 'syncing' })
         const result = await replayOne(action)
         if (result.ok) {
+          syncedDescriptions.push(action.description)
           await remove(action.id)
           synced++
         } else if (result.permanent || action.retries + 1 >= MAX_RETRIES) {
@@ -201,6 +205,11 @@ export async function flushOutbox(): Promise<{ synced: number; failed: number }>
     })
   } finally {
     flushing = false
+  }
+  if (typeof window !== 'undefined' && syncedDescriptions.length > 0) {
+    window.dispatchEvent(new CustomEvent('formentera:sync-success', {
+      detail: { descriptions: syncedDescriptions },
+    }))
   }
   return { synced, failed }
 }

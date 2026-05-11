@@ -71,6 +71,46 @@ function deriveStatusFromRepairs(body: Record<string, unknown>): string | null {
   return 'Closed'
 }
 
+// Lightweight per-ticket lookup used by the list pages (My Tickets,
+// Maintenance) so each TicketCard can show a Syncing pill + the
+// optimistic resulting status without each row re-walking the entire
+// outbox. Callers compute it once and look up by ticket id.
+export interface OptimisticListEntry {
+  syncing: boolean
+  resultingStatus: string | null
+}
+
+export function buildOptimisticListMap(actions: OutboxAction[]): Map<number, OptimisticListEntry> {
+  const out = new Map<number, OptimisticListEntry>()
+  const active = actions.filter(isActive)
+  for (const a of active) {
+    let ticketId: number | null = null
+    let status: string | null = null
+    if (a.url === '/api/dispatch' && a.method === 'POST') {
+      ticketId = getTicketIdFromBody(a)
+      status = deriveStatusFromDispatch((a.body || {}) as Record<string, unknown>)
+    } else if (a.url === '/api/repairs' && a.method === 'POST') {
+      ticketId = getTicketIdFromBody(a)
+      status = deriveStatusFromRepairs((a.body || {}) as Record<string, unknown>)
+    } else if (a.url === '/api/comments') {
+      ticketId = getTicketIdFromBody(a)
+    } else {
+      const m = /^\/api\/tickets\/(\d+)/.exec(a.url)
+      if (m) ticketId = parseInt(m[1], 10)
+    }
+    if (ticketId === null) continue
+    const prev = out.get(ticketId)
+    out.set(ticketId, {
+      syncing: true,
+      // Last-write-wins for status — a later dispatch/closeout supersedes
+      // an earlier one. Null status (e.g. from a comment) doesn't clear a
+      // prior derived status.
+      resultingStatus: status ?? prev?.resultingStatus ?? null,
+    })
+  }
+  return out
+}
+
 export function buildOptimisticView(
   actions: OutboxAction[],
   ticketId: number,

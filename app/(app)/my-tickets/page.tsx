@@ -10,6 +10,7 @@ import { cachedFetch } from '@/lib/cached-fetch'
 import { prefetchForOffline } from '@/lib/prefetch-for-offline'
 import { warmFormCaches } from '@/lib/warm-form-caches'
 import { useOutbox } from '@/lib/use-outbox'
+import { buildOptimisticListMap } from '@/lib/optimistic-ticket'
 import type { TicketStatus } from '@/types'
 
 const PAGE_SIZE = 20
@@ -322,6 +323,7 @@ export default function MyTicketsPage() {
           if (displayedTickets.length === 0 && !hasOptimisticQueued) {
             return <div className="py-8 text-center text-sm text-gray-400">No tickets found.</div>
           }
+          const optimisticMap = buildOptimisticListMap(outboxActions)
           return displayedTickets.map((t) => {
             const ticket = t as Record<string, unknown>
             const type = String(ticket.Location_Type ?? '').trim()
@@ -333,16 +335,20 @@ export default function MyTicketsPage() {
               type === 'Well'     ? `Well: ${blank(well) ? '—' : well}` :
               !blank(fac)         ? `Facility: ${fac}` :
               !blank(well)        ? `Well: ${well}` : '—'
+            const tid = ticket.id as number
+            const opt = typeof tid === 'number' ? optimisticMap.get(tid) : undefined
+            const displayedStatus = (opt?.resultingStatus ?? ticket.Ticket_Status) as TicketStatus
             return (
               <TicketCard
-                key={ticket.id as number}
-                id={ticket.id as number}
+                key={tid}
+                id={tid}
                 Asset={ticket.Asset as string}
                 locationLabel={locationLabel}
                 Equipment={ticket.Equipment as string}
-                Ticket_Status={ticket.Ticket_Status as TicketStatus}
+                Ticket_Status={displayedStatus}
                 Issue_Photos={ticket.Issue_Photos as string[]}
-                onClick={() => router.push(`/maintenance/${ticket.id}`)}
+                onClick={() => router.push(`/maintenance/${tid}`)}
+                isSyncing={!!opt?.syncing}
               />
             )
           })

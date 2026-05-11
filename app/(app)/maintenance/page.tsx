@@ -9,6 +9,8 @@ import { TICKET_STATUSES, STATUS_EMOJI } from '@/lib/utils'
 import { cachedFetch } from '@/lib/cached-fetch'
 import { prefetchForOffline } from '@/lib/prefetch-for-offline'
 import { warmFormCaches } from '@/lib/warm-form-caches'
+import { useOutbox } from '@/lib/use-outbox'
+import { buildOptimisticListMap } from '@/lib/optimistic-ticket'
 import type { TicketStatus } from '@/types'
 
 const PAGE_SIZE = 20
@@ -17,6 +19,7 @@ function MaintenancePageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { assets: userAssets, role } = useAuth()
+  const { actions: outboxActions } = useOutbox()
   const [tickets, setTickets] = useState<Record<string, unknown>[]>([])
   const [loading, setLoading] = useState(true)
   const [filtersOpen, setFiltersOpen] = useState(() => !!(searchParams.get('equipment') || searchParams.get('startDate') || searchParams.get('status') || searchParams.get('department')))
@@ -291,8 +294,9 @@ function MaintenancePageContent() {
           <div className="py-8 text-center text-sm text-gray-400">Loading tickets…</div>
         ) : tickets.length === 0 ? (
           <div className="py-8 text-center text-sm text-gray-400">No tickets found.</div>
-        ) : (
-          tickets.map((t) => {
+        ) : (() => {
+          const optimisticMap = buildOptimisticListMap(outboxActions)
+          return tickets.map((t) => {
             const ticket = t as Record<string, unknown>
             const type = String(ticket.Location_Type ?? '').trim()
             const fac  = String(ticket.Facility ?? '').trim()
@@ -303,20 +307,24 @@ function MaintenancePageContent() {
               type === 'Well'     ? `Well: ${blank(well) ? '—' : well}` :
               !blank(fac)         ? `Facility: ${fac}` :
               !blank(well)        ? `Well: ${well}` : '—'
+            const tid = ticket.id as number
+            const opt = typeof tid === 'number' ? optimisticMap.get(tid) : undefined
+            const displayedStatus = (opt?.resultingStatus ?? ticket.Ticket_Status) as TicketStatus
             return (
               <TicketCard
-                key={ticket.id as number}
-                id={ticket.id as number}
+                key={tid}
+                id={tid}
                 Asset={ticket.Asset as string}
                 locationLabel={locationLabel}
                 Equipment={ticket.Equipment as string}
-                Ticket_Status={ticket.Ticket_Status as TicketStatus}
+                Ticket_Status={displayedStatus}
                 Issue_Photos={ticket.Issue_Photos as string[]}
-                onClick={() => router.push(`/maintenance/${ticket.id}`)}
+                onClick={() => router.push(`/maintenance/${tid}`)}
+                isSyncing={!!opt?.syncing}
               />
             )
           })
-        )}
+        })()}
 
         {!loading && totalCount > 0 && (
           <div className="flex items-center justify-between pt-3 pb-2 border-t border-gray-100 mt-1">

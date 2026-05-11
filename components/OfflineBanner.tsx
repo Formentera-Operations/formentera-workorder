@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { toast } from 'sonner'
 import { WifiOff, CloudOff, CheckCircle2, AlertTriangle, ChevronRight } from 'lucide-react'
 import { useOnline } from '@/lib/use-online'
 import { useOutbox } from '@/lib/use-outbox'
@@ -21,6 +22,22 @@ export default function OfflineBanner() {
   useEffect(() => {
     if (online) void flushOutbox()
   }, [online])
+
+  // Toast each successfully synced action so the foreman gets explicit
+  // confirmation that "Closeout for ticket #X synced" rather than just
+  // watching the pending banner disappear silently. Fired by the sync
+  // worker after a successful flush.
+  useEffect(() => {
+    const onSyncSuccess = (e: Event) => {
+      const detail = (e as CustomEvent<{ descriptions?: string[] }>).detail
+      const descs = detail?.descriptions || []
+      for (const d of descs) {
+        toast.success(`${d} synced`, { duration: 4000 })
+      }
+    }
+    window.addEventListener('formentera:sync-success', onSyncSuccess)
+    return () => window.removeEventListener('formentera:sync-success', onSyncSuccess)
+  }, [])
 
   if (online && pending === 0 && failed === 0) return null
 

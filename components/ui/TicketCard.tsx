@@ -19,6 +19,10 @@ interface TicketCardProps {
   Ticket_Status: TicketStatus
   Issue_Photos?: string[]
   onClick?: () => void
+  // True when this ticket has a queued (pending/syncing) outbox action —
+  // dispatch, closeout, comment — so the card surfaces it instead of just
+  // showing the server-side status with no hint that work is in flight.
+  isSyncing?: boolean
 }
 
 export default function TicketCard({
@@ -28,6 +32,7 @@ export default function TicketCard({
   Ticket_Status,
   Issue_Photos,
   onClick,
+  isSyncing,
 }: TicketCardProps) {
   const hasPhoto = Issue_Photos && Issue_Photos.length > 0
   const bgClass = STATUS_BG[Ticket_Status] ?? 'bg-white border-gray-100'
@@ -51,8 +56,13 @@ export default function TicketCard({
       </div>
 
       {/* Status */}
-      <div className="flex-shrink-0">
+      <div className="flex-shrink-0 flex flex-col items-end gap-1">
         <StatusBadge status={Ticket_Status} />
+        {isSyncing && (
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-700 text-[10px] font-medium border border-blue-100">
+            Syncing
+          </span>
+        )}
       </div>
     </div>
   )
