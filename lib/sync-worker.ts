@@ -113,14 +113,22 @@ async function replayOne(action: OutboxAction): Promise<
           meta = { duplicates: dupes }
           if (!msg || msg === '409') msg = 'Looks like a duplicate'
         }
-        // PATCH /api/tickets/{id} returns 412 with the `current` row when the
-        // ticket was changed since we loaded it. Stash it so the modal can
-        // offer View latest / Discard.
+        // 412 with a `current` row means the parent ticket changed since we
+        // loaded it. PATCH /api/tickets/{id} carries the id in the URL;
+        // POST /api/dispatch and POST /api/repairs carry it on the response
+        // (`current.id`) since the URL doesn't include the ticket id. Stash
+        // either way so the failed-sync modal can offer View latest / Apply
+        // anyway / Discard.
         if (res.status === 412 && (data as { current?: unknown }).current && typeof (data as { current?: unknown }).current === 'object') {
-          const ticketIdMatch = /\/api\/tickets\/(\d+)/.exec(action.url)
-          const ticketId = ticketIdMatch ? parseInt(ticketIdMatch[1], 10) : NaN
+          const current = (data as { current: Record<string, unknown> }).current
+          const urlIdMatch = /\/api\/tickets\/(\d+)/.exec(action.url)
+          const ticketId = urlIdMatch
+            ? parseInt(urlIdMatch[1], 10)
+            : typeof current.id === 'number'
+            ? current.id
+            : Number(current.id)
           if (!Number.isNaN(ticketId)) {
-            meta = { conflict: { ticketId, current: (data as { current: Record<string, unknown> }).current } }
+            meta = { conflict: { ticketId, current } }
             if (!msg || msg === '412') msg = 'Ticket was changed by someone else'
           }
         }

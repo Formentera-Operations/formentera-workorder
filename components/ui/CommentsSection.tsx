@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { formatDate } from '@/lib/utils'
+import { queuedMutate } from '@/lib/queued-mutate'
 import { CornerDownRight, Trash2, Reply } from 'lucide-react'
 
 type Comment = {
@@ -9,6 +10,7 @@ type Comment = {
   author_name: string
   created_at: string
   parent_id: number | null
+  _pending?: boolean
 }
 
 interface CommentsSectionProps {
@@ -33,16 +35,16 @@ export default function CommentsSection({ comments, ticketId, userName, userEmai
     if (!body.trim()) return
     setPosting(true)
     try {
-      await fetch('/api/comments', {
+      await queuedMutate('/api/comments', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        description: `Comment on ticket #${ticketId}`,
+        body: {
           ticket_id: ticketId,
           body,
           author_name: userName,
           author_email: userEmail,
           parent_id: parentId,
-        }),
+        },
       })
       if (parentId) {
         setReplyText('')
@@ -57,10 +59,10 @@ export default function CommentsSection({ comments, ticketId, userName, userEmai
   }
 
   async function deleteComment(id: number) {
-    await fetch('/api/comments', {
+    await queuedMutate('/api/comments', {
       method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id }),
+      description: `Delete comment on ticket #${ticketId}`,
+      body: { id },
     })
     setDeleteId(null)
     onRefresh()
@@ -71,8 +73,15 @@ export default function CommentsSection({ comments, ticketId, userName, userEmai
     return (
       <div className={`bg-gray-50 rounded-lg p-3 ${indented ? 'flex-1' : ''}`}>
         <div className="flex items-start justify-between gap-2">
-          <p className="text-xs text-gray-500">{c.author_name} · {formatDate(c.created_at)}</p>
-          {isOwner && (
+          <p className="text-xs text-gray-500">
+            {c.author_name} · {formatDate(c.created_at)}
+            {c._pending && (
+              <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-700 text-[10px] font-medium border border-blue-100">
+                Syncing
+              </span>
+            )}
+          </p>
+          {isOwner && !c._pending && (
             <button
               type="button"
               onClick={() => setDeleteId(c.id)}

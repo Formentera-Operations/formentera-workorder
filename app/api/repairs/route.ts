@@ -8,8 +8,45 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const db = supabaseAdmin()
 
+    // Idempotency: a retried POST with the same client_request_id returns the
+    // existing Repairs_Closeout row instead of inserting a second one (which
+    // would also fire a second closeout email).
+    if (typeof body.client_request_id === 'string' && body.client_request_id) {
+      const { data: existing } = await db
+        .from('Repairs_Closeout')
+        .select('*')
+        .eq('client_request_id', body.client_request_id)
+        .maybeSingle()
+      if (existing) return NextResponse.json(existing, { status: 200 })
+    }
+
+    // Conflict guard on the parent ticket — see /api/dispatch and
+    // /api/tickets/[id] for the matching pattern. Catches the case where
+    // someone closed/backlogged the ticket online while the foreman was
+    // filling out closeout offline.
+    const clientTs = typeof body.client_updated_at === 'string' ? body.client_updated_at : null
+    if (clientTs && body.ticket_id) {
+      const { data: current } = await db
+        .from('Maintenance_Form_Submission')
+        .select('updated_at')
+        .eq('id', body.ticket_id)
+        .single()
+      const serverTs = (current as { updated_at?: string } | null)?.updated_at
+      if (serverTs && Date.parse(serverTs) !== Date.parse(clientTs)) {
+        const { data: full } = await db
+          .from('workorder_ticket_list')
+          .select('*')
+          .eq('id', body.ticket_id)
+          .single()
+        return NextResponse.json(
+          { error: 'Ticket was changed by someone else', current: full },
+          { status: 412 }
+        )
+      }
+    }
+
     // Upsert repairs/closeout
-    const { data: repairData, error: repairError } = await db
+    const insertResult = await db
       .from('Repairs_Closeout')
       .insert([{
         ticket_id: body.ticket_id,
@@ -27,9 +64,22 @@ export async function POST(req: NextRequest) {
         Priority_of_Issue: body.Priority_of_Issue || null,
         created_by: body.created_by,
         created_at: new Date().toISOString(),
+        client_request_id: typeof body.client_request_id === 'string' ? body.client_request_id : null,
       }])
       .select()
       .single()
+
+    let { data: repairData, error: repairError } = insertResult
+
+    // Concurrent insert with same idempotency key — return the winner.
+    if (repairError && (repairError as { code?: string }).code === '23505' && body.client_request_id) {
+      const { data: winner } = await db
+        .from('Repairs_Closeout')
+        .select('*')
+        .eq('client_request_id', body.client_request_id)
+        .maybeSingle()
+      if (winner) return NextResponse.json(winner, { status: 200 })
+    }
 
     if (repairError) throw repairError
 

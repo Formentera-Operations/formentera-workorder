@@ -43,12 +43,23 @@ async function retry(action: OutboxAction) {
   void flushOutbox()
 }
 
+function isConflictGuardedAction(a: OutboxAction): boolean {
+  // PATCH /api/tickets/{id} — Initial Report edit
+  if (a.method === 'PATCH' && /^\/api\/tickets\/\d+$/.test(a.url)) return true
+  // POST /api/dispatch and POST /api/repairs — both check the parent
+  // ticket's updated_at server-side and can return 412.
+  if (a.method === 'POST' && (a.url === '/api/dispatch' || a.url === '/api/repairs')) return true
+  return false
+}
+
 async function applyAnyway(action: OutboxAction) {
   // For 412 conflicts: re-queue without the client_updated_at stamp so the
-  // server skips the guard. The PATCH only carries fields the foreman
-  // actually edited (description, photos, etc. — never Ticket_Status), so
-  // unrelated changes someone else made online are preserved.
-  if (action.method !== 'PATCH') return
+  // server skips the guard. PATCH /api/tickets/{id} is diff-only so it only
+  // overwrites fields the foreman touched; POST /api/dispatch and
+  // POST /api/repairs intentionally update the ticket's status because
+  // that's the whole point of dispatching or closing out. Keep the same
+  // client_request_id so a successful Apply anyway can't double-insert.
+  if (!isConflictGuardedAction(action)) return
   const body = (action.body && typeof action.body === 'object')
     ? { ...(action.body as Record<string, unknown>) }
     : action.body
@@ -154,11 +165,12 @@ export default function FailedSyncModal({ open, onClose }: { open: boolean; onCl
                   ].filter(Boolean)
 
                   // Surface what the foreman is trying to change (from the
-                  // queued PATCH body — diff-only, so only fields they
-                  // actually edited show up) alongside the current value
-                  // on the server. That tells them at a glance whether
-                  // their edit collides with what's online now.
+                  // queued body) alongside the current value on the server.
+                  // PATCH bodies are diff-only so only touched fields show
+                  // up; dispatch/repairs POSTs carry the whole submission
+                  // and we extend the label map to cover their fields too.
                   const FIELD_LABELS: Record<string, string> = {
+                    // Initial Report (PATCH /api/tickets/{id})
                     Issue_Description: 'Description',
                     Troubleshooting_Conducted: 'Troubleshooting',
                     Department: 'Department',
@@ -174,22 +186,67 @@ export default function FailedSyncModal({ open, onClose }: { open: boolean; onCl
                     assigned_foreman: 'Assigned Foreman',
                     Estimate_Cost: 'Estimated Cost',
                     Issue_Photos: 'Photos',
+                    // Dispatch (POST /api/dispatch)
+                    work_order_decision: 'Work Order Decision',
+                    maintenance_foreman: 'Maintenance Foreman',
+                    production_foreman: 'Production Foreman',
+                    // Repairs / Closeout (POST /api/repairs)
+                    final_status: 'Final Status',
+                    repair_details: 'Repair Details',
+                    start_date: 'Start Date',
+                    date_completed: 'Date Completed',
+                    repair_images: 'Repair Photos',
                   }
                   const body = (a.body && typeof a.body === 'object' ? a.body : {}) as Record<string, unknown>
-                  const displayValue = (v: unknown): string => {
+                  const displayValue = (v: unknown, key?: string): string => {
                     if (v === null || v === undefined || v === '') return '(blank)'
-                    if (Array.isArray(v)) return `${v.length} photo${v.length === 1 ? '' : 's'}`
+                    if (Array.isArray(v)) {
+                      const noun = key === 'repair_images' ? 'photo' : key === 'Issue_Photos' ? 'photo' : 'item'
+                      return `${v.length} ${noun}${v.length === 1 ? '' : 's'}`
+                    }
                     if (typeof v === 'number') return String(v)
                     return String(v)
                   }
-                  const pendingEdits = Object.entries(body)
-                    .filter(([k]) => k in FIELD_LABELS)
-                    .map(([k, v]) => ({
+                  // For dispatch/repairs, the action is intentionally going to
+                  // change Ticket_Status — derive the new status from the body
+                  // and show it as a synthetic comparison row so the foreman
+                  // sees the actual collision (their proposed status vs the
+                  // status sitting on the server right now).
+                  const derivedStatus: string | null = (() => {
+                    if (a.url === '/api/dispatch') {
+                      const d = String(body.work_order_decision || '')
+                      if (d.toLowerCase().startsWith('backlog')) return 'Backlogged'
+                      if (d === 'Close Ticket - No Action Required') return 'Closed'
+                      if (d) return 'In Progress'
+                      return null
+                    }
+                    if (a.url === '/api/repairs') {
+                      const f = String(body.final_status || '')
+                      if (f === 'Backlog - Awaiting Parts' || f === 'Backlog - Not Economical') return 'Backlogged'
+                      if (f === 'Repaired - Awaiting Final Cost') return 'Awaiting Cost'
+                      if (f) return 'Closed'
+                      return null
+                    }
+                    return null
+                  })()
+                  const pendingEdits: Array<{ key: string; label: string; mine: string; current: string }> = []
+                  if (derivedStatus) {
+                    pendingEdits.push({
+                      key: '__resulting_status',
+                      label: 'Resulting Status',
+                      mine: derivedStatus,
+                      current: displayValue(conflict.current.Ticket_Status),
+                    })
+                  }
+                  for (const [k, v] of Object.entries(body)) {
+                    if (!(k in FIELD_LABELS)) continue
+                    pendingEdits.push({
                       key: k,
                       label: FIELD_LABELS[k],
-                      mine: displayValue(v),
-                      current: displayValue(conflict.current[k]),
-                    }))
+                      mine: displayValue(v, k),
+                      current: displayValue(conflict.current[k], k),
+                    })
+                  }
 
                   return (
                     <div className="space-y-2">

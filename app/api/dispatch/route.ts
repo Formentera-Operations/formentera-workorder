@@ -14,10 +14,48 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const db = supabaseAdmin()
 
+    // Idempotency: if the client supplied a stable request id (one UUID per
+    // submit attempt), check for an existing Dispatch row first so a retried
+    // offline replay doesn't create a duplicate row + duplicate email.
+    if (typeof body.client_request_id === 'string' && body.client_request_id) {
+      const { data: existing } = await db
+        .from('Dispatch')
+        .select('*')
+        .eq('client_request_id', body.client_request_id)
+        .maybeSingle()
+      if (existing) return NextResponse.json(existing, { status: 200 })
+    }
+
+    // Conflict guard: if the client tells us which version of the parent
+    // ticket it edited (the `updated_at` it saw on load), reject when the
+    // ticket has been touched since — caller gets the current row back and
+    // decides whether to Apply anyway or Discard. Mirrors the PATCH guard
+    // in /api/tickets/[id].
+    const clientTs = typeof body.client_updated_at === 'string' ? body.client_updated_at : null
+    if (clientTs && body.ticket_id) {
+      const { data: current } = await db
+        .from('Maintenance_Form_Submission')
+        .select('updated_at')
+        .eq('id', body.ticket_id)
+        .single()
+      const serverTs = (current as { updated_at?: string } | null)?.updated_at
+      if (serverTs && Date.parse(serverTs) !== Date.parse(clientTs)) {
+        const { data: full } = await db
+          .from('workorder_ticket_list')
+          .select('*')
+          .eq('id', body.ticket_id)
+          .single()
+        return NextResponse.json(
+          { error: 'Ticket was changed by someone else', current: full },
+          { status: 412 }
+        )
+      }
+    }
+
     const ticketStatus = deriveTicketStatus(body.work_order_decision || '')
     const estimateCost = body.Estimate_Cost ? parseFloat(body.Estimate_Cost) : null
 
-    const { data: dispatchData, error: dispatchError } = await db
+    const insertResult = await db
       .from('Dispatch')
       .insert([{
         ticket_id: body.ticket_id,
@@ -29,9 +67,22 @@ export async function POST(req: NextRequest) {
         date_assigned: body.date_assigned || new Date().toISOString(),
         created_at: new Date().toISOString(),
         ticket_status: ticketStatus,
+        client_request_id: typeof body.client_request_id === 'string' ? body.client_request_id : null,
       }])
       .select()
       .single()
+
+    let { data: dispatchData, error: dispatchError } = insertResult
+
+    // Concurrent insert with same idempotency key — return the winner.
+    if (dispatchError && (dispatchError as { code?: string }).code === '23505' && body.client_request_id) {
+      const { data: winner } = await db
+        .from('Dispatch')
+        .select('*')
+        .eq('client_request_id', body.client_request_id)
+        .maybeSingle()
+      if (winner) return NextResponse.json(winner, { status: 200 })
+    }
 
     if (dispatchError) throw dispatchError
 

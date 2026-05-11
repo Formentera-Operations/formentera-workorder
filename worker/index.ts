@@ -245,8 +245,14 @@ async function replayOutboxInner(): Promise<void> {
           if (msg === '409') msg = 'Looks like a duplicate'
         }
         if (res.status === 412 && data?.current) {
+          // /api/tickets/{id} carries the id in the URL; /api/dispatch and
+          // /api/repairs carry it on `current.id` since the URL is generic.
           const m = /\/api\/tickets\/(\d+)/.exec(action.url)
-          const ticketId = m ? parseInt(m[1], 10) : NaN
+          const ticketId = m
+            ? parseInt(m[1], 10)
+            : typeof data.current.id === 'number'
+            ? data.current.id
+            : Number(data.current.id)
           if (!Number.isNaN(ticketId)) {
             meta = { conflict: { ticketId, current: data.current } }
             if (msg === '412') msg = 'Ticket was changed by someone else'

@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { ArrowLeft, ChevronDown, Camera, X } from 'lucide-react'
@@ -7,11 +7,13 @@ import Accordion from '@/components/ui/Accordion'
 import LocationDropdowns from '@/components/forms/LocationDropdowns'
 import SearchableSelect from '@/components/ui/SearchableSelect'
 import { useAuth } from '@/components/AuthProvider'
-import { formatDate, formatDateShort, DEPARTMENTS, LOCATION_TYPES, WORK_ORDER_DECISIONS, FINAL_STATUSES, PRIORITY_OPTIONS, utcToLocalInput, localInputToUtc, diffEqual } from '@/lib/utils'
+import { formatDate, formatDateShort, DEPARTMENTS, LOCATION_TYPES, WORK_ORDER_DECISIONS, FINAL_STATUSES, PRIORITY_OPTIONS, utcToLocalInput, localInputToUtc, diffEqual, newRequestId } from '@/lib/utils'
 import CommentsSection from '@/components/ui/CommentsSection'
 import { queuedMutate } from '@/lib/queued-mutate'
 import { uploadPhoto } from '@/lib/upload-photo'
 import { isPhotoRef, deletePhoto, refToId } from '@/lib/offline-photos'
+import { useOutbox } from '@/lib/use-outbox'
+import { buildOptimisticView } from '@/lib/optimistic-ticket'
 import PhotoImg from '@/components/ui/PhotoImg'
 import type { LocationType } from '@/types'
 
@@ -21,6 +23,7 @@ export default function MaintenanceTicketPage() {
   const router = useRouter()
   const { id } = useParams()
   const { userName, userEmail, role, assets: userAssets } = useAuth()
+  const { actions: outboxActions } = useOutbox()
   const [tab, setTab] = useState<Tab>('Summary')
   const [expandAll, setExpandAll] = useState(false)
   const [data, setData] = useState<Record<string, unknown> | null>(null)
@@ -193,6 +196,31 @@ export default function MaintenanceTicketPage() {
     if (!repForm.Job_Type_Primary && match.jobTypePrimary) setRep('Job_Type_Primary', match.jobTypePrimary)
   }, [wellAfes, repForm.AFE_Number, repForm.Job_Category, repForm.Job_Type_Primary])
 
+  // Optimistic overlay of queued actions for this ticket. Lifted here so the
+  // refresh-on-drain effect below can stay above the loading early return
+  // (rules of hooks).
+  const ticketIdNum = typeof id === 'string' ? parseInt(id, 10) : NaN
+  const optimistic = buildOptimisticView(outboxActions, Number.isNaN(ticketIdNum) ? -1 : ticketIdNum, userName)
+
+  // When the queue drains for this ticket (pending → empty), pull fresh
+  // server data so the page transitions out of the optimistic overlay into
+  // the real persisted state.
+  const prevHadPendingRef = useRef(false)
+  useEffect(() => {
+    if (loading) return
+    if (prevHadPendingRef.current && !optimistic.hasPending) {
+      void (async () => {
+        try {
+          const res = await fetch(`/api/tickets/${id}`)
+          const updated = await res.json()
+          setData(updated)
+          initForms(updated)
+        } catch { /* offline — ignore */ }
+      })()
+    }
+    prevHadPendingRef.current = optimistic.hasPending
+  }, [optimistic.hasPending, loading, id])
+
   if (loading) return (
     <div className="flex items-center justify-center min-h-screen">
       <div className="text-sm text-gray-400">Loading…</div>
@@ -215,7 +243,33 @@ export default function MaintenanceTicketPage() {
     !isSelfDispatchedByMe // field_user default
   const repairs = (data?.repairs || {}) as Record<string, unknown>
   const vendorData = (data?.vendors || {}) as Record<string, unknown>
-  const comments = (data?.comments || []) as Record<string, unknown>[]
+  const serverComments = (data?.comments || []) as Record<string, unknown>[]
+
+  const optimisticStatus = optimistic.resultingStatus || (ticket.Ticket_Status as string ?? '')
+  const hasOptimisticEstCost =
+    !!optimistic.pendingDispatch &&
+    !!(optimistic.pendingDispatch.body as Record<string, unknown> | undefined)?.Estimate_Cost
+
+  // Filter out comments the foreman queued for deletion, then append any
+  // queued new comments with a synthetic negative id (CommentsSection keys
+  // off id) and a _pending flag so the row renders a Syncing pill.
+  const comments = (() => {
+    const kept = serverComments.filter(c => {
+      const cid = c.id as number | undefined
+      return typeof cid !== 'number' || !optimistic.pendingCommentDeletes.has(cid)
+    })
+    const appended = optimistic.pendingComments.map((p, idx) => ({
+      id: -(idx + 1),
+      body: p.body,
+      author_name: p.author_name,
+      author_email: '',
+      created_at: p.created_at,
+      parent_id: p.parent_id,
+      _pending: true,
+      _outboxId: p.outboxId,
+    } as Record<string, unknown>))
+    return [...kept, ...appended]
+  })()
 
 
 
@@ -288,6 +342,7 @@ export default function MaintenanceTicketPage() {
   async function saveDispatch() {
     setSaving(true)
     try {
+      const loadedTs = ((data?.ticket as Record<string, unknown> | undefined)?.updated_at as string | undefined) || null
       const result = await queuedMutate('/api/dispatch', {
         method: 'POST',
         description: `Dispatch ticket #${id}`,
@@ -299,8 +354,18 @@ export default function MaintenanceTicketPage() {
           production_foreman: dispForm.additional_assignee || null,
           date_assigned: dispForm.date_assigned,
           current_user_email: userEmail,
+          // Idempotency key so a retried offline replay doesn't double-insert
+          // (and double-email). Conflict guard so a stale dispatch can't
+          // silently overwrite a status change someone else made online.
+          client_request_id: newRequestId(),
+          client_updated_at: loadedTs,
         },
       })
+      if (result.status === 412) {
+        toast.error('This ticket was changed by someone else. Reloading to show the latest version — your dispatch wasn\'t saved.', { duration: 7000 })
+        await refreshData()
+        return
+      }
       if (!result.ok) {
         toast.error(result.error || 'Could not dispatch ticket.', { duration: 6000 })
         return
@@ -350,6 +415,7 @@ export default function MaintenanceTicketPage() {
         ? new Date().toISOString()
         : repForm.date_completed || null
     try {
+      const loadedTs = ((data?.ticket as Record<string, unknown> | undefined)?.updated_at as string | undefined) || null
       const result = await queuedMutate('/api/repairs', {
         method: 'POST',
         description: `Repairs / Closeout for ticket #${id}`,
@@ -364,8 +430,16 @@ export default function MaintenanceTicketPage() {
           current_user_email: userEmail,
           assigned_foreman: dispatch.maintenance_foreman || dispatch.production_foreman || null,
           production_foreman: dispatch.production_foreman || null,
+          // Idempotency + conflict guard — see saveDispatch comment above.
+          client_request_id: newRequestId(),
+          client_updated_at: loadedTs,
         },
       })
+      if (result.status === 412) {
+        toast.error('This ticket was changed by someone else. Reloading to show the latest version — your closeout wasn\'t saved.', { duration: 7000 })
+        await refreshData()
+        return
+      }
       if (!result.ok) {
         toast.error(`Failed to save: ${result.error || 'unknown error'}`, { duration: 8000 })
         return
@@ -405,8 +479,8 @@ export default function MaintenanceTicketPage() {
         <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
           {TABS.filter(t => {
             if (t !== 'Repairs / Closeout') return true
-            const status = (ticket.Ticket_Status as string ?? '').toLowerCase()
-            const hasEstCost = (ticket.Estimate_Cost != null && ticket.Estimate_Cost !== '') || (dispatch.Estimate_Cost != null && dispatch.Estimate_Cost !== '')
+            const status = optimisticStatus.toLowerCase()
+            const hasEstCost = (ticket.Estimate_Cost != null && ticket.Estimate_Cost !== '') || (dispatch.Estimate_Cost != null && dispatch.Estimate_Cost !== '') || hasOptimisticEstCost
             return ['in progress', 'closed', 'backlogged', 'awaiting cost'].includes(status) && hasEstCost
           }).map(t => (
             <button
@@ -423,9 +497,9 @@ export default function MaintenanceTicketPage() {
           ))}
         </div>
         {(() => {
-          const status = (ticket.Ticket_Status as string ?? '').toLowerCase()
+          const status = optimisticStatus.toLowerCase()
           const eligibleStatus = ['in progress', 'closed', 'backlogged', 'awaiting cost'].includes(status)
-          const hasEstCost = (ticket.Estimate_Cost != null && ticket.Estimate_Cost !== '') || (dispatch.Estimate_Cost != null && dispatch.Estimate_Cost !== '')
+          const hasEstCost = (ticket.Estimate_Cost != null && ticket.Estimate_Cost !== '') || (dispatch.Estimate_Cost != null && dispatch.Estimate_Cost !== '') || hasOptimisticEstCost
           if (status === 'open') return (
             <p className="text-xs text-blue-600 mt-2">
               Ticket must be dispatched to view the Repairs / Closeout tab.
@@ -856,11 +930,11 @@ export default function MaintenanceTicketPage() {
                       body: JSON.stringify({ url }),
                     }).catch(err => console.error('Storage delete failed:', err))
                   }
-                  await fetch(`/api/tickets/${id}`, {
+                  await queuedMutate(`/api/tickets/${id}`, {
                     method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ Issue_Photos: updated }),
-                  }).catch(err => console.error('Issue photos update failed:', err))
+                    description: `Remove photo from ticket #${id}`,
+                    body: { Issue_Photos: updated },
+                  })
                 }}
               >
                 Delete
@@ -899,11 +973,11 @@ export default function MaintenanceTicketPage() {
                       body: JSON.stringify({ url }),
                     }).catch(err => console.error('Storage delete failed:', err))
                   }
-                  await fetch('/api/repairs', {
+                  await queuedMutate('/api/repairs', {
                     method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ ticket_id: id, repair_images: updated }),
-                  }).catch(err => console.error('Repair images update failed:', err))
+                    description: `Remove repair photo from ticket #${id}`,
+                    body: { ticket_id: id, repair_images: updated },
+                  })
                 }}
               >
                 Delete
@@ -949,6 +1023,15 @@ export default function MaintenanceTicketPage() {
               <h2 className="text-xl font-bold text-gray-900">{(ticket.Well || ticket.Facility) as string}</h2>
               <p className="text-sm text-gray-500">{formatDate(ticket.Issue_Date as string)}</p>
             </div>
+
+            {optimistic.pendingDispatch && (
+              <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900 flex items-center gap-2">
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-white text-blue-700 text-[10px] font-medium border border-blue-100">
+                  Syncing
+                </span>
+                Dispatch saved offline — will sync when you&apos;re back online.
+              </div>
+            )}
 
             <div className="border-t border-gray-200 pt-4">
               <h3 className="text-lg font-bold text-gray-900 mb-4">Task Assignment</h3>
@@ -1055,6 +1138,15 @@ export default function MaintenanceTicketPage() {
               <h2 className="text-xl font-bold text-gray-900">{(ticket.Well || ticket.Facility) as string}</h2>
               <p className="text-sm text-gray-500">{formatDate(ticket.Issue_Date as string)}</p>
             </div>
+
+            {optimistic.pendingRepairs && (
+              <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900 flex items-center gap-2">
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-white text-blue-700 text-[10px] font-medium border border-blue-100">
+                  Syncing
+                </span>
+                Closeout saved offline — will sync when you&apos;re back online.
+              </div>
+            )}
 
             <div className="border-t border-gray-200 pt-4 space-y-4">
               <h3 className="text-lg font-bold text-gray-900">Final Status and Closeout</h3>
