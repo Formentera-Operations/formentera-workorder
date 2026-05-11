@@ -7,7 +7,7 @@ import Accordion from '@/components/ui/Accordion'
 import LocationDropdowns from '@/components/forms/LocationDropdowns'
 import SearchableSelect from '@/components/ui/SearchableSelect'
 import { useAuth } from '@/components/AuthProvider'
-import { formatDate, formatDateShort, DEPARTMENTS, LOCATION_TYPES, WORK_ORDER_DECISIONS, FINAL_STATUSES, PRIORITY_OPTIONS } from '@/lib/utils'
+import { formatDate, formatDateShort, DEPARTMENTS, LOCATION_TYPES, WORK_ORDER_DECISIONS, FINAL_STATUSES, PRIORITY_OPTIONS, utcToLocalInput, localInputToUtc } from '@/lib/utils'
 import CommentsSection from '@/components/ui/CommentsSection'
 import { queuedMutate } from '@/lib/queued-mutate'
 import { uploadPhoto } from '@/lib/upload-photo'
@@ -1057,7 +1057,13 @@ export default function MaintenanceTicketPage() {
 
               <div>
                 <label className="form-label">Start Date</label>
-                <input type="datetime-local" className="form-input" value={repForm.start_date ? (repForm.start_date as string).slice(0, 16) : ''} onChange={e => setRep('start_date', e.target.value)} disabled={isReadOnly} />
+                <input
+                  type="datetime-local"
+                  className="form-input"
+                  value={utcToLocalInput(repForm.start_date as string | null | undefined)}
+                  onChange={e => setRep('start_date', localInputToUtc(e.target.value) ?? '')}
+                  disabled={isReadOnly}
+                />
               </div>
 
               <div>
@@ -1312,9 +1318,9 @@ export default function MaintenanceTicketPage() {
                 <input
                   type="datetime-local"
                   className="form-input"
-                  value={repForm.date_completed ? (repForm.date_completed as string).slice(0, 16) : ''}
-                  min={repForm.start_date ? (repForm.start_date as string).slice(0, 16) : undefined}
-                  onChange={e => setRep('date_completed', e.target.value)}
+                  value={utcToLocalInput(repForm.date_completed as string | null | undefined)}
+                  min={utcToLocalInput(repForm.start_date as string | null | undefined) || undefined}
+                  onChange={e => setRep('date_completed', localInputToUtc(e.target.value) ?? '')}
                   disabled={isReadOnly}
                 />
                 {repForm.start_date && repForm.date_completed && new Date(repForm.date_completed as string) < new Date(repForm.start_date as string) && (

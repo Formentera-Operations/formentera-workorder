@@ -16,6 +16,28 @@ export function newRequestId(): string {
   return `req-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
 }
 
+// Convert a UTC ISO timestamp to the "YYYY-MM-DDTHH:MM" shape that
+// <input type="datetime-local"> expects, rendered in the user's local
+// time. Returns '' for nullish input so it slots straight into a
+// controlled input's `value`.
+export function utcToLocalInput(iso: string | null | undefined): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+// Reverse of utcToLocalInput — takes the local "YYYY-MM-DDTHH:MM" value
+// the datetime-local input produces and returns a UTC ISO string so the
+// server stores a properly-anchored timestamptz.
+export function localInputToUtc(local: string | null | undefined): string | null {
+  if (!local) return null
+  const d = new Date(local)
+  if (Number.isNaN(d.getTime())) return null
+  return d.toISOString()
+}
+
 export function formatDate(dateStr: string | null | undefined, fmt = 'MMM d, yyyy, h:mm a'): string {
   if (!dateStr) return '—'
   try {
