@@ -44,21 +44,23 @@ export async function PATCH(
     // Conflict guard: if the client tells us which version it edited (the
     // `last_activity_ts` it saw on load), reject the update when the row
     // has moved on since — caller gets the current row back and can decide
-    // whether to retry against the fresh state.
+    // whether to retry against the fresh state. The column lives on the
+    // workorder_ticket_list view (computed from related tables), not the
+    // base table, so we read from the view and don't try to write to it.
     const clientTs = typeof body.client_last_activity_ts === 'string' ? body.client_last_activity_ts : null
     const updateBody: Record<string, unknown> = { ...body }
     delete updateBody.client_last_activity_ts
 
     if (clientTs) {
       const { data: current } = await db
-        .from('Maintenance_Form_Submission')
+        .from('workorder_ticket_list')
         .select('last_activity_ts')
         .eq('id', id)
         .single()
       const serverTs = (current as { last_activity_ts?: string } | null)?.last_activity_ts
       if (serverTs && Date.parse(serverTs) !== Date.parse(clientTs)) {
         const { data: full } = await db
-          .from('Maintenance_Form_Submission')
+          .from('workorder_ticket_list')
           .select('*')
           .eq('id', id)
           .single()
@@ -71,7 +73,7 @@ export async function PATCH(
 
     const { data, error } = await db
       .from('Maintenance_Form_Submission')
-      .update({ ...updateBody, last_activity_ts: new Date().toISOString() })
+      .update(updateBody)
       .eq('id', id)
       .select()
       .single()
