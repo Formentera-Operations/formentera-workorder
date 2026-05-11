@@ -152,20 +152,78 @@ export default function FailedSyncModal({ open, onClose }: { open: boolean; onCl
                     createdBy ? `Submitted by ${createdBy}` : '',
                     foreman ? `Assigned to ${foreman}` : '',
                   ].filter(Boolean)
+
+                  // Surface what the foreman is trying to change (from the
+                  // queued PATCH body — diff-only, so only fields they
+                  // actually edited show up) alongside the current value
+                  // on the server. That tells them at a glance whether
+                  // their edit collides with what's online now.
+                  const FIELD_LABELS: Record<string, string> = {
+                    Issue_Description: 'Description',
+                    Troubleshooting_Conducted: 'Troubleshooting',
+                    Department: 'Department',
+                    Location_Type: 'Location Type',
+                    Asset: 'Asset',
+                    Field: 'Field',
+                    Well: 'Well',
+                    Facility: 'Facility',
+                    Area: 'Area',
+                    Route: 'Route',
+                    Equipment_Type: 'Equipment Type',
+                    Equipment: 'Equipment',
+                    assigned_foreman: 'Assigned Foreman',
+                    Estimate_Cost: 'Estimated Cost',
+                    Issue_Photos: 'Photos',
+                  }
+                  const body = (a.body && typeof a.body === 'object' ? a.body : {}) as Record<string, unknown>
+                  const displayValue = (v: unknown): string => {
+                    if (v === null || v === undefined || v === '') return '(blank)'
+                    if (Array.isArray(v)) return `${v.length} photo${v.length === 1 ? '' : 's'}`
+                    if (typeof v === 'number') return String(v)
+                    return String(v)
+                  }
+                  const pendingEdits = Object.entries(body)
+                    .filter(([k]) => k in FIELD_LABELS)
+                    .map(([k, v]) => ({
+                      key: k,
+                      label: FIELD_LABELS[k],
+                      mine: displayValue(v),
+                      current: displayValue(conflict.current[k]),
+                    }))
+
                   return (
-                    <div className="rounded-lg bg-white border border-amber-200 px-3 py-2 text-xs">
-                      <div className="font-semibold text-gray-900">
-                        Latest version of #{conflict.ticketId}
-                        {conflict.current.Ticket_Status ? ` · ${String(conflict.current.Ticket_Status)}` : ''}
-                      </div>
-                      <div className="text-gray-500 mt-0.5">
-                        {subtitleParts.length > 0 ? subtitleParts.join(' · ') : '—'}
-                      </div>
-                      {meaningfulDescription(conflict.current.Issue_Description as string | undefined) && (
-                        <div className="text-gray-700 mt-1 line-clamp-2">
-                          {meaningfulDescription(conflict.current.Issue_Description as string | undefined)}
+                    <div className="space-y-2">
+                      {pendingEdits.length > 0 && (
+                        <div className="rounded-lg bg-blue-50 border border-blue-200 px-3 py-2 text-xs">
+                          <div className="font-semibold text-blue-900 mb-1">Your offline edit{pendingEdits.length === 1 ? '' : 's'}</div>
+                          <div className="space-y-1">
+                            {pendingEdits.map(p => (
+                              <div key={p.key}>
+                                <span className="font-medium text-blue-900">{p.label}:</span>{' '}
+                                <span className="text-blue-900">{p.mine}</span>
+                                {p.mine !== p.current && (
+                                  <span className="text-blue-700"> (online now: {p.current})</span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       )}
+
+                      <div className="rounded-lg bg-white border border-amber-200 px-3 py-2 text-xs">
+                        <div className="font-semibold text-gray-900">
+                          Latest version of #{conflict.ticketId}
+                          {conflict.current.Ticket_Status ? ` · ${String(conflict.current.Ticket_Status)}` : ''}
+                        </div>
+                        <div className="text-gray-500 mt-0.5">
+                          {subtitleParts.length > 0 ? subtitleParts.join(' · ') : '—'}
+                        </div>
+                        {meaningfulDescription(conflict.current.Issue_Description as string | undefined) && (
+                          <div className="text-gray-700 mt-1 line-clamp-2">
+                            {meaningfulDescription(conflict.current.Issue_Description as string | undefined)}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )
                 })()}
