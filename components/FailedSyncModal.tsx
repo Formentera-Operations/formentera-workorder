@@ -122,22 +122,30 @@ export default function FailedSyncModal({ open, onClose }: { open: boolean; onCl
                   </div>
                 )}
 
-                {isConflict && (
-                  <div className="rounded-lg bg-white border border-amber-200 px-3 py-2 text-xs">
-                    <div className="font-semibold text-gray-900">
-                      Latest version of #{conflict.ticketId}
-                      {conflict.current.Ticket_Status ? ` · ${String(conflict.current.Ticket_Status)}` : ''}
-                    </div>
-                    <div className="text-gray-500 mt-0.5">
-                      {conflict.current.assigned_foreman ? `Assigned to ${String(conflict.current.assigned_foreman)}` : '—'}
-                    </div>
-                    {meaningfulDescription(conflict.current.Issue_Description as string | undefined) && (
-                      <div className="text-gray-700 mt-1 line-clamp-2">
-                        {meaningfulDescription(conflict.current.Issue_Description as string | undefined)}
+                {isConflict && (() => {
+                  const createdBy = conflict.current.Created_by_Name ? String(conflict.current.Created_by_Name) : ''
+                  const foreman = conflict.current.assigned_foreman ? String(conflict.current.assigned_foreman) : ''
+                  const subtitleParts = [
+                    createdBy ? `Submitted by ${createdBy}` : '',
+                    foreman ? `Assigned to ${foreman}` : '',
+                  ].filter(Boolean)
+                  return (
+                    <div className="rounded-lg bg-white border border-amber-200 px-3 py-2 text-xs">
+                      <div className="font-semibold text-gray-900">
+                        Latest version of #{conflict.ticketId}
+                        {conflict.current.Ticket_Status ? ` · ${String(conflict.current.Ticket_Status)}` : ''}
                       </div>
-                    )}
-                  </div>
-                )}
+                      <div className="text-gray-500 mt-0.5">
+                        {subtitleParts.length > 0 ? subtitleParts.join(' · ') : '—'}
+                      </div>
+                      {meaningfulDescription(conflict.current.Issue_Description as string | undefined) && (
+                        <div className="text-gray-700 mt-1 line-clamp-2">
+                          {meaningfulDescription(conflict.current.Issue_Description as string | undefined)}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })()}
 
                 <div className="flex items-center gap-2">
                   {isDup ? (
