@@ -228,8 +228,10 @@ export default function MaintenanceTicketPage() {
     try {
       // Stamp the request with the version of the ticket we loaded — the
       // server rejects with 412 if the row has moved on since, so stale
-      // offline edits can't silently overwrite a fresher change.
-      const loadedTs = ((data?.ticket as Record<string, unknown> | undefined)?.last_activity_ts as string | undefined) || null
+      // offline edits can't silently overwrite a fresher change. Reads
+      // the base table's updated_at (auto-bumped by trigger on every
+      // change, including cascading dispatch / repairs updates).
+      const loadedTs = ((data?.ticket as Record<string, unknown> | undefined)?.updated_at as string | undefined) || null
       const result = await queuedMutate(`/api/tickets/${id}`, {
         method: 'PATCH',
         description: `Update ticket #${id}`,
@@ -246,7 +248,7 @@ export default function MaintenanceTicketPage() {
           assigned_foreman: irForm.assigned_foreman,
           Estimate_Cost: irForm.Estimate_Cost ? parseFloat(irForm.Estimate_Cost as string) : null,
           Issue_Photos: irPhotos,
-          client_last_activity_ts: loadedTs,
+          client_updated_at: loadedTs,
         },
       })
       if (result.status === 412) {
