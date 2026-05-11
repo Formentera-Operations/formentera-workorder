@@ -30,7 +30,7 @@ export default function OfflineBanner() {
         <WifiOff size={14} />
         <span>
           You&apos;re offline — showing cached data.
-          {pending > 0 ? ` ${pending} change${pending === 1 ? '' : 's'} will sync when you&apos;re back online.` : ' Submissions are paused.'}
+          {pending > 0 ? ` ${pending} change${pending === 1 ? '' : 's'} will sync when you’re back online.` : ' Submissions are paused.'}
         </span>
       </div>
     )
