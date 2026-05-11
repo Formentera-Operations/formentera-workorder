@@ -76,12 +76,18 @@ export default function FailedSyncModal({ open, onClose }: { open: boolean; onCl
           ) : failed.map(a => {
             const dupes = a.meta?.duplicates || []
             const isDup = isCreateTicketAction(a) && dupes.length > 0
+            const conflict = a.meta?.conflict
+            const isConflict = !!conflict
             return (
               <div key={a.id} className="px-4 py-3 space-y-2">
                 <div>
                   <p className="text-sm font-medium text-gray-900">{a.description}</p>
                   <p className="text-xs text-red-600">
-                    {isDup ? `Looks like a duplicate of ${dupes.map(d => `#${d.id}`).join(', ')}` : (a.error || 'Failed')}
+                    {isDup
+                      ? `Looks like a duplicate of ${dupes.map(d => `#${d.id}`).join(', ')}`
+                      : isConflict
+                      ? `Ticket #${conflict.ticketId} was changed by someone else after you saved`
+                      : (a.error || 'Failed')}
                   </p>
                 </div>
 
@@ -116,6 +122,23 @@ export default function FailedSyncModal({ open, onClose }: { open: boolean; onCl
                   </div>
                 )}
 
+                {isConflict && (
+                  <div className="rounded-lg bg-white border border-amber-200 px-3 py-2 text-xs">
+                    <div className="font-semibold text-gray-900">
+                      Latest version of #{conflict.ticketId}
+                      {conflict.current.Ticket_Status ? ` · ${String(conflict.current.Ticket_Status)}` : ''}
+                    </div>
+                    <div className="text-gray-500 mt-0.5">
+                      {conflict.current.assigned_foreman ? `Assigned to ${String(conflict.current.assigned_foreman)}` : '—'}
+                    </div>
+                    {meaningfulDescription(conflict.current.Issue_Description as string | undefined) && (
+                      <div className="text-gray-700 mt-1 line-clamp-2">
+                        {meaningfulDescription(conflict.current.Issue_Description as string | undefined)}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="flex items-center gap-2">
                   {isDup ? (
                     <button
@@ -123,6 +146,13 @@ export default function FailedSyncModal({ open, onClose }: { open: boolean; onCl
                       className="flex-1 text-xs font-medium px-3 py-1.5 rounded-lg bg-[#1B2E6B] text-white hover:bg-[#162456] transition-colors"
                     >
                       Submit anyway
+                    </button>
+                  ) : isConflict ? (
+                    <button
+                      onClick={() => setPreviewTicketId(conflict.ticketId)}
+                      className="flex-1 text-xs font-medium px-3 py-1.5 rounded-lg bg-[#1B2E6B] text-white hover:bg-[#162456] transition-colors"
+                    >
+                      View latest
                     </button>
                   ) : (
                     <button

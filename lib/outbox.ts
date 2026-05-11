@@ -21,9 +21,9 @@ export interface OutboxAction {
   retries: number
   error?: string
   // Optional metadata captured from server responses — used by the failed
-  // sync review UI. Currently only `duplicates` (array of conflicting
-  // tickets) is set, when a queued create hits a 409 at sync time. Field
-  // names mirror the server payload from POST /api/tickets.
+  // sync review UI. `duplicates` is set when a queued create hits a 409
+  // (POST /api/tickets); `conflict` is set when a queued edit hits a 412
+  // because the row was changed by someone else since the foreman loaded it.
   meta?: {
     duplicates?: Array<{
       id: number
@@ -36,6 +36,10 @@ export interface OutboxAction {
       Facility?: string
       Issue_Description?: string
     }>
+    conflict?: {
+      ticketId: number
+      current: Record<string, unknown>
+    }
   }
 }
 

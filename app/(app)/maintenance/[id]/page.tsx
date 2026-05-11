@@ -226,6 +226,10 @@ export default function MaintenanceTicketPage() {
   async function saveInitialReport() {
     setSaving(true)
     try {
+      // Stamp the request with the version of the ticket we loaded — the
+      // server rejects with 412 if the row has moved on since, so stale
+      // offline edits can't silently overwrite a fresher change.
+      const loadedTs = ((data?.ticket as Record<string, unknown> | undefined)?.last_activity_ts as string | undefined) || null
       const result = await queuedMutate(`/api/tickets/${id}`, {
         method: 'PATCH',
         description: `Update ticket #${id}`,
@@ -242,8 +246,14 @@ export default function MaintenanceTicketPage() {
           assigned_foreman: irForm.assigned_foreman,
           Estimate_Cost: irForm.Estimate_Cost ? parseFloat(irForm.Estimate_Cost as string) : null,
           Issue_Photos: irPhotos,
+          client_last_activity_ts: loadedTs,
         },
       })
+      if (result.status === 412) {
+        toast.error('This ticket was changed by someone else. Reloading to show the latest version — your edits weren\'t saved.', { duration: 7000 })
+        await refreshData()
+        return
+      }
       if (!result.ok) {
         toast.error(result.error || 'Could not save initial report.', { duration: 6000 })
         return

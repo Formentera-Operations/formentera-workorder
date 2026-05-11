@@ -41,9 +41,37 @@ export async function PATCH(
     const db = supabaseAdmin()
     const id = parseInt(params.id)
 
+    // Conflict guard: if the client tells us which version it edited (the
+    // `last_activity_ts` it saw on load), reject the update when the row
+    // has moved on since — caller gets the current row back and can decide
+    // whether to retry against the fresh state.
+    const clientTs = typeof body.client_last_activity_ts === 'string' ? body.client_last_activity_ts : null
+    const updateBody: Record<string, unknown> = { ...body }
+    delete updateBody.client_last_activity_ts
+
+    if (clientTs) {
+      const { data: current } = await db
+        .from('Maintenance_Form_Submission')
+        .select('last_activity_ts')
+        .eq('id', id)
+        .single()
+      const serverTs = (current as { last_activity_ts?: string } | null)?.last_activity_ts
+      if (serverTs && Date.parse(serverTs) !== Date.parse(clientTs)) {
+        const { data: full } = await db
+          .from('Maintenance_Form_Submission')
+          .select('*')
+          .eq('id', id)
+          .single()
+        return NextResponse.json(
+          { error: 'Ticket was changed by someone else', current: full },
+          { status: 412 }
+        )
+      }
+    }
+
     const { data, error } = await db
       .from('Maintenance_Form_Submission')
-      .update(body)
+      .update({ ...updateBody, last_activity_ts: new Date().toISOString() })
       .eq('id', id)
       .select()
       .single()

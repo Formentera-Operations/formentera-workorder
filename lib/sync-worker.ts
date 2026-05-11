@@ -113,6 +113,17 @@ async function replayOne(action: OutboxAction): Promise<
           meta = { duplicates: dupes }
           if (!msg || msg === '409') msg = 'Looks like a duplicate'
         }
+        // PATCH /api/tickets/{id} returns 412 with the `current` row when the
+        // ticket was changed since we loaded it. Stash it so the modal can
+        // offer View latest / Discard.
+        if (res.status === 412 && (data as { current?: unknown }).current && typeof (data as { current?: unknown }).current === 'object') {
+          const ticketIdMatch = /\/api\/tickets\/(\d+)/.exec(action.url)
+          const ticketId = ticketIdMatch ? parseInt(ticketIdMatch[1], 10) : NaN
+          if (!Number.isNaN(ticketId)) {
+            meta = { conflict: { ticketId, current: (data as { current: Record<string, unknown> }).current } }
+            if (!msg || msg === '412') msg = 'Ticket was changed by someone else'
+          }
+        }
       }
     } catch { /* response wasn't JSON */ }
     return { ok: false, status: res.status, message: msg, permanent, meta }

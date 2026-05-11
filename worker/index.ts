@@ -47,7 +47,10 @@ interface OutboxAction {
   status: 'pending' | 'syncing' | 'failed'
   retries: number
   error?: string
-  meta?: { duplicates?: Array<{ id: number }> }
+  meta?: {
+    duplicates?: Array<{ id: number }>
+    conflict?: { ticketId: number; current: Record<string, unknown> }
+  }
 }
 
 function openDb(): Promise<IDBDatabase> {
@@ -231,11 +234,23 @@ async function replayOutboxInner(): Promise<void> {
       let msg = `${res.status}`
       let meta: OutboxAction['meta']
       try {
-        const data = (await res.json()) as { error?: string; duplicates?: Array<{ id: number }> }
+        const data = (await res.json()) as {
+          error?: string
+          duplicates?: Array<{ id: number }>
+          current?: Record<string, unknown>
+        }
         if (typeof data?.error === 'string') msg = data.error
         if (res.status === 409 && Array.isArray(data?.duplicates)) {
           meta = { duplicates: data.duplicates }
           if (msg === '409') msg = 'Looks like a duplicate'
+        }
+        if (res.status === 412 && data?.current) {
+          const m = /\/api\/tickets\/(\d+)/.exec(action.url)
+          const ticketId = m ? parseInt(m[1], 10) : NaN
+          if (!Number.isNaN(ticketId)) {
+            meta = { conflict: { ticketId, current: data.current } }
+            if (msg === '412') msg = 'Ticket was changed by someone else'
+          }
         }
       } catch { /* not JSON */ }
       if (permanent || action.retries + 1 >= MAX_RETRIES) {
