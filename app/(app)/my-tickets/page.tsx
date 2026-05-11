@@ -25,6 +25,16 @@ export default function MyTicketsPage() {
   const [page, setPage] = useState(0)
   const [totalCount, setTotalCount] = useState(0)
 
+  // Bumped when the outbox drains so the list re-fetches and shows the
+  // freshly-synced server state (without this, the Syncing pill clears
+  // but the ticket's old Ticket_Status sticks around until manual refresh).
+  const [refreshNonce, setRefreshNonce] = useState(0)
+  useEffect(() => {
+    const onSyncSuccess = () => setRefreshNonce(n => n + 1)
+    window.addEventListener('formentera:sync-success', onSyncSuccess)
+    return () => window.removeEventListener('formentera:sync-success', onSyncSuccess)
+  }, [])
+
   // Optimistically prepend a ticket the user just submitted online — see
   // /maintenance/new for the matching stash. Covers the case where the SW's
   // NetworkFirst strategy serves a brief stale cached list (or any other
@@ -135,7 +145,7 @@ export default function MyTicketsPage() {
       .catch(() => {})
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [page, ticketId, search, startDate, endDate, assetFilter, deptFilter, equipFilter, statusFilter, userEmail, userName, userAssets])
+  }, [page, ticketId, search, startDate, endDate, assetFilter, deptFilter, equipFilter, statusFilter, userEmail, userName, userAssets, refreshNonce])
 
   useEffect(() => { setPage(0) }, [ticketId, search, startDate, endDate, assetFilter, deptFilter, equipFilter, statusFilter])
 

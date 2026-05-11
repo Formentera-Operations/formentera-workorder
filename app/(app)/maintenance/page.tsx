@@ -20,6 +20,15 @@ function MaintenancePageContent() {
   const searchParams = useSearchParams()
   const { assets: userAssets, role } = useAuth()
   const { actions: outboxActions } = useOutbox()
+
+  // Bumped when the outbox drains so the list re-fetches and shows the
+  // freshly-synced server state — see /my-tickets for the matching logic.
+  const [refreshNonce, setRefreshNonce] = useState(0)
+  useEffect(() => {
+    const onSyncSuccess = () => setRefreshNonce(n => n + 1)
+    window.addEventListener('formentera:sync-success', onSyncSuccess)
+    return () => window.removeEventListener('formentera:sync-success', onSyncSuccess)
+  }, [])
   const [tickets, setTickets] = useState<Record<string, unknown>[]>([])
   const [loading, setLoading] = useState(true)
   const [filtersOpen, setFiltersOpen] = useState(() => !!(searchParams.get('equipment') || searchParams.get('startDate') || searchParams.get('status') || searchParams.get('department')))
@@ -108,7 +117,7 @@ function MaintenancePageContent() {
       .catch(() => {})
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [page, ticketId, search, startDate, endDate, assetFilter, deptFilter, equipFilter, statusFilter, foremanFilter, submittedByFilter, userAssets])
+  }, [page, ticketId, search, startDate, endDate, assetFilter, deptFilter, equipFilter, statusFilter, foremanFilter, submittedByFilter, userAssets, refreshNonce])
 
   useEffect(() => { setPage(0) }, [ticketId, search, startDate, endDate, assetFilter, deptFilter, equipFilter, statusFilter, foremanFilter, submittedByFilter])
 
