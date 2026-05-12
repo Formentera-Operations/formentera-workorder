@@ -147,13 +147,19 @@ export default function KPIDashboard() {
       <div className="space-y-4 mt-6">
         <div className="grid grid-cols-2 gap-3">
           {[0, 1, 2, 3].map(i => (
-            <div key={i} className="h-20 bg-gray-100 rounded-xl animate-pulse" />
+            <div key={i} className="h-[88px] bg-gray-100 rounded-xl animate-pulse" />
           ))}
         </div>
-        <div className="h-20 bg-gray-100 rounded-xl animate-pulse" />
-        <div className="h-44 bg-gray-100 rounded-xl animate-pulse" />
-        <div className="h-36 bg-gray-100 rounded-xl animate-pulse" />
-        <div className="h-40 bg-gray-100 rounded-xl animate-pulse" />
+        <div className="h-[88px] bg-gray-100 rounded-xl animate-pulse" />
+        {/* Daily-trend skeleton sized to match the real chart card
+            (title + presets row + 110px chart + p-4 padding ≈ 214px).
+            Previous h-44 was 38px short and the swap caused ~0.17 of
+            cumulative layout shift on every load. */}
+        <div className="h-[214px] bg-gray-100 rounded-xl animate-pulse" />
+        {/* Needs Attention is variable-height (0-10 rows) and renders
+            below the fold for most viewports, so don't paint a skeleton
+            there — a guessed height would shift content either way when
+            it resolves. */}
       </div>
     )
   }
