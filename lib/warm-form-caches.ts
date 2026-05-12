@@ -53,32 +53,30 @@ export async function warmFormCaches(userAssets: string[]): Promise<void> {
     )
   }
 
-  // Equipment is two-tier: types (per location), then names (per location +
-  // type). We chain these so each location's per-type equipment lists fire
-  // as soon as we know what types exist.
+  // AFE lists used by the Repairs / Closeout tab's Work Order Type = AFE
+  // flow. Per-well AFEs vary by ticket and aren't pre-warmed here — the
+  // detail page's SWR fetch handles those on first open.
+  tasks.push(
+    cachedFetch('/api/afe', { cacheKey: 'afe:list' }).catch(() => null)
+  )
+  tasks.push(
+    cachedFetch('/api/afe?scope=all', { cacheKey: 'afe:list:all' }).catch(() => null)
+  )
+
+  // Pre-warm the equipment *types* per location only. The per-type
+  // equipment-name lists were previously warmed here too — 20+ parallel
+  // fetches that saturated the browser's per-origin connection pool and
+  // backed up KPI / other requests on home-page load. Now that the form
+  // uses cachedFetchSwr for equipment names, the first pick per session
+  // pays a small lazy fetch and every subsequent pick is instant from
+  // cache. Cheap insurance vs. blocking the whole page on speculative
+  // prefetches the foreman might never use.
   for (const lt of LOCATION_TYPES) {
     tasks.push(
-      (async () => {
-        try {
-          const { data } = await cachedFetch<Array<{ equipment_type?: string }>>(
-            `/api/equipment?type=types&locationMatch=${encodeURIComponent(lt)}`,
-            { cacheKey: `equipment-types:${lt}` }
-          )
-          const types = (Array.isArray(data) ? data : [])
-            .map(r => r?.equipment_type)
-            .filter((t): t is string => typeof t === 'string' && t.length > 0)
-          await Promise.all(
-            types.map(t =>
-              cachedFetch(
-                `/api/equipment?type=equipment&equipmentType=${encodeURIComponent(t)}&locationMatch=${lt}`,
-                { cacheKey: `equipment:${lt}:${t}` }
-              ).catch(() => null)
-            )
-          )
-        } catch {
-          /* ignore — best-effort warm */
-        }
-      })()
+      cachedFetch(
+        `/api/equipment?type=types&locationMatch=${encodeURIComponent(lt)}`,
+        { cacheKey: `equipment-types:${lt}` }
+      ).catch(() => null)
     )
   }
 

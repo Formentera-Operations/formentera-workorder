@@ -166,9 +166,20 @@ export default function MaintenanceTicketPage() {
   useEffect(() => {
     const wot = String(repForm.Work_Order_Type || '')
     if (wot.startsWith('AFE') && afes.length === 0) {
-      fetch('/api/afe').then(r => r.json()).then(data => {
-        if (Array.isArray(data)) setAfes(data)
-      }).catch(() => {})
+      // SWR: paint the dropdown from cache instantly (Job_Category and
+      // Job_Type_Primary auto-fill off this list once an AFE is picked),
+      // then refresh from the network in the background. Was previously
+      // a raw fetch with no cache — every "Work Order Type → AFE" flip
+      // blocked on the network and failed entirely offline.
+      cachedFetchSwr<typeof afes>(
+        '/api/afe',
+        {
+          cacheKey: 'afe:list',
+          onCached: (data) => { if (Array.isArray(data)) setAfes(data) },
+        }
+      )
+        .then(({ data }) => { if (Array.isArray(data)) setAfes(data) })
+        .catch(() => {})
     }
   }, [repForm.Work_Order_Type, afes.length])
 
@@ -177,15 +188,25 @@ export default function MaintenanceTicketPage() {
     const unitId = (data?.ticket as Record<string, unknown> | undefined)?.Well_UNITID as string | undefined
     if (!wot.startsWith('AFE') || !unitId) return
     if (wellAfes === null) {
-      fetch(`/api/wells/${encodeURIComponent(unitId)}/afes`)
-        .then(r => r.json())
-        .then(d => { if (Array.isArray(d)) setWellAfes(d) })
+      cachedFetchSwr<typeof wellAfes>(
+        `/api/wells/${encodeURIComponent(unitId)}/afes`,
+        {
+          cacheKey: `wells:${unitId}:afes`,
+          onCached: (data) => { if (Array.isArray(data)) setWellAfes(data) },
+        }
+      )
+        .then(({ data }) => { if (Array.isArray(data)) setWellAfes(data) })
         .catch(() => {})
     }
     if (afesAll.length === 0) {
-      fetch('/api/afe?scope=all')
-        .then(r => r.json())
-        .then(d => { if (Array.isArray(d)) setAfesAll(d) })
+      cachedFetchSwr<typeof afesAll>(
+        '/api/afe?scope=all',
+        {
+          cacheKey: 'afe:list:all',
+          onCached: (data) => { if (Array.isArray(data)) setAfesAll(data) },
+        }
+      )
+        .then(({ data }) => { if (Array.isArray(data)) setAfesAll(data) })
         .catch(() => {})
     }
   }, [repForm.Work_Order_Type, data, wellAfes, afesAll.length])
