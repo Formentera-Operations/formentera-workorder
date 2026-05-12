@@ -88,6 +88,24 @@ const nextConfig = {
     // Required for snowflake-sdk in API routes
     serverComponentsExternalPackages: ['snowflake-sdk'],
   },
+  // Security headers applied to every response. Both are cheap free wins
+  // that satisfy Lighthouse Best Practices and add real defense-in-depth:
+  //   • X-Frame-Options: DENY blocks anyone embedding this app in an
+  //     iframe (clickjacking protection).
+  //   • Cross-Origin-Opener-Policy: same-origin isolates this window from
+  //     cross-origin pages. Safe here because Supabase Microsoft OAuth
+  //     uses a full-page redirect, not a popup window.
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          { key: 'X-Frame-Options', value: 'DENY' },
+          { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
+        ],
+      },
+    ]
+  },
 }
 
 module.exports = withPWA(nextConfig)
