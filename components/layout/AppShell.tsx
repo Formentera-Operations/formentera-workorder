@@ -42,11 +42,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <div className={`flex-1 flex flex-col min-w-0 ${sidebarHidden ? 'lg:pl-14' : 'lg:pl-64'}`}>
         <UpdatePrompt />
         <OfflineBanner />
-        <div className="flex-1 max-w-lg lg:max-w-none mx-auto lg:mx-0 w-full bg-white shadow-sm lg:shadow-none">
+        <main className="flex-1 max-w-lg lg:max-w-none mx-auto lg:mx-0 w-full bg-white shadow-sm lg:shadow-none">
           <div className="pb-16 lg:pb-0">
             {children}
           </div>
-        </div>
+        </main>
 
         {/* Bottom nav — mobile only */}
         <BottomNav />

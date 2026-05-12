@@ -30,14 +30,13 @@ export const metadata: Metadata = {
   },
 }
 
-// Strict mobile viewport — no pinch zoom, no scaling. Lives in its own
-// export now (was a manual <meta name="viewport"> tag in <head>) so
-// Next.js renders it once instead of double-emitting alongside its own.
+// Mobile viewport. Pinch-zoom is intentionally allowed (was disabled in
+// an earlier iteration but that failed Lighthouse a11y for low-vision
+// users). iOS Safari won't auto-zoom on input focus because every input/
+// select/textarea is forced to 16px on mobile in globals.css.
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
