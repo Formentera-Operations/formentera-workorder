@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { ChevronRight } from 'lucide-react'
 import { useAuth } from '@/components/AuthProvider'
@@ -109,31 +109,44 @@ export default function KPIDashboard() {
       .catch(() => {})
   }, [assets, loading, trendPreset, trendStart, trendEnd])
 
+  // The visibility / polling / realtime listeners all need to call the
+  // latest fetchKPIs without re-subscribing every time the deps change.
+  // Keep an always-current ref so the stable useEffects below can invoke
+  // it without tearing down their subscriptions on every render. Without
+  // this, a single page load fires fetchKPIs 4+ times as auth state
+  // settles (each re-render rebuilt the callback, re-fired the effect).
+  const fetchKPIsRef = useRef(fetchKPIs)
+  useEffect(() => { fetchKPIsRef.current = fetchKPIs }, [fetchKPIs])
+
+  // Single trigger for initial + dependency-driven fetches. Keyed off the
+  // actual values that should cause a refetch — not the callback identity.
   useEffect(() => {
-    fetchKPIs()
-  }, [fetchKPIs])
+    if (loading) return
+    if (trendPreset === 'custom' && (!trendStart || !trendEnd)) return
+    fetchKPIsRef.current()
+  }, [loading, assets, trendPreset, trendStart, trendEnd])
 
   useEffect(() => {
-    const onVisible = () => { if (document.visibilityState === 'visible') fetchKPIs() }
+    const onVisible = () => { if (document.visibilityState === 'visible') fetchKPIsRef.current() }
     document.addEventListener('visibilitychange', onVisible)
     return () => document.removeEventListener('visibilitychange', onVisible)
-  }, [fetchKPIs])
+  }, [])
 
   // Poll every 30 seconds as a fallback when Realtime isn't available
   useEffect(() => {
-    const interval = setInterval(fetchKPIs, 30_000)
+    const interval = setInterval(() => fetchKPIsRef.current(), 30_000)
     return () => clearInterval(interval)
-  }, [fetchKPIs])
+  }, [])
 
   useEffect(() => {
     const supabase = createSupabaseBrowserClient()
     const channel = supabase
       .channel('kpi-refresh')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'Maintenance_Form_Submission' }, fetchKPIs)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'Repairs_Closeout' }, fetchKPIs)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'Maintenance_Form_Submission' }, () => fetchKPIsRef.current())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'Repairs_Closeout' }, () => fetchKPIsRef.current())
       .subscribe()
     return () => { supabase.removeChannel(channel) }
-  }, [fetchKPIs])
+  }, [])
 
   if (!data) {
     return (

@@ -48,12 +48,16 @@ export async function GET(req: NextRequest) {
     // The userAssets filter is inlined per-query rather than extracted to
     // a helper — wrapping Supabase's chained builder in a generic blows
     // up the inferred types past TypeScript's recursion limit.
+    // Targeting the base table directly avoids the workorder_ticket_summary
+    // view's three LEFT JOINs (Dispatch, Repairs_Closeout, vendor_payment_details)
+    // — those joins were recomputed on every aggregate query and dominated
+    // the response time. Status + dates + asset all live on the base table.
     const applyAssets = userAssets.length > 0
     const statusCountPromises = KNOWN_STATUSES.map(async (status) => {
-      let q = db.from('workorder_ticket_summary')
+      let q = db.from('Maintenance_Form_Submission')
         .select('*', { count: 'exact', head: true })
-        .eq('ticket_status', status)
-      if (applyAssets) q = q.in('asset', userAssets)
+        .eq('Ticket_Status', status)
+      if (applyAssets) q = q.in('Asset', userAssets)
       const { count } = await q
       return { status, count: count || 0 }
     })
@@ -61,56 +65,56 @@ export async function GET(req: NextRequest) {
     // Tickets with NULL status historically rolled into "Open" — preserve
     // that behavior so the card counts match what the table SUM would show.
     const nullStatusCountPromise = (async () => {
-      let q = db.from('workorder_ticket_summary')
+      let q = db.from('Maintenance_Form_Submission')
         .select('*', { count: 'exact', head: true })
-        .is('ticket_status', null)
-      if (applyAssets) q = q.in('asset', userAssets)
+        .is('Ticket_Status', null)
+      if (applyAssets) q = q.in('Asset', userAssets)
       const { count } = await q
       return count || 0
     })()
 
     const totalCountPromise = (async () => {
-      let q = db.from('workorder_ticket_summary').select('*', { count: 'exact', head: true })
-      if (applyAssets) q = q.in('asset', userAssets)
+      let q = db.from('Maintenance_Form_Submission').select('*', { count: 'exact', head: true })
+      if (applyAssets) q = q.in('Asset', userAssets)
       const { count } = await q
       return count || 0
     })()
 
-    // Top 10 oldest unresolved tickets. ticket_id > 700 filter matches the
-    // previous behavior (legacy/test rows excluded from the Needs Attention
-    // surface). Ordering by issue_date ASC gives us oldest-first cheaply.
+    // Top 10 oldest unresolved tickets. id > 700 filter matches the previous
+    // behavior (legacy/test rows excluded from the Needs Attention surface).
+    // Ordering by Issue_Date ASC gives us oldest-first cheaply.
     const agedPromise = (async () => {
-      let q = db.from('workorder_ticket_summary')
-        .select('ticket_id, field, equipment_name, ticket_status, issue_date')
-        .in('ticket_status', OPEN_STATUSES as unknown as string[])
-        .gt('ticket_id', 700)
-      if (applyAssets) q = q.in('asset', userAssets)
+      let q = db.from('Maintenance_Form_Submission')
+        .select('id, Field, Equipment, Ticket_Status, Issue_Date')
+        .in('Ticket_Status', OPEN_STATUSES as unknown as string[])
+        .gt('id', 700)
+      if (applyAssets) q = q.in('Asset', userAssets)
       const { data, error } = await q
-        .order('issue_date', { ascending: true })
+        .order('Issue_Date', { ascending: true })
         .limit(10)
       if (error) throw error
       const nowMs = Date.now()
       return (data || []).map(r => ({
-        ticket_id: r.ticket_id as number,
-        field: (r.field as string) || '',
-        equipment: (r.equipment_name as string) || 'Unknown',
-        status: r.ticket_status as string,
-        days_open: Math.floor((nowMs - new Date(r.issue_date as string).getTime()) / 86_400_000),
+        ticket_id: r.id as number,
+        field: (r.Field as string) || '',
+        equipment: (r.Equipment as string) || 'Unknown',
+        status: r.Ticket_Status as string,
+        days_open: Math.floor((nowMs - new Date(r.Issue_Date as string).getTime()) / 86_400_000),
       }))
     })()
 
-    // Daily trend — pull only the issue_date column for tickets in the
+    // Daily trend — pull only the Issue_Date column for tickets in the
     // selected range, then bucket per day in JS. One column + a bounded
     // date range keeps the payload tiny even on "Last Year" custom ranges.
     const trendPromise = (async () => {
-      let q = db.from('workorder_ticket_summary')
-        .select('issue_date')
-        .gte('issue_date', rangeStartIso)
-        .lt('issue_date', rangeEndIso)
-      if (applyAssets) q = q.in('asset', userAssets)
+      let q = db.from('Maintenance_Form_Submission')
+        .select('Issue_Date')
+        .gte('Issue_Date', rangeStartIso)
+        .lt('Issue_Date', rangeEndIso)
+      if (applyAssets) q = q.in('Asset', userAssets)
       const { data, error } = await q
       if (error) throw error
-      return (data || []) as { issue_date: string }[]
+      return (data || []) as { Issue_Date: string }[]
     })()
 
     const [statusResults, nullCount, total, agedTickets, trendRows] = await Promise.all([
@@ -141,7 +145,7 @@ export async function GET(req: NextRequest) {
     }
     const trendIndex = new Map(trend.map((t, i) => [t.date, i]))
     for (const r of trendRows) {
-      const date = (r.issue_date || '').slice(0, 10)
+      const date = (r.Issue_Date || '').slice(0, 10)
       const idx = trendIndex.get(date)
       if (idx !== undefined) trend[idx].count++
     }
