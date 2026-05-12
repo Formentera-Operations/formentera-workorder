@@ -7,7 +7,7 @@ import LocationDropdowns from '@/components/forms/LocationDropdowns'
 import SearchableSelect from '@/components/ui/SearchableSelect'
 import { DEPARTMENTS, LOCATION_TYPES, newRequestId } from '@/lib/utils'
 import { useAuth } from '@/components/AuthProvider'
-import { cachedFetch } from '@/lib/cached-fetch'
+import { cachedFetch, cachedFetchSwr } from '@/lib/cached-fetch'
 import { queuedMutate } from '@/lib/queued-mutate'
 import { warmFormCaches } from '@/lib/warm-form-caches'
 import { uploadPhoto } from '@/lib/upload-photo'
@@ -77,11 +77,19 @@ export default function MaintenanceFormPage() {
 
   useEffect(() => {
     if (form.Location_Type) {
+      // SWR: populate the dropdown instantly from the warmed cache, then
+      // refresh from the network in the background. Equipment data barely
+      // changes between sessions, so the cached value is almost always
+      // correct — and waiting on a fresh fetch every time was the cause
+      // of the "Equipment Type takes a while to load" lag.
       setEquipmentTypes([])
       setEquipment([])
-      cachedFetch<typeof equipmentTypes>(
+      cachedFetchSwr<typeof equipmentTypes>(
         `/api/equipment?type=types&locationMatch=${encodeURIComponent(form.Location_Type)}`,
-        { cacheKey: `equipment-types:${form.Location_Type}` }
+        {
+          cacheKey: `equipment-types:${form.Location_Type}`,
+          onCached: (data) => setEquipmentTypes(data),
+        }
       )
         .then(({ data }) => setEquipmentTypes(data))
         .catch(() => {})
@@ -90,9 +98,12 @@ export default function MaintenanceFormPage() {
 
   useEffect(() => {
     if (form.Equipment_Type && form.Location_Type) {
-      cachedFetch<typeof equipment>(
+      cachedFetchSwr<typeof equipment>(
         `/api/equipment?type=equipment&equipmentType=${encodeURIComponent(form.Equipment_Type)}&locationMatch=${form.Location_Type}`,
-        { cacheKey: `equipment:${form.Location_Type}:${form.Equipment_Type}` }
+        {
+          cacheKey: `equipment:${form.Location_Type}:${form.Equipment_Type}`,
+          onCached: (data) => setEquipment(data),
+        }
       )
         .then(({ data }) => setEquipment(data))
         .catch(() => {})

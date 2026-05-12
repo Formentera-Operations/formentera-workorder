@@ -1,13 +1,29 @@
 'use client'
+import { useEffect } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { Wrench } from 'lucide-react'
 import KPIDashboard from '@/components/home/KPIDashboard'
 import { useAuth } from '@/components/AuthProvider'
+import { warmFormCaches } from '@/lib/warm-form-caches'
 
 export default function HomePage() {
-  const { role } = useAuth()
+  const { role, assets: userAssets } = useAuth()
   const isAnalyst = role === 'analyst'
+
+  // Pre-warm the new-ticket form's reference data (well/facility tree,
+  // equipment types + names, employees, active tickets) while the user
+  // reads the KPI cards. Without this, a foreman who taps "Submit a
+  // Ticket" straight from the home page races the form-mount warm and
+  // ends up waiting on the Equipment Type / Equipment dropdowns the
+  // first time around. Analysts can't submit tickets so skip them.
+  useEffect(() => {
+    if (isAnalyst) return
+    void warmFormCaches(userAssets)
+    const onOnline = () => { void warmFormCaches(userAssets) }
+    window.addEventListener('online', onOnline)
+    return () => window.removeEventListener('online', onOnline)
+  }, [isAnalyst, userAssets])
 
   return (
     <div className="flex flex-col min-h-screen">

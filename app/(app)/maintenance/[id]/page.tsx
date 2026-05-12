@@ -10,6 +10,7 @@ import { useAuth } from '@/components/AuthProvider'
 import { formatDate, formatDateShort, DEPARTMENTS, LOCATION_TYPES, WORK_ORDER_DECISIONS, FINAL_STATUSES, PRIORITY_OPTIONS, utcToLocalInput, localInputToUtc, diffEqual, newRequestId } from '@/lib/utils'
 import CommentsSection from '@/components/ui/CommentsSection'
 import { queuedMutate } from '@/lib/queued-mutate'
+import { cachedFetchSwr } from '@/lib/cached-fetch'
 import { uploadPhoto } from '@/lib/upload-photo'
 import { isPhotoRef, deletePhoto, refToId } from '@/lib/offline-photos'
 import { useOutbox } from '@/lib/use-outbox'
@@ -130,8 +131,19 @@ export default function MaintenanceTicketPage() {
   useEffect(() => {
     const locType = irForm.Location_Type as string
     if (locType) {
-      fetch(`/api/equipment?type=types&locationMatch=${encodeURIComponent(locType)}`)
-        .then(r => r.json()).then(setEquipmentTypes)
+      // Same SWR treatment as the new-ticket form — cached value renders
+      // immediately, network refreshes in-place. The previous raw fetch
+      // here didn't use the cache at all, so editing Location Type on
+      // the detail page always blocked on a fresh network call.
+      cachedFetchSwr<typeof equipmentTypes>(
+        `/api/equipment?type=types&locationMatch=${encodeURIComponent(locType)}`,
+        {
+          cacheKey: `equipment-types:${locType}`,
+          onCached: (data) => setEquipmentTypes(data),
+        }
+      )
+        .then(({ data }) => setEquipmentTypes(data))
+        .catch(() => {})
     }
   }, [irForm.Location_Type])
 
@@ -139,8 +151,15 @@ export default function MaintenanceTicketPage() {
     const eqType = irForm.Equipment_Type as string
     const locType = irForm.Location_Type as string
     if (eqType && locType) {
-      fetch(`/api/equipment?type=equipment&equipmentType=${encodeURIComponent(eqType)}&locationMatch=${locType}`)
-        .then(r => r.json()).then(setEquipment)
+      cachedFetchSwr<typeof equipment>(
+        `/api/equipment?type=equipment&equipmentType=${encodeURIComponent(eqType)}&locationMatch=${locType}`,
+        {
+          cacheKey: `equipment:${locType}:${eqType}`,
+          onCached: (data) => setEquipment(data),
+        }
+      )
+        .then(({ data }) => setEquipment(data))
+        .catch(() => {})
     }
   }, [irForm.Equipment_Type, irForm.Location_Type])
 
