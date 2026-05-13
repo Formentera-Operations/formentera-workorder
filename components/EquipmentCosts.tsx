@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useMemo, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from 'recharts'
@@ -231,6 +232,7 @@ function ChartTooltip({ active, payload, label }: {
 }
 
 export default function EquipmentCosts({ userAssets }: { userAssets: string[] }) {
+  const router = useRouter()
   const [costType, setCostType] = useState<CostType>('estimate_cost')
   const [equipCategoryFilter, setEquipCategoryFilter] = useState<string[]>([])
   const [fieldFilter, setFieldFilter] = useState<string[]>([])
@@ -626,7 +628,11 @@ export default function EquipmentCosts({ userAssets }: { userAssets: string[] })
                   const showSavings = est > 0 || rep > 0
                   const statusClass = t.ticket_status ? STATUS_COLORS[t.ticket_status] || 'bg-gray-100 text-gray-700' : 'bg-gray-100 text-gray-700'
                   return (
-                    <tr key={t.ticket_id} className="border-b border-gray-100 hover:bg-gray-50">
+                    <tr
+                      key={t.ticket_id}
+                      className="border-b border-gray-100 hover:bg-blue-50/40 cursor-pointer transition-colors"
+                      onClick={() => router.push(`/maintenance/${t.ticket_id}`)}
+                    >
                       <td className="px-2 py-2 font-medium text-[#1B2E6B] whitespace-nowrap">#{t.ticket_id}</td>
                       <td className="px-2 py-2 text-gray-700 whitespace-nowrap">{t.department || '—'}</td>
                       <td className="px-2 py-2 text-gray-700 whitespace-nowrap">{t.work_order_type || '—'}</td>
