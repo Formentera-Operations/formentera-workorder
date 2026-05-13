@@ -14,12 +14,14 @@ import {
 const STATUSES = ['Open', 'In Progress', 'Backlogged', 'Awaiting Cost', 'Closed']
 const WORK_TYPES = ['LOE', 'AFE - Workover', 'AFE - Capital', 'Unspecified']
 
+// Match filter pill colors (STATUS_COLORS in lib/utils.ts) so status
+// signaling is consistent across Home / Maintenance / Analysis.
 const STATUS_STYLE: Record<string, { bg: string; text: string; dot: string; border: string }> = {
-  'Open':          { bg: 'bg-blue-50',   text: 'text-[#1B2E6B]', dot: 'bg-[#1B2E6B]',   border: 'border-blue-100' },
-  'In Progress':   { bg: 'bg-amber-50',  text: 'text-amber-800', dot: 'bg-amber-400',   border: 'border-amber-100' },
-  'Backlogged':    { bg: 'bg-gray-100',  text: 'text-gray-700',  dot: 'bg-gray-400',    border: 'border-gray-200' },
-  'Awaiting Cost': { bg: 'bg-orange-50', text: 'text-orange-800', dot: 'bg-orange-400', border: 'border-orange-100' },
-  'Closed':        { bg: 'bg-green-50',  text: 'text-green-800', dot: 'bg-emerald-500', border: 'border-green-100' },
+  'Open':          { bg: 'bg-green-50',  text: 'text-green-800',  dot: 'bg-green-500',  border: 'border-green-100'  },
+  'In Progress':   { bg: 'bg-purple-50', text: 'text-purple-800', dot: 'bg-purple-500', border: 'border-purple-100' },
+  'Backlogged':    { bg: 'bg-yellow-50', text: 'text-yellow-800', dot: 'bg-yellow-400', border: 'border-yellow-100' },
+  'Awaiting Cost': { bg: 'bg-gray-100',  text: 'text-gray-800',   dot: 'bg-gray-500',   border: 'border-gray-200'   },
+  'Closed':        { bg: 'bg-red-50',    text: 'text-red-800',    dot: 'bg-red-500',    border: 'border-red-100'    },
 }
 
 const CHART_COLORS = ['#1B2E6B', '#3B82F6', '#F59E0B', '#10B981', '#EF4444', '#8B5CF6']
@@ -669,12 +671,15 @@ export default function AnalysisPage() {
                 bucket[status] = (bucket[status] || 0) + r.est_cost
                 monthMap.set(r.month, bucket)
               }
+              // Mirror the filter-pill palette (STATUS_COLORS in lib/utils.ts):
+              // green / purple / yellow / gray / red — same hues as the
+              // Tailwind classes used on the KPI cards.
               const STATUS_HEX: Record<string, string> = {
-                'Open': '#1B2E6B',
-                'In Progress': '#FBBF24',
-                'Backlogged': '#9CA3AF',
-                'Awaiting Cost': '#FB923C',
-                'Closed': '#10B981',
+                'Open':          '#22C55E', // green-500
+                'In Progress':   '#A855F7', // purple-500
+                'Backlogged':    '#FACC15', // yellow-400
+                'Awaiting Cost': '#6B7280', // gray-500
+                'Closed':        '#EF4444', // red-500
               }
 
               const data = Array.from(monthMap.keys()).sort().map(month => {

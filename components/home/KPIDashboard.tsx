@@ -8,20 +8,22 @@ import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
 } from 'recharts'
 
+// Card colors mirror the filter pills (STATUS_COLORS in lib/utils.ts) so
+// a green Open dot in the filter row matches the green Open KPI card.
 const KPI_GRID = [
-  { key: 'Open',          label: 'Open',          bg: 'bg-blue-50',   text: 'text-[#1B2E6B]', dot: 'bg-[#1B2E6B]' },
-  { key: 'In Progress',   label: 'In Progress',   bg: 'bg-amber-50',  text: 'text-amber-800', dot: 'bg-amber-400' },
-  { key: 'Backlogged',    label: 'Backlogged',    bg: 'bg-gray-100',  text: 'text-gray-700',  dot: 'bg-gray-400' },
-  { key: 'Awaiting Cost', label: 'Awaiting Cost', bg: 'bg-orange-50', text: 'text-orange-800', dot: 'bg-orange-400' },
+  { key: 'Open',          label: 'Open',          bg: 'bg-green-50',  text: 'text-green-800',  dot: 'bg-green-500'  },
+  { key: 'In Progress',   label: 'In Progress',   bg: 'bg-purple-50', text: 'text-purple-800', dot: 'bg-purple-500' },
+  { key: 'Backlogged',    label: 'Backlogged',    bg: 'bg-yellow-50', text: 'text-yellow-800', dot: 'bg-yellow-400' },
+  { key: 'Awaiting Cost', label: 'Awaiting Cost', bg: 'bg-gray-100',  text: 'text-gray-800',   dot: 'bg-gray-500'   },
 ]
 
-const KPI_CLOSED = { key: 'Closed', label: 'Closed', bg: 'bg-green-50', text: 'text-green-800', dot: 'bg-emerald-500' }
+const KPI_CLOSED = { key: 'Closed', label: 'Closed', bg: 'bg-red-50', text: 'text-red-800', dot: 'bg-red-500' }
 
 const STATUS_STYLE: Record<string, { bg: string; text: string; dot: string }> = {
-  'Open':          { bg: 'bg-blue-50',   text: 'text-[#1B2E6B]', dot: 'bg-[#1B2E6B]' },
-  'In Progress':   { bg: 'bg-amber-50',  text: 'text-amber-800', dot: 'bg-amber-400' },
-  'Backlogged':    { bg: 'bg-gray-100',  text: 'text-gray-700',  dot: 'bg-gray-400' },
-  'Awaiting Cost': { bg: 'bg-orange-50', text: 'text-orange-800', dot: 'bg-orange-400' },
+  'Open':          { bg: 'bg-green-50',  text: 'text-green-800',  dot: 'bg-green-500'  },
+  'In Progress':   { bg: 'bg-purple-50', text: 'text-purple-800', dot: 'bg-purple-500' },
+  'Backlogged':    { bg: 'bg-yellow-50', text: 'text-yellow-800', dot: 'bg-yellow-400' },
+  'Awaiting Cost': { bg: 'bg-gray-100',  text: 'text-gray-800',   dot: 'bg-gray-500'   },
 }
 
 type TrendPreset = 'this-week' | 'last-week' | 'this-month' | 'last-month' | 'custom'
