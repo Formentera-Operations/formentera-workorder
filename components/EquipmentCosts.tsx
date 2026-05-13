@@ -46,12 +46,14 @@ interface TicketRow {
   repair_cost: number | null
 }
 
+// Match filter-pill / KPI palette (STATUS_COLORS in lib/utils.ts):
+// green Open / purple In Progress / yellow Backlogged / gray Awaiting / red Closed.
 const STATUS_COLORS: Record<string, string> = {
-  Open: 'bg-blue-50 text-blue-700',
-  'In Progress': 'bg-yellow-50 text-yellow-700',
-  Backlogged: 'bg-gray-100 text-gray-700',
-  'Awaiting Cost': 'bg-orange-50 text-orange-700',
-  Closed: 'bg-green-50 text-green-700',
+  Open:            'bg-green-50 text-green-700',
+  'In Progress':   'bg-purple-50 text-purple-700',
+  Backlogged:      'bg-yellow-50 text-yellow-700',
+  'Awaiting Cost': 'bg-gray-100 text-gray-700',
+  Closed:          'bg-red-50 text-red-700',
 }
 
 function fmtDate(d: string | null | undefined): string {
