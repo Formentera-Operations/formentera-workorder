@@ -31,7 +31,11 @@ function MaintenancePageContent() {
   }, [])
   const [tickets, setTickets] = useState<Record<string, unknown>[]>([])
   const [loading, setLoading] = useState(true)
-  const [filtersOpen, setFiltersOpen] = useState(() => !!(searchParams.get('equipment') || searchParams.get('startDate') || searchParams.get('status') || searchParams.get('department')))
+  // Filter panel starts closed even when a status/equipment/date filter
+  // is pre-applied via the URL (e.g. a Home KPI card deep-link). The list
+  // below the trigger already reflects the filter, so popping the panel
+  // open just gets in the way.
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const [page, setPage] = useState(0)
   const [totalCount, setTotalCount] = useState(0)
 
