@@ -188,8 +188,10 @@ export default function MyTicketsPage() {
             {/* Backdrop */}
             <div className="fixed inset-0 z-30" onClick={() => setFiltersOpen(false)} />
 
-            {/* Panel */}
-            <div className="absolute left-4 right-4 top-full z-40 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-[70vh] overflow-y-auto">
+            {/* Panel — overflow-x-hidden stops iOS Safari from letting you
+                touch-pan the contents sideways when an input's intrinsic
+                width is ~a pixel wider than its container. */}
+            <div className="absolute left-4 right-4 top-full z-40 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-[70vh] overflow-y-auto overflow-x-hidden">
               <div className="p-4 space-y-3">
                 <div>
                   <label className="form-label">Ticket ID</label>
@@ -201,7 +203,7 @@ export default function MyTicketsPage() {
                   <input
                     type="text"
                     className="form-input pl-9"
-                    placeholder="Search Well, Facility, Route..."
+                    placeholder="Search Well, Facility…"
                     value={search}
                     onChange={e => setSearch(e.target.value)}
                   />

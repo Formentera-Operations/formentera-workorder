@@ -234,8 +234,10 @@ function MaintenancePageContent() {
             {/* Backdrop */}
             <div className="fixed inset-0 z-30" onClick={() => setFiltersOpen(false)} />
 
-            {/* Panel */}
-            <div className="absolute left-4 right-4 top-full z-40 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-[70vh] overflow-y-auto">
+            {/* Panel — overflow-x-hidden stops iOS Safari from letting you
+                touch-pan the contents sideways when an input's intrinsic
+                width is ~a pixel wider than its container. */}
+            <div className="absolute left-4 right-4 top-full z-40 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-[70vh] overflow-y-auto overflow-x-hidden">
               <div className="p-4 space-y-3">
                 <div>
                   <label className="form-label">Ticket ID</label>
@@ -244,7 +246,7 @@ function MaintenancePageContent() {
 
                 <div className="relative">
                   <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input type="text" className="form-input pl-9" placeholder="Search Well, Facility, Route, Foreman, Submitted by..." value={search} onChange={e => setSearch(e.target.value)} />
+                  <input type="text" className="form-input pl-9" placeholder="Search Well, Facility, Foreman…" value={search} onChange={e => setSearch(e.target.value)} />
                 </div>
 
                 <button className="btn-primary" onClick={() => { resetFilters(); setFiltersOpen(false) }}>Reset Filters</button>
