@@ -65,8 +65,9 @@ export default function MyTicketsPage() {
 
   const [optionRows, setOptionRows] = useState<OptionRow[]>([])
 
-  // Cache key bumped to v2 because the API response shape changed from the
-  // old { assets, departments, equipments } flat lists to { rows } combos.
+  // Cache key bumped to v3 — request now includes status/date filters so
+  // the response varies with them. Re-fetches when any cascade-influencing
+  // filter changes.
   useEffect(() => {
     if (!userEmail && !userName) return
     const params = new URLSearchParams({
@@ -75,13 +76,16 @@ export default function MyTicketsPage() {
       userName,
     })
     if (userAssets.length > 0) params.set('userAssets', userAssets.join(','))
+    if (statusFilter !== 'All') params.set('status', statusFilter)
+    if (startDate) params.set('startDate', startDate)
+    if (endDate) params.set('endDate', endDate)
     cachedFetch<{ rows?: OptionRow[] }>(
       `/api/tickets/options?${params}`,
-      { cacheKey: `my-tickets:options:v2:${userEmail || userName}:${userAssets.join(',')}` }
+      { cacheKey: `my-tickets:options:v3:${userEmail || userName}:${userAssets.join(',')}:${statusFilter}:${startDate}:${endDate}` }
     )
       .then(({ data }) => setOptionRows(data.rows || []))
       .catch(() => {})
-  }, [userEmail, userName, userAssets])
+  }, [userEmail, userName, userAssets, statusFilter, startDate, endDate])
 
   const { assets, departments, equipments } = useMemo(
     () => deriveCascadingOptions(optionRows, {

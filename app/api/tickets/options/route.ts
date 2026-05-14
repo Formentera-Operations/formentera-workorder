@@ -12,6 +12,9 @@ export async function GET(req: NextRequest) {
   const userName = searchParams.get('userName') || ''
   const userAssetsParam = searchParams.get('userAssets') || ''
   const userAssets = userAssetsParam ? userAssetsParam.split(',').map(a => a.trim()).filter(Boolean) : []
+  const status = searchParams.get('status') || ''
+  const startDate = searchParams.get('startDate') || ''
+  const endDate = searchParams.get('endDate') || ''
 
   try {
     const db = supabaseAdmin()
@@ -27,6 +30,9 @@ export async function GET(req: NextRequest) {
     }
 
     if (userAssets.length > 0) query = query.in('Asset', userAssets)
+    if (status && status !== 'All') query = query.eq('Ticket_Status', status)
+    if (startDate) query = query.gte('Issue_Date', startDate)
+    if (endDate) query = query.lte('Issue_Date', endDate + 'T23:59:59')
 
     const { data, error } = await query
 
