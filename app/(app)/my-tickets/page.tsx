@@ -191,7 +191,7 @@ export default function MyTicketsPage() {
             {/* Panel — overflow-x-hidden stops iOS Safari from letting you
                 touch-pan the contents sideways when an input's intrinsic
                 width is ~a pixel wider than its container. */}
-            <div className="absolute left-4 right-4 top-full z-40 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-[70vh] overflow-y-auto overflow-x-hidden">
+            <div className="absolute left-4 right-4 lg:left-32 lg:right-32 top-full z-40 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-[70vh] overflow-y-auto overflow-x-hidden">
               <div className="p-4 space-y-3">
                 <div>
                   <label className="form-label">Ticket ID</label>
