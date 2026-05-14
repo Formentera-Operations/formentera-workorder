@@ -1,6 +1,6 @@
 'use client'
 import { Suspense } from 'react'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ChevronDown, ChevronUp, Search, Calendar, Wrench, SlidersHorizontal } from 'lucide-react'
 import TicketCard from '@/components/ui/TicketCard'
@@ -12,6 +12,7 @@ import { prefetchForOffline } from '@/lib/prefetch-for-offline'
 import { warmFormCaches } from '@/lib/warm-form-caches'
 import { useOutbox } from '@/lib/use-outbox'
 import { buildOptimisticListMap } from '@/lib/optimistic-ticket'
+import { deriveCascadingOptions, type OptionRow } from '@/lib/cascading-options'
 import type { TicketStatus } from '@/types'
 
 const PAGE_SIZE = 20
@@ -50,31 +51,31 @@ function MaintenancePageContent() {
   const [foremanFilter, setForemanFilter] = useState('All')
   const [submittedByFilter, setSubmittedByFilter] = useState('All')
   const [statusFilter, setStatusFilter] = useState<TicketStatus | 'All'>(() => (searchParams.get('status') as TicketStatus) || 'All')
-  const [assets, setAssets] = useState<string[]>([])
-  const [departments, setDepartments] = useState<string[]>([])
-  const [equipments, setEquipments] = useState<string[]>([])
-  const [foremans, setForemans] = useState<string[]>([])
-  const [submitters, setSubmitters] = useState<string[]>([])
+  const [optionRows, setOptionRows] = useState<OptionRow[]>([])
 
+  // Cache key bumped to v2 because the API response shape changed from the
+  // old { assets, departments, ... } flat lists to { rows } combos.
   useEffect(() => {
     const params = new URLSearchParams({ mode: 'all' })
     if (userAssets.length > 0) params.set('userAssets', userAssets.join(','))
-    cachedFetch<{
-      assets?: string[]; departments?: string[]; equipments?: string[];
-      foremans?: string[]; submitters?: string[]
-    }>(
+    cachedFetch<{ rows?: OptionRow[] }>(
       `/api/tickets/options?${params}`,
-      { cacheKey: `maintenance:options:${userAssets.join(',')}` }
+      { cacheKey: `maintenance:options:v2:${userAssets.join(',')}` }
     )
-      .then(({ data }) => {
-        setAssets(data.assets || [])
-        setDepartments(data.departments || [])
-        setEquipments(data.equipments || [])
-        setForemans(data.foremans || [])
-        setSubmitters(data.submitters || [])
-      })
+      .then(({ data }) => setOptionRows(data.rows || []))
       .catch(() => {})
   }, [userAssets])
+
+  const { assets, departments, equipments, foremans, submitters } = useMemo(
+    () => deriveCascadingOptions(optionRows, {
+      asset: assetFilter,
+      department: deptFilter,
+      equipment: equipFilter,
+      foreman: foremanFilter,
+      submitter: submittedByFilter,
+    }),
+    [optionRows, assetFilter, deptFilter, equipFilter, foremanFilter, submittedByFilter],
+  )
 
   // Pre-warm new-ticket form reference data so it works offline. Also
   // re-fires on the online event to recover from any fetches that lost

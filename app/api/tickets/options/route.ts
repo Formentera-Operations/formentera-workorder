@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 
+// Returns the universe of unique (asset, department, equipment, foreman,
+// submitter) combos visible to the user. The client uses this to compute
+// cascading dropdown options — see lib/cascading-options.ts.
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const mode = searchParams.get('mode') || 'all'
@@ -28,16 +32,21 @@ export async function GET(req: NextRequest) {
 
     if (error) throw error
 
-    const rows = data || []
-    const unique = <T>(arr: T[]) => [...new Set(arr.filter(Boolean))].sort() as T[]
+    const seen = new Set<string>()
+    const rows: { asset: string; department: string; equipment: string; foreman: string; submitter: string }[] = []
+    for (const r of data || []) {
+      const asset = r.Asset || ''
+      const department = r.Department || ''
+      const equipment = r.Equipment || ''
+      const foreman = r.assigned_foreman || ''
+      const submitter = r.Created_by_Name || ''
+      const key = `${asset}|${department}|${equipment}|${foreman}|${submitter}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      rows.push({ asset, department, equipment, foreman, submitter })
+    }
 
-    return NextResponse.json({
-      assets:      userAssets.length > 0 ? userAssets.sort() : unique(rows.map(r => r.Asset)),
-      departments: unique(rows.map(r => r.Department)),
-      equipments:  unique(rows.map(r => r.Equipment)),
-      foremans:    unique(rows.map(r => r.assigned_foreman)),
-      submitters:  unique(rows.map(r => r.Created_by_Name)),
-    })
+    return NextResponse.json({ rows })
   } catch (error) {
     console.error('Options fetch error:', error)
     return NextResponse.json({ error: 'Failed to fetch options' }, { status: 500 })

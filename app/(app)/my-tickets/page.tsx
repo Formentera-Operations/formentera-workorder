@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { ChevronDown, ChevronUp, Search, Calendar, SlidersHorizontal } from 'lucide-react'
 import TicketCard from '@/components/ui/TicketCard'
@@ -12,6 +12,7 @@ import { prefetchForOffline } from '@/lib/prefetch-for-offline'
 import { warmFormCaches } from '@/lib/warm-form-caches'
 import { useOutbox } from '@/lib/use-outbox'
 import { buildOptimisticListMap } from '@/lib/optimistic-ticket'
+import { deriveCascadingOptions, type OptionRow } from '@/lib/cascading-options'
 import type { TicketStatus } from '@/types'
 
 const PAGE_SIZE = 20
@@ -62,10 +63,10 @@ export default function MyTicketsPage() {
   const [equipFilter, setEquipFilter] = useState('All')
   const [statusFilter, setStatusFilter] = useState<TicketStatus | 'All'>('All')
 
-  const [assets, setAssets] = useState<string[]>([])
-  const [departments, setDepartments] = useState<string[]>([])
-  const [equipments, setEquipments] = useState<string[]>([])
+  const [optionRows, setOptionRows] = useState<OptionRow[]>([])
 
+  // Cache key bumped to v2 because the API response shape changed from the
+  // old { assets, departments, equipments } flat lists to { rows } combos.
   useEffect(() => {
     if (!userEmail && !userName) return
     const params = new URLSearchParams({
@@ -74,17 +75,22 @@ export default function MyTicketsPage() {
       userName,
     })
     if (userAssets.length > 0) params.set('userAssets', userAssets.join(','))
-    cachedFetch<{ assets?: string[]; departments?: string[]; equipments?: string[] }>(
+    cachedFetch<{ rows?: OptionRow[] }>(
       `/api/tickets/options?${params}`,
-      { cacheKey: `my-tickets:options:${userEmail || userName}:${userAssets.join(',')}` }
+      { cacheKey: `my-tickets:options:v2:${userEmail || userName}:${userAssets.join(',')}` }
     )
-      .then(({ data }) => {
-        setAssets(data.assets || [])
-        setDepartments(data.departments || [])
-        setEquipments(data.equipments || [])
-      })
+      .then(({ data }) => setOptionRows(data.rows || []))
       .catch(() => {})
   }, [userEmail, userName, userAssets])
+
+  const { assets, departments, equipments } = useMemo(
+    () => deriveCascadingOptions(optionRows, {
+      asset: assetFilter,
+      department: deptFilter,
+      equipment: equipFilter,
+    }),
+    [optionRows, assetFilter, deptFilter, equipFilter],
+  )
 
   // Pre-warm the new-ticket form's reference data so it works offline the
   // first time a foreman opens it. Also re-warm whenever connectivity
