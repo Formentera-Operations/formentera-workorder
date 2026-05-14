@@ -15,11 +15,17 @@ import type { TicketStatus } from '@/types'
 
 const PAGE_SIZE = 20
 
+// Lists shorter than this skip the search input entirely — for ~9 departments
+// you don't need search, and on iPhone an auto-focused input pops the keyboard
+// and eats half the sheet.
+const SEARCH_THRESHOLD = 12
+
 function SearchableSelectFilter({ label, value, onChange, options }: {
   label: string; value: string; onChange: (v: string) => void; options: string[]
 }) {
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
+  const showSearch = options.length > SEARCH_THRESHOLD
   const filtered = q ? options.filter(o => o.toLowerCase().includes(q.toLowerCase())) : options
   const close = () => { setOpen(false); setQ('') }
   const renderRow = (rowLabel: string, optionValue: string) => {
@@ -74,19 +80,20 @@ function SearchableSelectFilter({ label, value, onChange, options }: {
                 Cancel
               </button>
             </div>
-            <div className="px-4 pb-3">
-              <div className="relative">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input
-                  autoFocus
-                  type="text"
-                  className="w-full pl-8 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#1B2E6B]"
-                  placeholder="Search..."
-                  value={q}
-                  onChange={e => setQ(e.target.value)}
-                />
+            {showSearch && (
+              <div className="px-4 pb-3">
+                <div className="relative">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    className="w-full pl-8 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#1B2E6B]"
+                    placeholder="Search..."
+                    value={q}
+                    onChange={e => setQ(e.target.value)}
+                  />
+                </div>
               </div>
-            </div>
+            )}
             <ul className="flex-1 overflow-y-auto px-2 pb-4 space-y-0.5">
               {renderRow('All', 'All')}
               {filtered.map(o => renderRow(o, o))}
