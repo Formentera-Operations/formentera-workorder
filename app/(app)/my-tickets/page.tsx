@@ -212,6 +212,23 @@ export default function MyTicketsPage() {
                 <button className="btn-primary" onClick={() => { resetFilters(); setFiltersOpen(false) }}>Reset Filters</button>
 
                 <div>
+                  <label className="form-label">Ticket Status</label>
+                  <div className="flex gap-2 flex-wrap">
+                    {(['All', ...TICKET_STATUSES] as (TicketStatus | 'All')[]).map(s => (
+                      <button
+                        key={s}
+                        onClick={() => setStatusFilter(s)}
+                        className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                          statusFilter === s ? 'bg-[#1B2E6B] text-white shadow-sm' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:shadow-sm hover:scale-105'
+                        }`}
+                      >
+                        {s}{s !== 'All' ? ` ${STATUS_EMOJI[s] ?? '⚪'}` : ''}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
                   <p className="text-sm font-semibold text-gray-700 mb-2">Date Range</p>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
@@ -263,23 +280,6 @@ export default function MyTicketsPage() {
                       {equipments.map(eq => <option key={eq} value={eq}>{eq}</option>)}
                     </select>
                     <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="form-label">Ticket Status</label>
-                  <div className="flex gap-2 flex-wrap">
-                    {(['All', ...TICKET_STATUSES] as (TicketStatus | 'All')[]).map(s => (
-                      <button
-                        key={s}
-                        onClick={() => setStatusFilter(s)}
-                        className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                          statusFilter === s ? 'bg-[#1B2E6B] text-white shadow-sm' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:shadow-sm hover:scale-105'
-                        }`}
-                      >
-                        {s}{s !== 'All' ? ` ${STATUS_EMOJI[s] ?? '⚪'}` : ''}
-                      </button>
-                    ))}
                   </div>
                 </div>
               </div>
