@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 import { ArrowLeft, ChevronDown, Camera, X } from 'lucide-react'
 import Accordion from '@/components/ui/Accordion'
 import LocationDropdowns from '@/components/forms/LocationDropdowns'
-import SearchableSelect from '@/components/ui/SearchableSelect'
+import FilterSelect from '@/components/ui/FilterSelect'
 import { useAuth } from '@/components/AuthProvider'
 import { formatDate, formatDateShort, DEPARTMENTS, LOCATION_TYPES, WORK_ORDER_DECISIONS, FINAL_STATUSES, PRIORITY_OPTIONS, utcToLocalInput, localInputToUtc, diffEqual, newRequestId } from '@/lib/utils'
 import CommentsSection from '@/components/ui/CommentsSection'
@@ -1254,11 +1254,14 @@ export default function MaintenanceTicketPage() {
                 return (
                   <>
                     <div>
-                      <label className="form-label form-label-required">AFE Number</label>
-                      <SearchableSelect
+                      <FilterSelect
+                        label="AFE Number"
                         value={currentLabel}
                         options={afeOptions}
                         placeholder={loading ? 'Loading AFEs…' : 'Select AFE'}
+                        placeholderValue=""
+                        required
+                        allowClear
                         onChange={v => {
                           const picked = v.split(' — ')[0] || ''
                           setRep('AFE_Number', picked)
@@ -1392,10 +1395,14 @@ export default function MaintenanceTicketPage() {
                       <label className="form-label text-xs">
                         {i === 0 ? 'Vendor (leave blank if not applicable)' : `Vendor ${i + 1}`}
                       </label>
-                      <SearchableSelect
+                      <FilterSelect
+                        label={i === 0 ? 'Vendor' : `Vendor ${i + 1}`}
+                        labelHidden
                         value={row.vendor}
                         options={row.vendor && !vendors.includes(row.vendor) ? [row.vendor, ...vendors] : vendors}
                         placeholder="Select Vendor"
+                        placeholderValue=""
+                        allowClear
                         disabled={isReadOnly}
                         onChange={v => {
                           const rows = [...vendorRows]

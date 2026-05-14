@@ -4,7 +4,6 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { ArrowLeft, ChevronDown, Camera, X, AlertTriangle } from 'lucide-react'
 import LocationDropdowns from '@/components/forms/LocationDropdowns'
-import SearchableSelect from '@/components/ui/SearchableSelect'
 import FilterSelect from '@/components/ui/FilterSelect'
 import { DEPARTMENTS, LOCATION_TYPES, newRequestId } from '@/lib/utils'
 import { useAuth } from '@/components/AuthProvider'
@@ -348,25 +347,27 @@ export default function MaintenanceFormPage() {
           <h3 className="text-lg font-bold text-gray-900 mb-4">Problem Equipment</h3>
 
           <div className="space-y-4">
-            <div>
-              <label className="form-label form-label-required">Select an Equipment Type</label>
-              <SearchableSelect
-                value={form.Equipment_Type}
-                options={equipmentTypes.map(et => et.equipment_type)}
-                placeholder="Select Equipment Type"
-                onChange={v => { set('Equipment_Type', v); set('Equipment', '') }}
-              />
-            </div>
+            <FilterSelect
+              label="Select an Equipment Type"
+              value={form.Equipment_Type}
+              options={equipmentTypes.map(et => et.equipment_type)}
+              placeholder="Select Equipment Type"
+              placeholderValue=""
+              required
+              allowClear
+              onChange={v => { set('Equipment_Type', v); set('Equipment', '') }}
+            />
 
-            <div>
-              <label className="form-label form-label-required">Equipment Name</label>
-              <SearchableSelect
-                value={form.Equipment}
-                options={equipment.map(eq => eq.equip_name)}
-                placeholder="Select Equipment"
-                onChange={v => set('Equipment', v)}
-              />
-            </div>
+            <FilterSelect
+              label="Equipment Name"
+              value={form.Equipment}
+              options={equipment.map(eq => eq.equip_name)}
+              placeholder="Select Equipment"
+              placeholderValue=""
+              required
+              allowClear
+              onChange={v => set('Equipment', v)}
+            />
           </div>
         </div>
 
@@ -523,15 +524,15 @@ export default function MaintenanceFormPage() {
 
             {/* Assigned Foreman — hidden when self dispatching */}
             {!form.Self_Dispatch && (
-              <div>
-                <label className="form-label">Assigned Foreman</label>
-                <SearchableSelect
-                  value={form.assigned_foreman}
-                  options={employees.map(e => e.name)}
-                  placeholder="Select Foreman"
-                  onChange={v => set('assigned_foreman', v)}
-                />
-              </div>
+              <FilterSelect
+                label="Assigned Foreman"
+                value={form.assigned_foreman}
+                options={employees.map(e => e.name)}
+                placeholder="Select Foreman"
+                placeholderValue=""
+                allowClear
+                onChange={v => set('assigned_foreman', v)}
+              />
             )}
 
             {/* Self Dispatch */}

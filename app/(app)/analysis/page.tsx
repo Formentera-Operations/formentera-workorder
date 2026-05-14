@@ -2,7 +2,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
-import SearchableSelect from '@/components/ui/SearchableSelect'
+import FilterSelect from '@/components/ui/FilterSelect'
 import PivotBuilder from '@/components/PivotBuilder'
 import EquipmentCosts from '@/components/EquipmentCosts'
 import { Search, ChevronDown, ChevronUp, X, BarChart2, Table2, List, Download, ChevronRight, MessageSquare, Send, LayoutGrid, DollarSign } from 'lucide-react'
@@ -1209,10 +1209,11 @@ export default function AnalysisPage() {
               {aggData?.equipmentList && aggData.equipmentList.length > 0 && (
                 <div>
                   <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Equipment</p>
-                  <SearchableSelect
+                  <FilterSelect
+                    label="Equipment"
+                    labelHidden
                     value={equipmentFilter}
-                    options={['All', ...aggData.equipmentList]}
-                    placeholder="All Equipment"
+                    options={aggData.equipmentList}
                     onChange={v => setEquipmentFilter(v || 'All')}
                   />
                 </div>

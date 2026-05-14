@@ -21,12 +21,17 @@ type FilterSelectProps = {
   // Shows a small X on the trigger when a value is set, letting the user
   // clear the selection without opening the picker.
   allowClear?: boolean
+  // Suppress the rendered <label> above the trigger when the caller wants
+  // to provide its own (e.g. the analysis page uses a small uppercase
+  // pill label style). The `label` value is still used for the desktop
+  // modal heading.
+  labelHidden?: boolean
 }
 
 export default function FilterSelect({
   label, value, onChange, options,
   placeholder = 'All', placeholderValue = 'All', required = false,
-  disabled = false, allowClear = false,
+  disabled = false, allowClear = false, labelHidden = false,
 }: FilterSelectProps) {
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
@@ -69,20 +74,25 @@ export default function FilterSelect({
 
   return (
     <div>
-      <label className={`form-label${required ? ' form-label-required' : ''}`}>{label}</label>
+      {!labelHidden && (
+        <label className={`form-label${required ? ' form-label-required' : ''}`}>{label}</label>
+      )}
 
-      {/* Mobile: native select for the iOS system wheel picker. */}
+      {/* Mobile: inline searchable dropdown anchored below the trigger.
+          (Native <select> + iOS wheel was clean but lacked search, which
+          matters for long lists like equipment.) */}
       <div className="relative sm:hidden">
-        <select
-          className={`form-select${triggerExtraPadding}${disabledClasses}`}
-          value={value}
-          onChange={e => onChange(e.target.value)}
+        <button
+          type="button"
+          className={`form-select text-left w-full flex items-center justify-between${triggerExtraPadding}${disabledClasses}`}
+          onClick={() => { if (!disabled) setOpen(v => !v) }}
           disabled={disabled}
         >
-          <option value={placeholderValue}>{placeholder}</option>
-          {options.map(o => <option key={o} value={o}>{o}</option>)}
-        </select>
-        <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+          <span className={isPlaceholder ? 'text-gray-400' : 'text-gray-900'}>
+            {isPlaceholder ? placeholder : value}
+          </span>
+          <ChevronDown size={16} className="text-gray-400 shrink-0" />
+        </button>
         {showClear && (
           <button
             type="button"
@@ -92,6 +102,47 @@ export default function FilterSelect({
           >
             <X size={14} />
           </button>
+        )}
+
+        {open && !disabled && (
+          <>
+            {/* Backdrop catches outside taps. */}
+            <div className="fixed inset-0 z-40" onClick={close} />
+            <div className="absolute left-0 right-0 top-full mt-1 z-50 bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden">
+              <div className="p-2 border-b border-gray-100">
+                <div className="relative">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#1B2E6B]"
+                    placeholder="Search..."
+                    value={q}
+                    onChange={e => setQ(e.target.value)}
+                  />
+                </div>
+              </div>
+              <ul className="max-h-64 overflow-y-auto py-1">
+                <li
+                  onClick={() => { onChange(placeholderValue); close() }}
+                  className={`px-4 py-2 text-sm cursor-pointer hover:bg-gray-50 ${isPlaceholder ? 'font-medium text-[#1B2E6B]' : 'text-gray-700'}`}
+                >
+                  {placeholder}
+                </li>
+                {filtered.map(o => (
+                  <li
+                    key={o}
+                    onClick={() => { onChange(o); close() }}
+                    className={`px-4 py-2 text-sm cursor-pointer hover:bg-gray-50 ${value === o ? 'font-medium text-[#1B2E6B]' : 'text-gray-700'}`}
+                  >
+                    {o}
+                  </li>
+                ))}
+                {filtered.length === 0 && (
+                  <li className="px-4 py-2 text-sm text-gray-400">No results</li>
+                )}
+              </ul>
+            </div>
+          </>
         )}
       </div>
 

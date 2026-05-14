@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import { filterOptions } from '@/lib/utils'
-import SearchableSelect from '@/components/ui/SearchableSelect'
+import FilterSelect from '@/components/ui/FilterSelect'
 import WellSearchPicker from '@/components/forms/WellSearchPicker'
 import { cachedFetch } from '@/lib/cached-fetch'
 
@@ -139,28 +139,29 @@ export default function LocationDropdowns({ locationType, onChange, initialValue
   return (
     <div className="space-y-4">
       {/* Asset */}
-      <div>
-        <label className="form-label form-label-required">Asset</label>
-        <SearchableSelect
-          value={asset}
-          options={assets}
-          placeholder="Select an Asset"
-          disabled={disabled || singleAsset}
-          onChange={v => { setAsset(v); setField(''); setWell(''); setFacility(''); emit(v, '', '', '') }}
-        />
-      </div>
+      <FilterSelect
+        label="Asset"
+        value={asset}
+        options={assets}
+        placeholder="Select an Asset"
+        placeholderValue=""
+        required
+        disabled={disabled || singleAsset}
+        allowClear
+        onChange={v => { setAsset(v); setField(''); setWell(''); setFacility(''); emit(v, '', '', '') }}
+      />
 
       {/* Field */}
-      <div>
-        <label className="form-label">Field</label>
-        <SearchableSelect
-          value={field}
-          options={fields}
-          placeholder="Select a Field"
-          disabled={disabled}
-          onChange={v => { setField(v); setWell(''); setFacility(''); emit(asset, v, '', '') }}
-        />
-      </div>
+      <FilterSelect
+        label="Field"
+        value={field}
+        options={fields}
+        placeholder="Select a Field"
+        placeholderValue=""
+        disabled={disabled}
+        allowClear
+        onChange={v => { setField(v); setWell(''); setFacility(''); emit(asset, v, '', '') }}
+      />
 
       {/* Well — only shown if locationType = Well */}
       {locationType === 'Well' && (
@@ -189,16 +190,17 @@ export default function LocationDropdowns({ locationType, onChange, initialValue
 
       {/* Facility — only shown if locationType = Facility */}
       {locationType === 'Facility' && (
-        <div>
-          <label className="form-label form-label-required">Facility</label>
-          <SearchableSelect
-            value={facility}
-            options={facilities}
-            placeholder="Select a Facility"
-            disabled={disabled}
-            onChange={v => { setFacility(v); setWell(''); emit(asset, field, '', v) }}
-          />
-        </div>
+        <FilterSelect
+          label="Facility"
+          value={facility}
+          options={facilities}
+          placeholder="Select a Facility"
+          placeholderValue=""
+          required
+          disabled={disabled}
+          allowClear
+          onChange={v => { setFacility(v); setWell(''); emit(asset, field, '', v) }}
+        />
       )}
     </div>
   )
