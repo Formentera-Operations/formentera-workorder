@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { ChevronDown, ChevronUp, Search, Calendar, SlidersHorizontal } from 'lucide-react'
 import TicketCard from '@/components/ui/TicketCard'
 import QueuedTicketCard from '@/components/ui/QueuedTicketCard'
+import FilterSelect from '@/components/ui/FilterSelect'
 import { useAuth } from '@/components/AuthProvider'
 import { TICKET_STATUSES, STATUS_EMOJI } from '@/lib/utils'
 import { cachedFetch } from '@/lib/cached-fetch'
@@ -249,39 +250,10 @@ export default function MyTicketsPage() {
                 </div>
 
                 {userAssets.length !== 1 && (
-                  <div>
-                    <label className="form-label">Asset</label>
-                    <div className="relative">
-                      <select className="form-select" value={assetFilter} onChange={e => setAssetFilter(e.target.value)}>
-                        <option value="All">All</option>
-                        {assets.map(a => <option key={a} value={a}>{a}</option>)}
-                      </select>
-                      <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                    </div>
-                  </div>
+                  <FilterSelect label="Asset" value={assetFilter} onChange={setAssetFilter} options={assets} />
                 )}
-
-                <div>
-                  <label className="form-label">Department</label>
-                  <div className="relative">
-                    <select className="form-select" value={deptFilter} onChange={e => setDeptFilter(e.target.value)}>
-                      <option value="All">All</option>
-                      {departments.map(d => <option key={d} value={d}>{d}</option>)}
-                    </select>
-                    <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="form-label">Equipment</label>
-                  <div className="relative">
-                    <select className="form-select" value={equipFilter} onChange={e => setEquipFilter(e.target.value)}>
-                      <option value="All">All</option>
-                      {equipments.map(eq => <option key={eq} value={eq}>{eq}</option>)}
-                    </select>
-                    <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                  </div>
-                </div>
+                <FilterSelect label="Department" value={deptFilter} onChange={setDeptFilter} options={departments} />
+                <FilterSelect label="Equipment" value={equipFilter} onChange={setEquipFilter} options={equipments} />
               </div>
             </div>
           </>

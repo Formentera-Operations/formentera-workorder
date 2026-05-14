@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ChevronDown, ChevronUp, Search, Calendar, Wrench, SlidersHorizontal } from 'lucide-react'
 import TicketCard from '@/components/ui/TicketCard'
+import FilterSelect from '@/components/ui/FilterSelect'
 import { useAuth } from '@/components/AuthProvider'
 import { TICKET_STATUSES, STATUS_EMOJI } from '@/lib/utils'
 import { cachedFetch } from '@/lib/cached-fetch'
@@ -14,111 +15,6 @@ import { buildOptimisticListMap } from '@/lib/optimistic-ticket'
 import type { TicketStatus } from '@/types'
 
 const PAGE_SIZE = 20
-
-// Lists shorter than this skip the search input entirely — for ~9 departments
-// you don't need search, and on iPhone an auto-focused input pops the keyboard
-// and eats half the sheet.
-const SEARCH_THRESHOLD = 12
-
-function SearchableSelectFilter({ label, value, onChange, options }: {
-  label: string; value: string; onChange: (v: string) => void; options: string[]
-}) {
-  const [open, setOpen] = useState(false)
-  const [q, setQ] = useState('')
-  const showSearch = options.length > SEARCH_THRESHOLD
-  const filtered = q ? options.filter(o => o.toLowerCase().includes(q.toLowerCase())) : options
-  const close = () => { setOpen(false); setQ('') }
-  const renderRow = (rowLabel: string, optionValue: string) => {
-    const selected = value === optionValue
-    return (
-      <li
-        key={optionValue}
-        onClick={() => { onChange(optionValue); close() }}
-        className={`flex items-center gap-3 px-3 py-3 rounded-lg cursor-pointer ${
-          selected ? 'bg-gray-100' : 'hover:bg-gray-50'
-        }`}
-      >
-        <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
-          selected ? 'border-[#1B2E6B]' : 'border-gray-300'
-        }`}>
-          {selected && <span className="w-2.5 h-2.5 rounded-full bg-[#1B2E6B]" />}
-        </span>
-        <span className={`text-sm ${selected ? 'font-medium text-gray-900' : 'text-gray-700'}`}>
-          {rowLabel}
-        </span>
-      </li>
-    )
-  }
-  return (
-    <div>
-      <label className="form-label">{label}</label>
-
-      {/* Mobile: native select so iOS opens its system wheel picker. */}
-      <div className="relative sm:hidden">
-        <select
-          className="form-select"
-          value={value}
-          onChange={e => onChange(e.target.value)}
-        >
-          <option value="All">All</option>
-          {options.map(o => <option key={o} value={o}>{o}</option>)}
-        </select>
-        <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-      </div>
-
-      {/* Desktop: searchable centered modal. */}
-      <div className="hidden sm:block">
-        <button
-          type="button"
-          className="form-select text-left w-full flex items-center justify-between"
-          onClick={() => setOpen(v => !v)}
-        >
-          <span className={value === 'All' ? 'text-gray-400' : 'text-gray-900'}>
-            {value === 'All' ? `All` : value}
-          </span>
-          <ChevronDown size={16} className="text-gray-400 shrink-0" />
-        </button>
-
-        {open && (
-          <>
-            <div className="fixed inset-0 z-50 bg-black/40" onClick={close} />
-            <div className="fixed z-50 bg-white shadow-2xl flex flex-col
-                            top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2
-                            w-full max-w-md rounded-2xl max-h-[70vh]">
-              <div className="px-4 pt-3 pb-2 flex items-center justify-between">
-                <h3 className="text-base font-semibold text-gray-900">{label}</h3>
-                <button type="button" onClick={close} className="text-sm text-gray-500 px-2 py-1">
-                  Cancel
-                </button>
-              </div>
-              {showSearch && (
-                <div className="px-4 pb-3">
-                  <div className="relative">
-                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                    <input
-                      type="text"
-                      className="w-full pl-8 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#1B2E6B]"
-                      placeholder="Search..."
-                      value={q}
-                      onChange={e => setQ(e.target.value)}
-                    />
-                  </div>
-                </div>
-              )}
-              <ul className="flex-1 overflow-y-auto px-2 pb-4 space-y-0.5">
-                {renderRow('All', 'All')}
-                {filtered.map(o => renderRow(o, o))}
-                {filtered.length === 0 && (
-                  <li className="px-4 py-3 text-sm text-gray-400 text-center">No results</li>
-                )}
-              </ul>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  )
-}
 
 function MaintenancePageContent() {
   const router = useRouter()
@@ -331,12 +227,12 @@ function MaintenancePageContent() {
                 </div>
 
                 {userAssets.length !== 1 && (
-                  <SearchableSelectFilter label="Asset" value={assetFilter} onChange={setAssetFilter} options={assets} />
+                  <FilterSelect label="Asset" value={assetFilter} onChange={setAssetFilter} options={assets} />
                 )}
-                <SearchableSelectFilter label="Department" value={deptFilter} onChange={setDeptFilter} options={departments} />
-                <SearchableSelectFilter label="Equipment" value={equipFilter} onChange={setEquipFilter} options={equipments} />
-                <SearchableSelectFilter label="Assigned Foreman" value={foremanFilter} onChange={setForemanFilter} options={foremans} />
-                <SearchableSelectFilter label="Submitted By" value={submittedByFilter} onChange={setSubmittedByFilter} options={submitters} />
+                <FilterSelect label="Department" value={deptFilter} onChange={setDeptFilter} options={departments} />
+                <FilterSelect label="Equipment" value={equipFilter} onChange={setEquipFilter} options={equipments} />
+                <FilterSelect label="Assigned Foreman" value={foremanFilter} onChange={setForemanFilter} options={foremans} />
+                <FilterSelect label="Submitted By" value={submittedByFilter} onChange={setSubmittedByFilter} options={submitters} />
               </div>
             </div>
           </>

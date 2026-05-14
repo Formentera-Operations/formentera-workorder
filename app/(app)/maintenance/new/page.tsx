@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { ArrowLeft, ChevronDown, Camera, X, AlertTriangle } from 'lucide-react'
 import LocationDropdowns from '@/components/forms/LocationDropdowns'
 import SearchableSelect from '@/components/ui/SearchableSelect'
+import FilterSelect from '@/components/ui/FilterSelect'
 import { DEPARTMENTS, LOCATION_TYPES, newRequestId } from '@/lib/utils'
 import { useAuth } from '@/components/AuthProvider'
 import { cachedFetch, cachedFetchSwr } from '@/lib/cached-fetch'
@@ -298,16 +299,15 @@ export default function MaintenanceFormPage() {
         <h2 className="text-xl font-bold text-gray-900 text-center">Maintenance Form</h2>
 
         {/* Department */}
-        <div>
-          <label className="form-label form-label-required">Department</label>
-          <div className="relative">
-            <select className="form-select" value={form.Department} onChange={e => set('Department', e.target.value)}>
-              <option value="">Select a department</option>
-              {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
-            </select>
-            <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-          </div>
-        </div>
+        <FilterSelect
+          label="Department"
+          value={form.Department}
+          onChange={v => set('Department', v)}
+          options={[...DEPARTMENTS]}
+          placeholder="Select a department"
+          placeholderValue=""
+          required
+        />
 
         {/* Location Type */}
         <div>
