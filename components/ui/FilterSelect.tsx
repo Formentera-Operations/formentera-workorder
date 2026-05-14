@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { Search, ChevronDown } from 'lucide-react'
+import { Search, ChevronDown, X } from 'lucide-react'
 
 // Lists shorter than this skip the search input entirely.
 const SEARCH_THRESHOLD = 12
@@ -17,11 +17,16 @@ type FilterSelectProps = {
   // For form fields where unset means empty, pass placeholderValue=''.
   placeholderValue?: string
   required?: boolean
+  disabled?: boolean
+  // Shows a small X on the trigger when a value is set, letting the user
+  // clear the selection without opening the picker.
+  allowClear?: boolean
 }
 
 export default function FilterSelect({
   label, value, onChange, options,
   placeholder = 'All', placeholderValue = 'All', required = false,
+  disabled = false, allowClear = false,
 }: FilterSelectProps) {
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
@@ -29,6 +34,13 @@ export default function FilterSelect({
   const filtered = q ? options.filter(o => o.toLowerCase().includes(q.toLowerCase())) : options
   const close = () => { setOpen(false); setQ('') }
   const isPlaceholder = value === placeholderValue
+  const showClear = allowClear && !isPlaceholder && !disabled
+
+  const handleClear = (e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    onChange(placeholderValue)
+  }
 
   const renderRow = (rowLabel: string, optionValue: string) => {
     const selected = value === optionValue
@@ -52,6 +64,9 @@ export default function FilterSelect({
     )
   }
 
+  const triggerExtraPadding = showClear ? ' pr-16' : ''
+  const disabledClasses = disabled ? ' opacity-50 cursor-not-allowed' : ''
+
   return (
     <div>
       <label className={`form-label${required ? ' form-label-required' : ''}`}>{label}</label>
@@ -59,30 +74,52 @@ export default function FilterSelect({
       {/* Mobile: native select for the iOS system wheel picker. */}
       <div className="relative sm:hidden">
         <select
-          className="form-select"
+          className={`form-select${triggerExtraPadding}${disabledClasses}`}
           value={value}
           onChange={e => onChange(e.target.value)}
+          disabled={disabled}
         >
           <option value={placeholderValue}>{placeholder}</option>
           {options.map(o => <option key={o} value={o}>{o}</option>)}
         </select>
         <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+        {showClear && (
+          <button
+            type="button"
+            className="absolute right-9 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
+            onClick={handleClear}
+            aria-label="Clear selection"
+          >
+            <X size={14} />
+          </button>
+        )}
       </div>
 
       {/* Desktop: searchable centered modal. */}
-      <div className="hidden sm:block">
+      <div className="hidden sm:block relative">
         <button
           type="button"
-          className="form-select text-left w-full flex items-center justify-between"
-          onClick={() => setOpen(v => !v)}
+          className={`form-select text-left w-full flex items-center justify-between${triggerExtraPadding}${disabledClasses}`}
+          onClick={() => { if (!disabled) setOpen(v => !v) }}
+          disabled={disabled}
         >
           <span className={isPlaceholder ? 'text-gray-400' : 'text-gray-900'}>
             {isPlaceholder ? placeholder : value}
           </span>
           <ChevronDown size={16} className="text-gray-400 shrink-0" />
         </button>
+        {showClear && (
+          <button
+            type="button"
+            className="absolute right-9 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
+            onClick={handleClear}
+            aria-label="Clear selection"
+          >
+            <X size={14} />
+          </button>
+        )}
 
-        {open && (
+        {open && !disabled && (
           <>
             <div className="fixed inset-0 z-50 bg-black/40" onClick={close} />
             <div className="fixed z-50 bg-white shadow-2xl flex flex-col
