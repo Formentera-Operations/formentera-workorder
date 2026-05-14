@@ -68,12 +68,19 @@ export default function WellSearchPicker({
     return () => { cancelled = true }
   }, [assetFilter])
 
-  // Local search that mirrors the server's tokenize-and-match logic so
-  // online and offline results behave the same.
+  // Local search. Both the blob and the query are "squished" (non-alphanumeric
+  // removed) so a token like "jbc" can match "J B C" — the spaces in well
+  // names shouldn't matter. Matching is order-insensitive: every token must
+  // appear somewhere in the squished blob, but not in any particular order.
+  // Filtered rows are then ranked so that prefix/substring matches on
+  // WELLNAME (and then NAME) rise above matches that only hit because tokens
+  // were scattered across other fields.
   const rows = useMemo(() => {
     if (!assetFilter) return []
     let pool = allRows
     if (fieldFilter) pool = pool.filter(r => r.FIELD === fieldFilter)
+    const squish = (s: string | null | undefined): string =>
+      (s || '').toLowerCase().replace(/[^a-z0-9]+/g, '')
     const tokens = query
       .toLowerCase()
       .split(/\s+/)
@@ -81,17 +88,32 @@ export default function WellSearchPicker({
       .filter(t => t.length >= 1)
       .slice(0, 10)
     if (tokens.length === 0) return pool.slice(0, 50)
-    return pool.filter(r => {
-      const blob = [r.WELLNAME, r.NAME, r.UNITIDA, r.FIELD, r.Asset, r.Area, r.ROUTENAME]
-        .filter(Boolean).join(' ').toLowerCase()
-      let pos = 0
-      for (const t of tokens) {
-        const idx = blob.indexOf(t, pos)
-        if (idx === -1) return false
-        pos = idx + t.length
-      }
-      return true
-    }).slice(0, 50)
+    const sqQuery = tokens.join('')
+    const filtered = pool.filter(r => {
+      const blob = squish([r.WELLNAME, r.NAME, r.UNITIDA, r.FIELD, r.Asset, r.Area, r.ROUTENAME]
+        .filter(Boolean).join(' '))
+      return tokens.every(t => blob.includes(t))
+    })
+    const score = (r: ApiRow): number => {
+      const w = squish(r.WELLNAME)
+      const n = squish(r.NAME)
+      if (w === sqQuery) return 0
+      if (w.startsWith(sqQuery)) return 1
+      if (w.includes(sqQuery)) return 2
+      if (tokens.every(t => w.includes(t))) return 3
+      if (n && n === sqQuery) return 4
+      if (n && n.startsWith(sqQuery)) return 5
+      if (n && n.includes(sqQuery)) return 6
+      if (n && tokens.every(t => n.includes(t))) return 7
+      return 8
+    }
+    return filtered
+      .sort((a, b) => {
+        const diff = score(a) - score(b)
+        if (diff !== 0) return diff
+        return a.WELLNAME.localeCompare(b.WELLNAME)
+      })
+      .slice(0, 50)
   }, [allRows, query, assetFilter, fieldFilter])
 
   const loading = allRowsLoading
