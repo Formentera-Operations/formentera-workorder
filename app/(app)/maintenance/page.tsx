@@ -15,6 +15,92 @@ import type { TicketStatus } from '@/types'
 
 const PAGE_SIZE = 20
 
+function SearchableSelectFilter({ label, value, onChange, options }: {
+  label: string; value: string; onChange: (v: string) => void; options: string[]
+}) {
+  const [open, setOpen] = useState(false)
+  const [q, setQ] = useState('')
+  const filtered = q ? options.filter(o => o.toLowerCase().includes(q.toLowerCase())) : options
+  const close = () => { setOpen(false); setQ('') }
+  const renderRow = (rowLabel: string, optionValue: string) => {
+    const selected = value === optionValue
+    return (
+      <li
+        key={optionValue}
+        onClick={() => { onChange(optionValue); close() }}
+        className={`flex items-center gap-3 px-3 py-3 rounded-lg cursor-pointer ${
+          selected ? 'bg-gray-100' : 'hover:bg-gray-50'
+        }`}
+      >
+        <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
+          selected ? 'border-[#1B2E6B]' : 'border-gray-300'
+        }`}>
+          {selected && <span className="w-2.5 h-2.5 rounded-full bg-[#1B2E6B]" />}
+        </span>
+        <span className={`text-sm ${selected ? 'font-medium text-gray-900' : 'text-gray-700'}`}>
+          {rowLabel}
+        </span>
+      </li>
+    )
+  }
+  return (
+    <div>
+      <label className="form-label">{label}</label>
+      <button
+        type="button"
+        className="form-select text-left w-full flex items-center justify-between"
+        onClick={() => setOpen(v => !v)}
+      >
+        <span className={value === 'All' ? 'text-gray-400' : 'text-gray-900'}>
+          {value === 'All' ? `All` : value}
+        </span>
+        <ChevronDown size={16} className="text-gray-400 shrink-0" />
+      </button>
+
+      {open && (
+        <>
+          <div className="fixed inset-0 z-50 bg-black/40" onClick={close} />
+          <div className="fixed z-50 bg-white shadow-2xl flex flex-col
+                          inset-x-0 bottom-0 rounded-t-2xl max-h-[85vh]
+                          sm:inset-x-auto sm:bottom-auto sm:top-1/2 sm:left-1/2
+                          sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-full
+                          sm:max-w-md sm:rounded-2xl sm:max-h-[70vh]">
+            <div className="flex justify-center pt-3 pb-1 sm:hidden">
+              <div className="w-10 h-1 rounded-full bg-gray-300" />
+            </div>
+            <div className="px-4 pt-3 pb-2 flex items-center justify-between">
+              <h3 className="text-base font-semibold text-gray-900">{label}</h3>
+              <button type="button" onClick={close} className="text-sm text-gray-500 px-2 py-1">
+                Cancel
+              </button>
+            </div>
+            <div className="px-4 pb-3">
+              <div className="relative">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  autoFocus
+                  type="text"
+                  className="w-full pl-8 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#1B2E6B]"
+                  placeholder="Search..."
+                  value={q}
+                  onChange={e => setQ(e.target.value)}
+                />
+              </div>
+            </div>
+            <ul className="flex-1 overflow-y-auto px-2 pb-4 space-y-0.5">
+              {renderRow('All', 'All')}
+              {filtered.map(o => renderRow(o, o))}
+              {filtered.length === 0 && (
+                <li className="px-4 py-3 text-sm text-gray-400 text-center">No results</li>
+              )}
+            </ul>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 function MaintenancePageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -134,71 +220,6 @@ function MaintenancePageContent() {
   }
 
   const totalPages = Math.ceil(totalCount / PAGE_SIZE)
-
-  const SearchableSelectFilter = ({ label, value, onChange, options }: {
-    label: string; value: string; onChange: (v: string) => void; options: string[]
-  }) => {
-    const [open, setOpen] = useState(false)
-    const [q, setQ] = useState('')
-    const filtered = q ? options.filter(o => o.toLowerCase().includes(q.toLowerCase())) : options
-    return (
-      <div className="relative">
-        <label className="form-label">{label}</label>
-        <button
-          type="button"
-          className="form-select text-left w-full flex items-center justify-between"
-          onClick={() => setOpen(v => !v)}
-        >
-          <span className={value === 'All' ? 'text-gray-400' : 'text-gray-900'}>
-            {value === 'All' ? `All` : value}
-          </span>
-          <ChevronDown size={16} className="text-gray-400 shrink-0" />
-        </button>
-
-        {open && (
-          <>
-            <div className="fixed inset-0 z-40" onClick={() => { setOpen(false); setQ('') }} />
-            <div className="absolute left-0 right-0 z-50 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl">
-              <div className="p-2 border-b border-gray-100">
-                <div className="relative">
-                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input
-                    autoFocus
-                    type="text"
-                    className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#1B2E6B]"
-                    placeholder="Search..."
-                    value={q}
-                    onChange={e => setQ(e.target.value)}
-                    onClick={e => e.stopPropagation()}
-                  />
-                </div>
-              </div>
-              <ul className="max-h-64 overflow-y-auto py-1">
-                <li
-                  className={`px-4 py-2 text-sm cursor-pointer hover:bg-gray-50 ${value === 'All' ? 'font-medium text-[#1B2E6B]' : 'text-gray-700'}`}
-                  onClick={() => { onChange('All'); setOpen(false); setQ('') }}
-                >
-                  All
-                </li>
-                {filtered.map(o => (
-                  <li
-                    key={o}
-                    className={`px-4 py-2 text-sm cursor-pointer hover:bg-gray-50 ${value === o ? 'font-medium text-[#1B2E6B]' : 'text-gray-700'}`}
-                    onClick={() => { onChange(o); setOpen(false); setQ('') }}
-                  >
-                    {o}
-                  </li>
-                ))}
-                {filtered.length === 0 && (
-                  <li className="px-4 py-2 text-sm text-gray-400">No results</li>
-                )}
-              </ul>
-            </div>
-          </>
-        )}
-      </div>
-    )
-  }
 
   return (
     <div className="flex flex-col min-h-screen">
