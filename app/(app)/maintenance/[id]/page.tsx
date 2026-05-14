@@ -748,31 +748,26 @@ export default function MaintenanceTicketPage() {
             <h2 className="text-xl font-bold text-gray-900 text-center">Submission Details</h2>
 
             {/* Department */}
-            <div>
-              <label className="form-label">Department</label>
-              <div className="relative">
-                <select className="form-select" value={irForm.Department as string} onChange={e => setIr('Department', e.target.value)} disabled={isReadOnly}>
-                  {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
-                </select>
-                <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-              </div>
-            </div>
+            <FilterSelect
+              label="Department"
+              value={irForm.Department as string}
+              options={[...DEPARTMENTS]}
+              placeholder="Select a department"
+              placeholderValue=""
+              disabled={isReadOnly}
+              onChange={v => setIr('Department', v)}
+            />
 
             {/* Location Type */}
-            <div>
-              <label className="form-label">Location Type</label>
-              <div className="relative">
-                <select
-                  className="form-select"
-                  value={irForm.Location_Type as string}
-                  onChange={e => { setIr('Location_Type', e.target.value); setIr('Well', ''); setIr('Facility', '') }}
-                  disabled={isReadOnly}
-                >
-                  {LOCATION_TYPES.map(l => <option key={l} value={l}>{l}</option>)}
-                </select>
-                <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-              </div>
-            </div>
+            <FilterSelect
+              label="Location Type"
+              value={irForm.Location_Type as string}
+              options={[...LOCATION_TYPES]}
+              placeholder="Select a location type"
+              placeholderValue=""
+              disabled={isReadOnly}
+              onChange={v => { setIr('Location_Type', v); setIr('Well', ''); setIr('Facility', '') }}
+            />
 
             {irForm.Location_Type && (
               <LocationDropdowns
@@ -783,6 +778,7 @@ export default function MaintenanceTicketPage() {
                   well: irForm.Well as string,
                   facility: irForm.Facility as string,
                 }}
+                userAssets={userAssets}
                 disabled={isReadOnly}
                 onChange={({ asset, field, well, facility, area, route }) => {
                   setIrForm(f => ({ ...f, Asset: asset, Field: field, Well: well, Facility: facility, Area: area, Route: route }))
@@ -794,26 +790,24 @@ export default function MaintenanceTicketPage() {
             <div>
               <h3 className="text-lg font-bold text-gray-900 mb-4">Problem Equipment</h3>
               <div className="space-y-4">
-                <div>
-                  <label className="form-label">Select an Equipment Type</label>
-                  <div className="relative">
-                    <select className="form-select" value={irForm.Equipment_Type as string} onChange={e => { setIr('Equipment_Type', e.target.value); setIr('Equipment', '') }} disabled={isReadOnly}>
-                      <option value="">Select Equipment Type</option>
-                      {equipmentTypes.map(et => <option key={et.id} value={et.equipment_type}>{et.equipment_type}</option>)}
-                    </select>
-                    <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                  </div>
-                </div>
-                <div>
-                  <label className="form-label">Equipment</label>
-                  <div className="relative">
-                    <select className="form-select" value={irForm.Equipment as string} onChange={e => setIr('Equipment', e.target.value)} disabled={isReadOnly}>
-                      <option value="">Select Equipment</option>
-                      {equipment.map(eq => <option key={eq.id} value={eq.equip_name}>{eq.equip_name}</option>)}
-                    </select>
-                    <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                  </div>
-                </div>
+                <FilterSelect
+                  label="Select an Equipment Type"
+                  value={irForm.Equipment_Type as string}
+                  options={equipmentTypes.map(et => et.equipment_type)}
+                  placeholder="Select Equipment Type"
+                  placeholderValue=""
+                  disabled={isReadOnly}
+                  onChange={v => { setIr('Equipment_Type', v); setIr('Equipment', '') }}
+                />
+                <FilterSelect
+                  label="Equipment"
+                  value={irForm.Equipment as string}
+                  options={equipment.map(eq => eq.equip_name)}
+                  placeholder="Select Equipment"
+                  placeholderValue=""
+                  disabled={isReadOnly}
+                  onChange={v => setIr('Equipment', v)}
+                />
               </div>
             </div>
 
@@ -840,16 +834,15 @@ export default function MaintenanceTicketPage() {
                     />
                   </div>
                 ) : (
-                  <div>
-                    <label className="form-label">Initial Assigned Foreman</label>
-                    <div className="relative">
-                      <select className="form-select" value={irForm.assigned_foreman as string} disabled>
-                        <option value="">Select Foreman</option>
-                        {employees.map(emp => <option key={emp.id} value={emp.name}>{emp.name}</option>)}
-                      </select>
-                      <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                    </div>
-                  </div>
+                  <FilterSelect
+                    label="Initial Assigned Foreman"
+                    value={irForm.assigned_foreman as string}
+                    options={employees.map(emp => emp.name)}
+                    placeholder="Select Foreman"
+                    placeholderValue=""
+                    disabled
+                    onChange={v => setIr('assigned_foreman', v)}
+                  />
                 )}
                 {/* Issue Photos */}
                 <div>
@@ -1076,16 +1069,16 @@ export default function MaintenanceTicketPage() {
             <div className="border-t border-gray-200 pt-4">
               <h3 className="text-lg font-bold text-gray-900 mb-4">Task Assignment</h3>
               <div className="space-y-4">
-                <div>
-                  <label className="form-label form-label-required">Work Order Decision</label>
-                  <div className="relative">
-                    <select className="form-select" value={dispForm.work_order_decision as string} onChange={e => setDisp('work_order_decision', e.target.value)} disabled={isReadOnly}>
-                      <option value="">Select Decision</option>
-                      {WORK_ORDER_DECISIONS.map(d => <option key={d} value={d}>{d}</option>)}
-                    </select>
-                    <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                  </div>
-                </div>
+                <FilterSelect
+                  label="Work Order Decision"
+                  value={dispForm.work_order_decision as string}
+                  options={[...WORK_ORDER_DECISIONS]}
+                  placeholder="Select Decision"
+                  placeholderValue=""
+                  required
+                  disabled={isReadOnly}
+                  onChange={v => setDisp('work_order_decision', v)}
+                />
 
                 <div>
                   <label className="form-label form-label-required">Estimated Cost</label>
@@ -1109,27 +1102,27 @@ export default function MaintenanceTicketPage() {
 
                 {dispForm.work_order_decision !== 'Backlog - Uneconomic / Awaiting Part' && !ticket.Self_Dispatch_Assignee && (
                   <>
-                    <div>
-                      <label className="form-label">Assigned Foreman</label>
-                      <div className="relative">
-                        <select className="form-select" value={dispForm.assigned_foreman as string} onChange={e => setDisp('assigned_foreman', e.target.value)} disabled={isReadOnly}>
-                          <option value="">Select Foreman</option>
-                          {employees.map(emp => <option key={emp.id} value={emp.name}>{emp.name}</option>)}
-                        </select>
-                        <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                      </div>
-                    </div>
+                    <FilterSelect
+                      label="Assigned Foreman"
+                      value={dispForm.assigned_foreman as string}
+                      options={employees.map(emp => emp.name)}
+                      placeholder="Select Foreman"
+                      placeholderValue=""
+                      allowClear
+                      disabled={isReadOnly}
+                      onChange={v => setDisp('assigned_foreman', v)}
+                    />
 
-                    <div>
-                      <label className="form-label">Additional Assignee</label>
-                      <div className="relative">
-                        <select className="form-select" value={dispForm.additional_assignee as string} onChange={e => setDisp('additional_assignee', e.target.value)} disabled={isReadOnly}>
-                          <option value="">Select Employee</option>
-                          {employees.map(emp => <option key={emp.id} value={emp.name}>{emp.name}</option>)}
-                        </select>
-                        <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                      </div>
-                    </div>
+                    <FilterSelect
+                      label="Additional Assignee"
+                      value={dispForm.additional_assignee as string}
+                      options={employees.map(emp => emp.name)}
+                      placeholder="Select Employee"
+                      placeholderValue=""
+                      allowClear
+                      disabled={isReadOnly}
+                      onChange={v => setDisp('additional_assignee', v)}
+                    />
                   </>
                 )}
 
@@ -1190,16 +1183,16 @@ export default function MaintenanceTicketPage() {
 
             <div className="border-t border-gray-200 pt-4 space-y-4">
               <h3 className="text-lg font-bold text-gray-900">Final Status and Closeout</h3>
-              <div>
-                <label className="form-label form-label-required">Final Status</label>
-                <div className="relative">
-                  <select className="form-select" value={repForm.final_status as string} onChange={e => setRep('final_status', e.target.value)} disabled={isReadOnly}>
-                    <option value="">Select a status</option>
-                    {FINAL_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                  <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                </div>
-              </div>
+              <FilterSelect
+                label="Final Status"
+                value={repForm.final_status as string}
+                options={[...FINAL_STATUSES]}
+                placeholder="Select a status"
+                placeholderValue=""
+                required
+                disabled={isReadOnly}
+                onChange={v => setRep('final_status', v)}
+              />
             </div>
 
             <div className="space-y-4">
@@ -1216,23 +1209,23 @@ export default function MaintenanceTicketPage() {
                 />
               </div>
 
-              <div>
-                <label className="form-label form-label-required">Work Order Type</label>
-                <div className="relative">
-                  <select className="form-select" value={repForm.Work_Order_Type as string} onChange={e => {
-                    setRep('Work_Order_Type', e.target.value)
-                    if (!e.target.value.startsWith('AFE')) {
-                      setRep('AFE_Number', '')
-                      setRep('Job_Category', '')
-                      setRep('Job_Type_Primary', '')
-                    }
-                  }} disabled={isReadOnly}>
-                    <option value="">Select Work Order Type</option>
-                    {['AFE - Workover', 'AFE - Capital', 'LOE'].map(t => <option key={t} value={t}>{t}</option>)}
-                  </select>
-                  <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                </div>
-              </div>
+              <FilterSelect
+                label="Work Order Type"
+                value={repForm.Work_Order_Type as string}
+                options={['AFE - Workover', 'AFE - Capital', 'LOE']}
+                placeholder="Select Work Order Type"
+                placeholderValue=""
+                required
+                disabled={isReadOnly}
+                onChange={v => {
+                  setRep('Work_Order_Type', v)
+                  if (!v.startsWith('AFE')) {
+                    setRep('AFE_Number', '')
+                    setRep('Job_Category', '')
+                    setRep('Job_Type_Primary', '')
+                  }
+                }}
+              />
 
               {String(repForm.Work_Order_Type || '').startsWith('AFE') && (() => {
                 const unitId = ticket.Well_UNITID as string | undefined
