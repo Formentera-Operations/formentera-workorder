@@ -59,17 +59,28 @@ function extFromContentType(contentType) {
 }
 
 async function downloadImage(url, attempt = 1) {
+  let res;
   try {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const buffer = Buffer.from(await res.arrayBuffer());
-    const contentType = res.headers.get('content-type') || 'image/jpeg';
-    return { buffer, contentType };
+    res = await fetch(url);
   } catch (e) {
-    if (attempt >= 3) throw new Error(`Download failed after ${attempt} attempts (${e.message}): ${url}`);
+    // Network error — retry with backoff.
+    if (attempt >= 3) throw new Error(`Network error after ${attempt} attempts (${e.message}): ${url}`);
     await new Promise(r => setTimeout(r, 1000 * attempt));
     return downloadImage(url, attempt + 1);
   }
+  if (!res.ok) {
+    // 4xx is deterministic — file is gone or forbidden. Fail fast, no retry.
+    if (res.status >= 400 && res.status < 500) {
+      throw new Error(`HTTP ${res.status} (deterministic, no retry): ${url}`);
+    }
+    // 5xx — server hiccup, worth retrying.
+    if (attempt >= 3) throw new Error(`HTTP ${res.status} after ${attempt} attempts: ${url}`);
+    await new Promise(r => setTimeout(r, 1000 * attempt));
+    return downloadImage(url, attempt + 1);
+  }
+  const buffer = Buffer.from(await res.arrayBuffer());
+  const contentType = res.headers.get('content-type') || 'image/jpeg';
+  return { buffer, contentType };
 }
 
 async function uploadToSupabase(path, buffer, contentType) {
@@ -82,12 +93,15 @@ async function uploadToSupabase(path, buffer, contentType) {
 }
 
 // Process one row's URL array. Returns the new array AND counts.
-// Throws on any individual photo failure so the caller can skip the row
-// entirely (preserves array integrity — no half-migrated rows).
+// Photos whose source URL fails to download (e.g. 404 from Retool) are
+// dropped from the new array — the array length shrinks. Non-migratable
+// URLs (already in our Supabase or idb refs) pass through unchanged.
+// Upload failures still throw so the caller treats the whole row as bad.
 async function migrateUrlArray({ ticketId, urls, subfolder }) {
   const newUrls = [];
   let migrated = 0;
   let skipped = 0;
+  let dropped = 0;
   for (let i = 0; i < urls.length; i++) {
     const original = urls[i];
     if (!isMigratable(original)) {
@@ -95,20 +109,28 @@ async function migrateUrlArray({ ticketId, urls, subfolder }) {
       skipped++;
       continue;
     }
-    const { buffer, contentType } = await downloadImage(original);
+    let payload;
+    try {
+      payload = await downloadImage(original);
+    } catch (e) {
+      // Source unreachable. Drop this URL from the array — caller will
+      // update the row with a shorter list.
+      console.error(`    Ticket ${ticketId} photo ${i + 1} dropped: ${e.message}`);
+      dropped++;
+      continue;
+    }
+    const { buffer, contentType } = payload;
     const ext = extFromContentType(contentType);
     const path = `tickets/${ticketId}/${subfolder}-${i + 1}.${ext}`;
     if (COMMIT) {
       const publicUrl = await uploadToSupabase(path, buffer, contentType);
       newUrls.push(publicUrl);
     } else {
-      // Dry-run: pretend the new URL would replace the old one so we can
-      // log a clean before/after, but never write to DB.
       newUrls.push(`[DRY-RUN: ${BUCKET}/${path}]`);
     }
     migrated++;
   }
-  return { newUrls, migrated, skipped };
+  return { newUrls, migrated, skipped, dropped };
 }
 
 async function fetchAllRows({ table, selectCols, idCol }) {
@@ -143,6 +165,7 @@ async function migrateTable({ table, urlCol, idCol, ticketIdCol, subfolder }) {
   let rowsTouched = 0;
   let photosMigrated = 0;
   let photosSkipped = 0;
+  let photosDropped = 0;
   let errors = 0;
 
   for (const row of rows) {
@@ -154,7 +177,7 @@ async function migrateTable({ table, urlCol, idCol, ticketIdCol, subfolder }) {
     const rowId = row[idCol];
 
     try {
-      const { newUrls, migrated, skipped } = await migrateUrlArray({
+      const { newUrls, migrated, skipped, dropped } = await migrateUrlArray({
         ticketId,
         urls,
         subfolder,
@@ -162,12 +185,15 @@ async function migrateTable({ table, urlCol, idCol, ticketIdCol, subfolder }) {
       rowsTouched++;
       photosMigrated += migrated;
       photosSkipped += skipped;
+      photosDropped += dropped;
       const label = ticketIdCol === idCol
         ? `Ticket ${ticketId}`
         : `Ticket ${ticketId} (${table} ${rowId})`;
-      console.log(`  ${label}: migrated ${migrated}, skipped ${skipped}`);
+      console.log(`  ${label}: migrated ${migrated}, skipped ${skipped}, dropped ${dropped}`);
 
-      if (COMMIT && migrated > 0) {
+      // Update the row whenever anything changed — migrated URLs need the
+      // new Supabase paths, and dropped URLs need to disappear from the array.
+      if (COMMIT && (migrated > 0 || dropped > 0)) {
         const { error: updateErr } = await supabase
           .from(table)
           .update({ [urlCol]: newUrls })
@@ -180,9 +206,9 @@ async function migrateTable({ table, urlCol, idCol, ticketIdCol, subfolder }) {
     }
   }
 
-  console.log(`  → ${rowsTouched} rows touched, ${photosMigrated} migrated, ${photosSkipped} skipped, ${errors} errors`);
+  console.log(`  → ${rowsTouched} rows touched, ${photosMigrated} migrated, ${photosSkipped} skipped, ${photosDropped} dropped, ${errors} errors`);
   console.log('');
-  return { rowsTouched, photosMigrated, photosSkipped, errors };
+  return { rowsTouched, photosMigrated, photosSkipped, photosDropped, errors };
 }
 
 async function main() {
@@ -210,6 +236,7 @@ async function main() {
   console.log(`Rows touched:    ${issueResult.rowsTouched + repairResult.rowsTouched}`);
   console.log(`Photos migrated: ${issueResult.photosMigrated + repairResult.photosMigrated}`);
   console.log(`Photos skipped:  ${issueResult.photosSkipped + repairResult.photosSkipped}`);
+  console.log(`Photos dropped:  ${issueResult.photosDropped + repairResult.photosDropped}`);
   console.log(`Errors:          ${issueResult.errors + repairResult.errors}`);
   if (!COMMIT) {
     console.log('');
