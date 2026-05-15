@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 
+const BUCKET = 'ticket-images'
+// Legacy bucket still receives DELETE calls for photos uploaded before the
+// ticket-images cutover. New uploads always go to BUCKET.
+const LEGACY_BUCKETS = ['work-orders']
+
 export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData()
@@ -19,13 +24,13 @@ export async function POST(req: NextRequest) {
 
     const db = supabaseAdmin()
     const { error } = await db.storage
-      .from('work-orders')
+      .from(BUCKET)
       .upload(path, buffer, { contentType: file.type })
 
     if (error) throw error
 
     const { data: { publicUrl } } = db.storage
-      .from('work-orders')
+      .from(BUCKET)
       .getPublicUrl(path)
 
     return NextResponse.json({ url: publicUrl })
@@ -40,13 +45,22 @@ export async function DELETE(req: NextRequest) {
     const { url } = await req.json()
     if (!url) return NextResponse.json({ error: 'No URL provided' }, { status: 400 })
 
-    const marker = '/work-orders/'
-    const idx = url.indexOf(marker)
-    if (idx === -1) return NextResponse.json({ error: 'Invalid URL' }, { status: 400 })
+    // Match against the current bucket first, then any legacy bucket so old
+    // photos can still be cleaned up.
+    const candidates = [BUCKET, ...LEGACY_BUCKETS]
+    let matched: { bucket: string; path: string } | null = null
+    for (const bucket of candidates) {
+      const marker = `/${bucket}/`
+      const idx = url.indexOf(marker)
+      if (idx !== -1) {
+        matched = { bucket, path: url.slice(idx + marker.length) }
+        break
+      }
+    }
+    if (!matched) return NextResponse.json({ error: 'Invalid URL' }, { status: 400 })
 
-    const path = url.slice(idx + marker.length)
     const db = supabaseAdmin()
-    const { error } = await db.storage.from('work-orders').remove([path])
+    const { error } = await db.storage.from(matched.bucket).remove([matched.path])
     if (error) throw error
 
     return NextResponse.json({ success: true })
