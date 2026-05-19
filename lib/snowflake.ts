@@ -53,7 +53,14 @@ export async function snowflakeQuery<T = Record<string, unknown>>(
   })
 }
 
-// Query to get all well/facility data for cascade dropdowns
+// Query to get all well/facility data for cascade dropdowns.
+//
+// Wheeler quirk: rows where Asset is FP WHEELER / FP WHEELER MIDSTREAM /
+// FP WHEELER UPSTREAM carry their facility name in the NAME column, with
+// WELLNAME and Facility_Name both NULL. The CASE expression promotes NAME
+// into Facility_Name when TYP1 = 'facility' so those rows show up in the
+// cascade dropdown as facilities. Wells (UPSTREAM rows with WELLNAME
+// populated) and Wheeler rows with non-facility TYP1 pass through unchanged.
 export const WELL_FACILITY_QUERY = `
 SELECT
   "UNITID",
@@ -62,9 +69,15 @@ SELECT
   "Area",
   "FIELD",
   "WELLNAME",
-  "Facility_Name"
+  CASE
+    WHEN "Asset" IN ('FP WHEELER MIDSTREAM', 'FP WHEELER UPSTREAM', 'FP WHEELER')
+      AND "WELLNAME" IS NULL
+      AND "Facility_Name" IS NULL
+      AND LOWER("TYP1") = 'facility'
+    THEN "NAME"
+    ELSE "Facility_Name"
+  END AS "Facility_Name"
 FROM FO_STAGE_DB.DEV_INTERMEDIATE.RETOOL_WELL_FACILITY
-WHERE "Asset" != 'FP WHEELER MIDSTREAM' AND "Asset" != 'FP WHEELER UPSTREAM' AND "Asset" != 'FP WHEELER'
 UNION ALL
 SELECT
   "UNITID",

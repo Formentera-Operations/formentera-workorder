@@ -75,6 +75,44 @@ export default function MaintenanceFormPage() {
       .catch(() => {})
   }, [form.Asset, userAssets])
 
+  // Lock Location_Type to 'Facility' when the foreman's assigned assets have
+  // zero well rows in the well-facility data. Data-driven so that if Wheeler
+  // (or any other currently-facility-only asset) gets a well row in Snowflake
+  // later, the lock auto-unlocks on the next form load — no code change needed.
+  // LocationDropdowns also fetches this payload; cachedFetch dedupes the call
+  // via the shared cacheKey, so the second fetch is effectively free.
+  const [wfData, setWfData] = useState<Record<string, string[]> | null>(null)
+  useEffect(() => {
+    cachedFetch<Record<string, string[]>>('/api/well-facility', { cacheKey: 'well-facility' })
+      .then(({ data }) => setWfData(data))
+      .catch(() => {})
+  }, [])
+
+  // Loading-aware: while wfData hasn't resolved, lockedToFacility is false and
+  // the select stays enabled. For a returning foreman the cache fills it on the
+  // first frame; for a brand-new install there's a brief moment before the
+  // dropdown locks. Acceptable since the form's other reference data has the
+  // same race today.
+  const lockedToFacility = (() => {
+    if (userAssets.length === 0) return false
+    const assetCol = wfData?.Asset
+    const wellCol = wfData?.WELLNAME
+    if (!assetCol || !wellCol) return false
+    const userSet = new Set(userAssets)
+    for (let i = 0; i < assetCol.length; i++) {
+      if (userSet.has(assetCol[i]) && wellCol[i] && String(wellCol[i]).trim() !== '') {
+        return false
+      }
+    }
+    return true
+  })()
+
+  useEffect(() => {
+    if (lockedToFacility) {
+      setForm(f => f.Location_Type === 'Facility' ? f : { ...f, Location_Type: 'Facility' })
+    }
+  }, [lockedToFacility])
+
   useEffect(() => {
     if (form.Location_Type) {
       // SWR: populate the dropdown instantly from the warmed cache, then
@@ -313,8 +351,9 @@ export default function MaintenanceFormPage() {
           <label className="form-label form-label-required">Location Type</label>
           <div className="relative">
             <select
-              className="form-select"
+              className={`form-select${lockedToFacility ? ' opacity-60 cursor-not-allowed' : ''}`}
               value={form.Location_Type}
+              disabled={lockedToFacility}
               onChange={e => {
                 set('Location_Type', e.target.value)
                 set('Well', ''); set('Well_UNITID', ''); set('Facility', '')

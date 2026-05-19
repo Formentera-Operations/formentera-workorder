@@ -10,7 +10,7 @@ import { useAuth } from '@/components/AuthProvider'
 import { formatDate, formatDateShort, DEPARTMENTS, LOCATION_TYPES, WORK_ORDER_DECISIONS, FINAL_STATUSES, PRIORITY_OPTIONS, utcToLocalInput, localInputToUtc, diffEqual, newRequestId } from '@/lib/utils'
 import CommentsSection from '@/components/ui/CommentsSection'
 import { queuedMutate } from '@/lib/queued-mutate'
-import { cachedFetchSwr } from '@/lib/cached-fetch'
+import { cachedFetch, cachedFetchSwr } from '@/lib/cached-fetch'
 import { uploadPhoto } from '@/lib/upload-photo'
 import { isPhotoRef, deletePhoto, refToId } from '@/lib/offline-photos'
 import { useOutbox } from '@/lib/use-outbox'
@@ -52,6 +52,44 @@ export default function MaintenanceTicketPage() {
   const [repairPhotos, setRepairPhotos] = useState<string[]>([])
   const [uploadingRepairPhotos, setUploadingRepairPhotos] = useState(false)
   const [deleteRepairPhotoIdx, setDeleteRepairPhotoIdx] = useState<number | null>(null)
+
+  // Mirror the new-ticket form's Wheeler lock on the Initial Report tab so a
+  // foreman whose assigned assets have zero wells in the well-facility data is
+  // forced to Location_Type='Facility' and can't toggle. Same data source and
+  // logic as app/(app)/maintenance/new/page.tsx — see that file for the
+  // future-proofing rationale (no hardcoded asset list).
+  //
+  // Guard: only auto-flip when the current Location_Type is empty or already
+  // 'Facility'. Preserves any existing non-Facility value on a ticket the
+  // foreman didn't create (e.g. after an asset reassignment) instead of
+  // silently clobbering it on render.
+  const [wfData, setWfData] = useState<Record<string, string[]> | null>(null)
+  useEffect(() => {
+    cachedFetch<Record<string, string[]>>('/api/well-facility', { cacheKey: 'well-facility' })
+      .then(({ data }) => setWfData(data))
+      .catch(() => {})
+  }, [])
+
+  const lockedToFacility = (() => {
+    if (userAssets.length === 0) return false
+    const assetCol = wfData?.Asset
+    const wellCol = wfData?.WELLNAME
+    if (!assetCol || !wellCol) return false
+    const userSet = new Set(userAssets)
+    for (let i = 0; i < assetCol.length; i++) {
+      if (userSet.has(assetCol[i]) && wellCol[i] && String(wellCol[i]).trim() !== '') {
+        return false
+      }
+    }
+    return true
+  })()
+
+  useEffect(() => {
+    if (!lockedToFacility) return
+    const current = irForm.Location_Type as string | undefined
+    if (current && current !== '' && current !== 'Facility') return
+    setIrForm(f => f.Location_Type === 'Facility' ? f : { ...f, Location_Type: 'Facility' })
+  }, [lockedToFacility, irForm.Location_Type])
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function initForms(td: any) {
@@ -765,7 +803,7 @@ export default function MaintenanceTicketPage() {
               options={[...LOCATION_TYPES]}
               placeholder="Select a location type"
               placeholderValue=""
-              disabled={isReadOnly}
+              disabled={isReadOnly || (lockedToFacility && (irForm.Location_Type === '' || irForm.Location_Type === 'Facility'))}
               onChange={v => { setIr('Location_Type', v); setIr('Well', ''); setIr('Facility', '') }}
             />
 
