@@ -1,5 +1,6 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Search, ChevronDown, X } from 'lucide-react'
 
 // Lists shorter than this skip the search input entirely.
@@ -35,6 +36,15 @@ export default function FilterSelect({
 }: FilterSelectProps) {
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
+  // Portal target: document.body. Tracked via state so SSR (where `document`
+  // doesn't exist) renders nothing on first pass, then hydrates with the
+  // portal target attached. Required because some parents that embed
+  // FilterSelect — e.g. the maintenance page's filter panel — set
+  // overflow-y-auto, which on iOS Safari traps position:fixed descendants
+  // inside the scroll container instead of letting them anchor to the
+  // viewport. Portaling to body bypasses every ancestor's containing block.
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => { setMounted(true) }, [])
   const showSearch = options.length > SEARCH_THRESHOLD
   const filtered = q ? options.filter(o => o.toLowerCase().includes(q.toLowerCase())) : options
   const close = () => { setOpen(false); setQ('') }
@@ -106,44 +116,51 @@ export default function FilterSelect({
           </button>
         )}
 
-        {open && !disabled && (
-          <>
-            <div className="fixed inset-0 z-50 bg-black/40" onClick={close} />
-            <div className="fixed z-50 bg-white shadow-2xl flex flex-col
-                            left-0 right-0 bottom-0
-                            rounded-t-2xl max-h-[80vh]">
-              <div className="px-4 pt-3 pb-2 flex items-center justify-between">
-                <h3 className="text-base font-semibold text-gray-900">{label}</h3>
-                <button type="button" onClick={close} className="text-sm text-gray-500 px-2 py-1">
-                  Cancel
-                </button>
-              </div>
-              {showSearch && (
-                <div className="px-4 pb-3">
-                  <div className="relative">
-                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                    <input
-                      type="text"
-                      className="w-full pl-8 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#1B2E6B]"
-                      placeholder="Search..."
-                      value={q}
-                      onChange={e => setQ(e.target.value)}
-                    />
-                  </div>
-                </div>
-              )}
-              <ul className="flex-1 overflow-y-auto px-2 space-y-0.5
-                             pb-[calc(env(safe-area-inset-bottom)+1rem)]">
-                {renderRow(placeholder, placeholderValue)}
-                {filtered.map(o => renderRow(o, o))}
-                {filtered.length === 0 && (
-                  <li className="px-4 py-3 text-sm text-gray-400 text-center">No results</li>
-                )}
-              </ul>
-            </div>
-          </>
-        )}
       </div>
+
+      {/* Mobile sheet — portaled to <body> so iOS Safari can't trap the
+          fixed-position sheet inside an overflow-y-auto ancestor (e.g. the
+          maintenance page's filter panel). The wrapping sm:hidden div
+          ensures we don't render alongside the desktop modal when both
+          would otherwise be visible after a viewport resize. */}
+      {mounted && open && !disabled && createPortal(
+        <div className="sm:hidden">
+          <div className="fixed inset-0 z-50 bg-black/40" onClick={close} />
+          <div className="fixed z-50 bg-white shadow-2xl flex flex-col
+                          left-0 right-0 bottom-0
+                          rounded-t-2xl max-h-[80vh]">
+            <div className="px-4 pt-3 pb-2 flex items-center justify-between">
+              <h3 className="text-base font-semibold text-gray-900">{label}</h3>
+              <button type="button" onClick={close} className="text-sm text-gray-500 px-2 py-1">
+                Cancel
+              </button>
+            </div>
+            {showSearch && (
+              <div className="px-4 pb-3">
+                <div className="relative">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    className="w-full pl-8 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#1B2E6B]"
+                    placeholder="Search..."
+                    value={q}
+                    onChange={e => setQ(e.target.value)}
+                  />
+                </div>
+              </div>
+            )}
+            <ul className="flex-1 overflow-y-auto px-2 space-y-0.5
+                           pb-[calc(env(safe-area-inset-bottom)+1rem)]">
+              {renderRow(placeholder, placeholderValue)}
+              {filtered.map(o => renderRow(o, o))}
+              {filtered.length === 0 && (
+                <li className="px-4 py-3 text-sm text-gray-400 text-center">No results</li>
+              )}
+            </ul>
+          </div>
+        </div>,
+        document.body
+      )}
 
       {/* Desktop: searchable centered modal. */}
       <div className="hidden sm:block relative">
