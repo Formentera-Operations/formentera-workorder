@@ -97,6 +97,33 @@ export default function KPIDashboard() {
     return { trendStart: customStart, trendEnd: customEnd }
   }, [trendPreset, customStart, customEnd])
 
+  // localStorage snapshot of the last successful response, keyed by the
+  // exact params we'd send to /api/kpis. Lets us paint the prior values
+  // on first frame so the foreman never stares at a skeleton on return
+  // visits — the background fetch below then revalidates in place.
+  const snapshotKey = trendStart && trendEnd
+    ? `kpi:snapshot:${assets.join(',')}:${trendStart}:${trendEnd}`
+    : null
+
+  // Seed `data` from the snapshot when the key first becomes available
+  // (or changes before any fetch has populated `data`). Once data is
+  // set — by snapshot or fetch — preset switches let the in-flight fetch
+  // update the chart in place rather than reverting to a stale preset.
+  useEffect(() => {
+    if (!snapshotKey || data) return
+    try {
+      const raw = window.localStorage.getItem(snapshotKey)
+      if (!raw) return
+      const parsed = JSON.parse(raw) as { data: KPIData; savedAt: number } | null
+      if (parsed?.data) {
+        setData(parsed.data)
+        setLastRefreshed(new Date(parsed.savedAt))
+      }
+    } catch {
+      /* corrupt entry — ignore */
+    }
+  }, [snapshotKey, data])
+
   const fetchKPIs = useCallback(() => {
     if (loading) return
     if (trendPreset === 'custom' && (!trendStart || !trendEnd)) return
@@ -107,7 +134,18 @@ export default function KPIDashboard() {
     params.set('_t', Date.now().toString())
     fetch(`/api/kpis?${params}`, { cache: 'no-store' })
       .then(r => r.json())
-      .then(d => { setData(d); setLastRefreshed(new Date()) })
+      .then(d => {
+        setData(d)
+        setLastRefreshed(new Date())
+        if (trendStart && trendEnd) {
+          const key = `kpi:snapshot:${assets.join(',')}:${trendStart}:${trendEnd}`
+          try {
+            window.localStorage.setItem(key, JSON.stringify({ data: d, savedAt: Date.now() }))
+          } catch {
+            /* quota / private mode — ignore */
+          }
+        }
+      })
       .catch(() => {})
   }, [assets, loading, trendPreset, trendStart, trendEnd])
 
