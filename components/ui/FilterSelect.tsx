@@ -78,9 +78,11 @@ export default function FilterSelect({
         <label className={`form-label${required ? ' form-label-required' : ''}`}>{label}</label>
       )}
 
-      {/* Mobile: inline searchable dropdown anchored below the trigger.
-          (Native <select> + iOS wheel was clean but lacked search, which
-          matters for long lists like equipment.) */}
+      {/* Mobile: bottom-sheet modal. Previously an inline dropdown anchored
+          below the trigger, but when the field sat near the bottom of the
+          viewport (e.g. Assigned Foreman on the new-ticket form) the list
+          got squeezed against the bottom nav and only ~1 row was visible.
+          The sheet always gets ~80vh regardless of trigger position. */}
       <div className="relative sm:hidden">
         <button
           type="button"
@@ -106,39 +108,36 @@ export default function FilterSelect({
 
         {open && !disabled && (
           <>
-            {/* Backdrop catches outside taps. */}
-            <div className="fixed inset-0 z-40" onClick={close} />
-            <div className="absolute left-0 right-0 top-full mt-1 z-50 bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden">
-              <div className="p-2 border-b border-gray-100">
-                <div className="relative">
-                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input
-                    type="text"
-                    className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#1B2E6B]"
-                    placeholder="Search..."
-                    value={q}
-                    onChange={e => setQ(e.target.value)}
-                  />
-                </div>
+            <div className="fixed inset-0 z-50 bg-black/40" onClick={close} />
+            <div className="fixed z-50 bg-white shadow-2xl flex flex-col
+                            left-0 right-0 bottom-0
+                            rounded-t-2xl max-h-[80vh]">
+              <div className="px-4 pt-3 pb-2 flex items-center justify-between">
+                <h3 className="text-base font-semibold text-gray-900">{label}</h3>
+                <button type="button" onClick={close} className="text-sm text-gray-500 px-2 py-1">
+                  Cancel
+                </button>
               </div>
-              <ul className="max-h-64 overflow-y-auto py-1">
-                <li
-                  onClick={() => { onChange(placeholderValue); close() }}
-                  className={`px-4 py-2 text-sm cursor-pointer hover:bg-gray-50 ${isPlaceholder ? 'font-medium text-[#1B2E6B]' : 'text-gray-700'}`}
-                >
-                  {placeholder}
-                </li>
-                {filtered.map(o => (
-                  <li
-                    key={o}
-                    onClick={() => { onChange(o); close() }}
-                    className={`px-4 py-2 text-sm cursor-pointer hover:bg-gray-50 ${value === o ? 'font-medium text-[#1B2E6B]' : 'text-gray-700'}`}
-                  >
-                    {o}
-                  </li>
-                ))}
+              {showSearch && (
+                <div className="px-4 pb-3">
+                  <div className="relative">
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input
+                      type="text"
+                      className="w-full pl-8 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#1B2E6B]"
+                      placeholder="Search..."
+                      value={q}
+                      onChange={e => setQ(e.target.value)}
+                    />
+                  </div>
+                </div>
+              )}
+              <ul className="flex-1 overflow-y-auto px-2 space-y-0.5
+                             pb-[calc(env(safe-area-inset-bottom)+1rem)]">
+                {renderRow(placeholder, placeholderValue)}
+                {filtered.map(o => renderRow(o, o))}
                 {filtered.length === 0 && (
-                  <li className="px-4 py-2 text-sm text-gray-400">No results</li>
+                  <li className="px-4 py-3 text-sm text-gray-400 text-center">No results</li>
                 )}
               </ul>
             </div>
