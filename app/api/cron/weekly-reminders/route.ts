@@ -45,8 +45,26 @@ export async function GET(req: NextRequest) {
   const url = new URL(req.url)
   const dryRun = url.searchParams.get('dryRun') === 'true'
   const force = url.searchParams.get('force') === 'true'
+  // testTo=<email>: redirect every foreman's email to this single address so a
+  // dry-run-with-actual-send can be reviewed without spamming real foremen.
+  // Subject gets a [TEST — for {Name}] prefix so multiple test emails are
+  // distinguishable in the recipient's inbox. Implies bypassing the DST gate.
+  // Validation: must be exactly one email — no commas, no whitespace — so a
+  // malformed value can't accidentally fan out to real foreman addresses.
+  const testToRaw = (url.searchParams.get('testTo') || '').trim()
+  const isTestMode = testToRaw.length > 0
+  if (isTestMode) {
+    const validTestTo = /^[^\s,@]+@[^\s,@]+\.[^\s,@]+$/.test(testToRaw)
+    if (!validTestTo) {
+      return NextResponse.json(
+        { error: 'testTo must be a single valid email (no commas, no spaces)' },
+        { status: 400 }
+      )
+    }
+  }
+  const testTo = testToRaw
 
-  if (!force && !dryRun && !isFivePmCentral(new Date())) {
+  if (!force && !dryRun && !isTestMode && !isFivePmCentral(new Date())) {
     return NextResponse.json({ skipped: 'not 5pm Central' }, { status: 200 })
   }
 
@@ -82,7 +100,7 @@ export async function GET(req: NextRequest) {
       ? []
       : tickets.filter(t => t.Asset && assets.includes(t.Asset))
 
-    const { subject, html } = weeklyReminderEmail(f.name, myTickets.map(t => ({
+    const built = weeklyReminderEmail(f.name, myTickets.map(t => ({
       id: t.id,
       Ticket_Status: t.Ticket_Status,
       Issue_Date: t.Issue_Date || undefined,
@@ -94,23 +112,37 @@ export async function GET(req: NextRequest) {
       assigned_foreman: t.assigned_foreman || undefined,
     })))
 
+    const recipient = isTestMode ? testTo : f.work_email
+    const subject = isTestMode ? `[TEST — for ${f.name}] ${built.subject}` : built.subject
+    const html = built.html
+
+    // Defensive guard: if we're in test mode, the recipient MUST equal the
+    // test address. If anything ever changes upstream that breaks that
+    // invariant, refuse to send rather than risk leaking to a real foreman.
+    if (isTestMode && recipient !== testTo) {
+      console.error(`weekly-reminders test-mode guard tripped: recipient=${recipient} testTo=${testTo}`)
+      summary.push({ to: recipient, foreman: f.name, ticketCount: myTickets.length, sent: false, error: 'test-mode guard tripped' })
+      continue
+    }
+
     if (dryRun) {
-      summary.push({ to: f.work_email, foreman: f.name, ticketCount: myTickets.length, sent: false })
+      summary.push({ to: recipient, foreman: f.name, ticketCount: myTickets.length, sent: false })
       continue
     }
 
     try {
-      await sendMail({ to: f.work_email, subject, html })
-      summary.push({ to: f.work_email, foreman: f.name, ticketCount: myTickets.length, sent: true })
+      await sendMail({ to: recipient, subject, html })
+      summary.push({ to: recipient, foreman: f.name, ticketCount: myTickets.length, sent: true })
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      console.error(`weekly-reminders sendMail failed for ${f.work_email}:`, msg)
-      summary.push({ to: f.work_email, foreman: f.name, ticketCount: myTickets.length, sent: false, error: msg })
+      console.error(`weekly-reminders sendMail failed for ${recipient}:`, msg)
+      summary.push({ to: recipient, foreman: f.name, ticketCount: myTickets.length, sent: false, error: msg })
     }
   }
 
   return NextResponse.json({
     dryRun,
+    testMode: isTestMode ? testTo : false,
     foremenProcessed: summary.length,
     summary,
   })
