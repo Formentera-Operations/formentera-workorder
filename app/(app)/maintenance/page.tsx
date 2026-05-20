@@ -20,7 +20,7 @@ const PAGE_SIZE = 20
 function MaintenancePageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { assets: userAssets, role } = useAuth()
+  const { assets: userAssets, role, loading: authLoading } = useAuth()
   const { actions: outboxActions } = useOutbox()
 
   // Bumped when the outbox drains so the list re-fetches and shows the
@@ -59,8 +59,11 @@ function MaintenancePageContent() {
 
   // Cache key bumped to v3 — request now includes status/date filters so
   // the response varies with them. Re-fetches when any cascade-influencing
-  // filter changes.
+  // filter changes. Gated on authLoading so we don't fire once with
+  // userAssets=[] (treated server-side as admin = sees all) and then
+  // immediately re-fire with the real asset list.
   useEffect(() => {
+    if (authLoading) return
     const params = new URLSearchParams({ mode: 'all' })
     if (userAssets.length > 0) params.set('userAssets', userAssets.join(','))
     if (statusFilter !== 'All') params.set('status', statusFilter)
@@ -72,7 +75,7 @@ function MaintenancePageContent() {
     )
       .then(({ data }) => setOptionRows(data.rows || []))
       .catch(() => {})
-  }, [userAssets, statusFilter, startDate, endDate])
+  }, [authLoading, userAssets, statusFilter, startDate, endDate])
 
   const { assets, departments, equipments, foremans, submitters } = useMemo(
     () => deriveCascadingOptions(optionRows, {
@@ -97,6 +100,11 @@ function MaintenancePageContent() {
   }, [userAssets])
 
   useEffect(() => {
+    // Same gate as the options fetch — wait for AuthProvider to finish
+    // before firing so the asset filter is included in the FIRST request.
+    // Otherwise foremen briefly see all-asset results before the correct
+    // narrowed list overwrites them.
+    if (authLoading) return
     let cancelled = false
     setLoading(true)
     const params = new URLSearchParams({
@@ -131,7 +139,7 @@ function MaintenancePageContent() {
       .catch(() => {})
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [page, ticketId, search, startDate, endDate, assetFilter, deptFilter, equipFilter, statusFilter, foremanFilter, submittedByFilter, userAssets, refreshNonce])
+  }, [authLoading, page, ticketId, search, startDate, endDate, assetFilter, deptFilter, equipFilter, statusFilter, foremanFilter, submittedByFilter, userAssets, refreshNonce])
 
   useEffect(() => { setPage(0) }, [ticketId, search, startDate, endDate, assetFilter, deptFilter, equipFilter, statusFilter, foremanFilter, submittedByFilter])
 

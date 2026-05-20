@@ -9,6 +9,13 @@ function profileKey(email: string): string {
   return `auth:profile:${email.toLowerCase()}`
 }
 
+// Last-known email is stored so we can prime role + assets synchronously on
+// mount, before the async getSession() / getUser() round-trip completes.
+// Without this, the first render always has role='field_user' and assets=[],
+// causing every gated fetch (maintenance list, options) to wait ~200-400ms
+// for AuthProvider to settle.
+const LAST_EMAIL_KEY = 'auth:last-email'
+
 function readProfileCache(email: string): ProfileCache | null {
   if (typeof window === 'undefined') return null
   try {
@@ -26,8 +33,20 @@ function writeProfileCache(email: string, profile: ProfileCache): void {
   if (typeof window === 'undefined') return
   try {
     window.localStorage.setItem(profileKey(email), JSON.stringify(profile))
+    window.localStorage.setItem(LAST_EMAIL_KEY, email.toLowerCase())
   } catch {
     /* quota / private mode — ignore */
+  }
+}
+
+function readSeedProfile(): ProfileCache | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const lastEmail = window.localStorage.getItem(LAST_EMAIL_KEY)
+    if (!lastEmail) return null
+    return readProfileCache(lastEmail)
+  } catch {
+    return null
   }
 }
 
@@ -60,6 +79,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [assets, setAssets] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const supabase = createSupabaseBrowserClient()
+
+  // Seed role/assets from the last-known cached profile so deeplinks render
+  // their auth-gated content (e.g. asset-filtered ticket list) without
+  // waiting on the network getSession() round-trip. The useEffect below
+  // still validates against Supabase and overwrites if anything changed.
+  // Done in useEffect (not the useState initializer) to avoid SSR/hydration
+  // mismatch — server has no window/localStorage.
+  useEffect(() => {
+    const seed = readSeedProfile()
+    if (seed) {
+      setRoleIfChanged(seed.role || 'field_user')
+      setAssetsIfChanged(seed.assets || [])
+      setLoading(false)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Only swap state when content changes — otherwise every onAuthStateChange
   // (token refresh, app foreground, reconnection) creates a fresh array

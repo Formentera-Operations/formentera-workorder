@@ -17,10 +17,12 @@ function isFivePmCentral(now: Date): boolean {
   return parseInt(hour, 10) === 17
 }
 
-// Returns YYYY-MM-DD strings for Monday and Sunday of the current Chicago week.
-// Sunday will be in the future when the cron runs Friday — that's fine, the
-// upper bound still bounds the query correctly and matches the email button's
-// "this week" framing the user wanted.
+// Returns YYYY-MM-DD strings for the Saturday–Friday "work week" ending on
+// THIS week's Friday in Chicago. For the actual cron run (Friday 5pm CT)
+// that's the past Sat through today's Fri. For tests on other weekdays
+// (Mon–Thu) it returns the same Sat–Fri window so the preview matches what
+// the cron will actually send this Friday. For weekend tests (Sat/Sun) the
+// window slides forward to the next upcoming Friday's week.
 function getChicagoWeekRange(now: Date): { startDate: string; endDate: string } {
   const chicagoToday = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'America/Chicago',
@@ -33,14 +35,20 @@ function getChicagoWeekRange(now: Date): { startDate: string; endDate: string } 
     Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3,
     Thursday: 4, Friday: 5, Saturday: 6,
   }
-  const dow = dayMap[dayName] ?? 1
-  const daysSinceMonday = (dow + 6) % 7
+  const dow = dayMap[dayName] ?? 5
+  // Days until this week's Friday: 0 if today IS Friday, otherwise count
+  // forward. Saturday slides to next Friday (6 days out).
+  const daysUntilFriday =
+    dow === 5 ? 0 :
+    dow === 6 ? 6 :
+    5 - dow
   const [y, m, d] = chicagoToday.split('-').map(Number)
   const baseUtc = Date.UTC(y, m - 1, d)
+  const fridayUtc = baseUtc + daysUntilFriday * 86400000
   const fmt = (utcMs: number) => new Date(utcMs).toISOString().slice(0, 10)
   return {
-    startDate: fmt(baseUtc - daysSinceMonday * 86400000),
-    endDate: fmt(baseUtc + (6 - daysSinceMonday) * 86400000),
+    startDate: fmt(fridayUtc - 6 * 86400000),
+    endDate: fmt(fridayUtc),
   }
 }
 
