@@ -53,6 +53,10 @@ export async function GET(req: NextRequest) {
   // malformed value can't accidentally fan out to real foreman addresses.
   const testToRaw = (url.searchParams.get('testTo') || '').trim()
   const isTestMode = testToRaw.length > 0
+  // foreman=<name>: case-insensitive match, processes only that one foreman.
+  // Pair with testTo to send a single representative email instead of one
+  // per foreman during a test.
+  const foremanFilter = (url.searchParams.get('foreman') || '').trim().toLowerCase()
   if (isTestMode) {
     const validTestTo = /^[^\s,@]+@[^\s,@]+\.[^\s,@]+$/.test(testToRaw)
     if (!validTestTo) {
@@ -88,8 +92,11 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Failed to load tickets' }, { status: 500 })
   }
 
-  const foremen = (foremenRes.data || []) as Foreman[]
+  let foremen = (foremenRes.data || []) as Foreman[]
   const tickets = (ticketsRes.data || []) as TicketRow[]
+  if (foremanFilter) {
+    foremen = foremen.filter(f => (f.name || '').toLowerCase() === foremanFilter)
+  }
 
   const summary: { to: string; foreman: string; ticketCount: number; sent: boolean; error?: string }[] = []
 
