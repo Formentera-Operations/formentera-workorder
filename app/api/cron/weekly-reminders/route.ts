@@ -17,6 +17,33 @@ function isFivePmCentral(now: Date): boolean {
   return parseInt(hour, 10) === 17
 }
 
+// Returns YYYY-MM-DD strings for Monday and Sunday of the current Chicago week.
+// Sunday will be in the future when the cron runs Friday — that's fine, the
+// upper bound still bounds the query correctly and matches the email button's
+// "this week" framing the user wanted.
+function getChicagoWeekRange(now: Date): { startDate: string; endDate: string } {
+  const chicagoToday = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Chicago',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(now)
+  const dayName = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Chicago', weekday: 'long',
+  }).format(now)
+  const dayMap: Record<string, number> = {
+    Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3,
+    Thursday: 4, Friday: 5, Saturday: 6,
+  }
+  const dow = dayMap[dayName] ?? 1
+  const daysSinceMonday = (dow + 6) % 7
+  const [y, m, d] = chicagoToday.split('-').map(Number)
+  const baseUtc = Date.UTC(y, m - 1, d)
+  const fmt = (utcMs: number) => new Date(utcMs).toISOString().slice(0, 10)
+  return {
+    startDate: fmt(baseUtc - daysSinceMonday * 86400000),
+    endDate: fmt(baseUtc + (6 - daysSinceMonday) * 86400000),
+  }
+}
+
 type Foreman = { name: string; work_email: string; assets: string[] | null }
 
 type TicketRow = {
@@ -59,13 +86,21 @@ export async function GET(req: NextRequest) {
   // Pair with testTo to send a single representative email instead of one
   // per foreman during a test.
   const foremanFilter = (url.searchParams.get('foreman') || '').trim().toLowerCase()
-  // days=N: only include tickets with Issue_Date in the last N days. Useful
-  // for previewing a slim test email; production runs leave this off so
-  // long-standing open tickets still get reminded.
+  // Production: filter tickets to Issue_Date within the current Chicago week
+  // (Mon–Sun). Sunday is in the future when the cron fires Friday — harmless
+  // upper bound. The "View in App" button in the email mirrors these exact
+  // bounds so the page shows the same set on landing.
+  // days=N override: rolling last-N-days window instead of the calendar week.
+  // Useful for previewing a slim test email outside the normal Mon–Sun frame.
   const daysRaw = parseInt(url.searchParams.get('days') || '', 10)
-  const sinceIso = Number.isFinite(daysRaw) && daysRaw > 0
-    ? new Date(Date.now() - daysRaw * 24 * 60 * 60 * 1000).toISOString()
-    : null
+  const { startDate, endDate } = (() => {
+    if (Number.isFinite(daysRaw) && daysRaw > 0) {
+      const end = new Date().toISOString().slice(0, 10)
+      const start = new Date(Date.now() - daysRaw * 86400000).toISOString().slice(0, 10)
+      return { startDate: start, endDate: end }
+    }
+    return getChicagoWeekRange(new Date())
+  })()
   if (isTestMode) {
     const validTestTo = /^[^\s,@]+@[^\s,@]+\.[^\s,@]+$/.test(testToRaw)
     if (!validTestTo) {
@@ -83,13 +118,11 @@ export async function GET(req: NextRequest) {
 
   const db = supabaseAdmin()
 
-  const ticketsQuery = (() => {
-    let q = db.from('workorder_ticket_list')
-      .select('id, Ticket_Status, Issue_Date, Location_Type, Asset, Field, Well, Facility, Equipment, Issue_Description, Created_by_Name, assigned_foreman')
-      .in('Ticket_Status', ['Open', 'In Progress'])
-    if (sinceIso) q = q.gte('Issue_Date', sinceIso)
-    return q
-  })()
+  const ticketsQuery = db.from('workorder_ticket_list')
+    .select('id, Ticket_Status, Issue_Date, Location_Type, Asset, Field, Well, Facility, Equipment, Issue_Description, Created_by_Name, assigned_foreman')
+    .in('Ticket_Status', ['Open', 'In Progress'])
+    .gte('Issue_Date', startDate)
+    .lte('Issue_Date', endDate + 'T23:59:59')
 
   const [foremenRes, ticketsRes] = await Promise.all([
     db.from('employees')
@@ -134,7 +167,7 @@ export async function GET(req: NextRequest) {
       Issue_Description: t.Issue_Description || undefined,
       Created_by_Name: t.Created_by_Name || undefined,
       assigned_foreman: t.assigned_foreman || undefined,
-    })))
+    })), { startDate, endDate })
 
     const recipient = isTestMode ? testTo : f.work_email
     const subject = isTestMode ? `[TEST — for ${f.name}] ${built.subject}` : built.subject

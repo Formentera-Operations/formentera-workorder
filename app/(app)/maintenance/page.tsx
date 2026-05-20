@@ -50,7 +50,11 @@ function MaintenancePageContent() {
   const [equipFilter, setEquipFilter] = useState(() => searchParams.get('equipment') || 'All')
   const [foremanFilter, setForemanFilter] = useState('All')
   const [submittedByFilter, setSubmittedByFilter] = useState('All')
-  const [statusFilter, setStatusFilter] = useState<TicketStatus | 'All'>(() => (searchParams.get('status') as TicketStatus) || 'All')
+  // 'Active' is a URL-only pseudo-status used by the weekly-reminder email
+  // button — the API expands it to Open + In Progress. Not a selectable
+  // dropdown option; foremen who land with it see "Active" in the trigger
+  // and can switch to a real status whenever they want.
+  const [statusFilter, setStatusFilter] = useState<TicketStatus | 'All' | 'Active'>(() => (searchParams.get('status') as TicketStatus | 'Active') || 'All')
   const [optionRows, setOptionRows] = useState<OptionRow[]>([])
 
   // Cache key bumped to v3 — request now includes status/date filters so
@@ -141,6 +145,20 @@ function MaintenancePageContent() {
 
   const totalPages = Math.ceil(totalCount / PAGE_SIZE)
 
+  // Surface that filters are pre-applied (e.g. weekly-reminder email landing)
+  // so the foreman can tell why their list is narrowed even though the
+  // filter panel is collapsed. Date range counts as one filter, not two.
+  const activeFilterCount =
+    (statusFilter !== 'All' ? 1 : 0) +
+    (assetFilter !== 'All' ? 1 : 0) +
+    (deptFilter !== 'All' ? 1 : 0) +
+    (equipFilter !== 'All' ? 1 : 0) +
+    (foremanFilter !== 'All' ? 1 : 0) +
+    (submittedByFilter !== 'All' ? 1 : 0) +
+    ((startDate || endDate) ? 1 : 0) +
+    (ticketId ? 1 : 0) +
+    (search ? 1 : 0)
+
   return (
     <div className="flex flex-col min-h-screen">
       {/* Header */}
@@ -159,12 +177,17 @@ function MaintenancePageContent() {
 
         {/* Filter trigger */}
         <button
-          className="w-full flex items-center justify-between px-3 py-2 rounded-lg border border-gray-200 bg-white"
+          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg border bg-white ${activeFilterCount > 0 ? 'border-[#1B2E6B] ring-1 ring-[#1B2E6B]/30' : 'border-gray-200'}`}
           onClick={() => setFiltersOpen(!filtersOpen)}
         >
           <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
-            <SlidersHorizontal size={15} className="text-gray-500" />
+            <SlidersHorizontal size={15} className={activeFilterCount > 0 ? 'text-[#1B2E6B]' : 'text-gray-500'} />
             Ticket Filters
+            {activeFilterCount > 0 && (
+              <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-[#1B2E6B] text-white text-[11px] font-semibold">
+                {activeFilterCount}
+              </span>
+            )}
           </div>
           <div className="w-6 h-6 rounded-full bg-gray-800 flex items-center justify-center">
             {filtersOpen

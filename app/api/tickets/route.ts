@@ -59,7 +59,16 @@ export async function GET(req: NextRequest) {
     if (asset && asset !== 'All') query = query.ilike('Asset', asset)
     if (department && department !== 'All') query = query.eq('Department', department)
     if (equipment && equipment !== 'All') query = query.eq('Equipment', equipment)
-    if (status && status !== 'All') query = query.eq('Ticket_Status', status)
+    if (status && status !== 'All') {
+      // 'Active' is a UI shortcut used by the weekly-reminder email button:
+      // expands to Open + In Progress so the foreman lands on exactly the
+      // tickets shown in the email.
+      if (status === 'Active') {
+        query = query.in('Ticket_Status', ['Open', 'In Progress'])
+      } else {
+        query = query.eq('Ticket_Status', status)
+      }
+    }
     if (foreman && foreman !== 'All') query = query.eq('assigned_foreman', foreman)
     if (submittedBy && submittedBy !== 'All') query = query.eq('Created_by_Name', submittedBy)
 

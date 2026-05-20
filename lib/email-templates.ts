@@ -314,7 +314,11 @@ type ReminderTicket = {
   assigned_foreman?: string
 }
 
-export function weeklyReminderEmail(foremanName: string, tickets: ReminderTicket[]) {
+export function weeklyReminderEmail(
+  foremanName: string,
+  tickets: ReminderTicket[],
+  weekRange: { startDate: string; endDate: string },
+) {
   const firstName = (foremanName.trim().split(/\s+/)[0] || '')
     .toLowerCase()
     .replace(/^\w/, c => c.toUpperCase())
@@ -322,12 +326,27 @@ export function weeklyReminderEmail(foremanName: string, tickets: ReminderTicket
     weekday: 'long', month: 'long', day: 'numeric', timeZone: 'America/Chicago',
   })
 
+  // Button links to the Maintenance list with the same filters the cron used
+  // so the foreman sees the exact tickets from the email when they click in.
+  // status=Active is interpreted by /api/tickets as Open + In Progress.
+  const appUrl = `${APP_URL}/maintenance?status=Active&startDate=${weekRange.startDate}&endDate=${weekRange.endDate}`
+  const buttonHtml = `
+    <div style="margin:16px 0 24px;">
+      <a href="${appUrl}"
+         style="display:inline-block;padding:12px 18px;border-radius:6px;
+                background:#1B2E6B;color:#fff;text-decoration:none;font-weight:600;">
+        View in App
+      </a>
+    </div>
+  `
+
   if (tickets.length === 0) {
     return {
       subject: `Weekly Reminder — No Open Tickets`,
       html: `
         <p>Hi ${firstName},</p>
         <p>You have no open or in-progress tickets on your assigned assets as of ${todayLabel}. Have a great weekend!</p>
+        ${buttonHtml}
       `,
     }
   }
@@ -382,6 +401,7 @@ export function weeklyReminderEmail(foremanName: string, tickets: ReminderTicket
   const html = `
     <p>Hi ${firstName},</p>
     <p>Here are the open / in-progress ${plural} on your assigned assets as of ${todayLabel}:</p>
+    ${buttonHtml}
     <table style="border-collapse:collapse;width:100%;font-size:13px;font-family:Arial,Helvetica,sans-serif;">
       <thead>
         <tr style="background:#1B2E6B;color:#fff;">
