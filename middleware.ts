@@ -49,6 +49,9 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    // api/cron/* is excluded so Vercel Cron and external automation can hit
+    // those endpoints with Bearer auth instead of being redirected to
+    // /login. The cron routes do their own Authorization header check.
+    '/((?!_next/static|_next/image|favicon.ico|api/cron|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }
