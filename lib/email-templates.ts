@@ -304,11 +304,13 @@ type ReminderTicket = {
   id: number
   Ticket_Status?: string
   Issue_Date?: string
+  Location_Type?: string
   Asset?: string
   Well?: string
   Facility?: string
   Equipment?: string
   Issue_Description?: string
+  Created_by_Name?: string
   assigned_foreman?: string
 }
 
@@ -357,7 +359,13 @@ export function weeklyReminderEmail(foremanName: string, tickets: ReminderTicket
   }
 
   const rowsHtml = sorted.map(t => {
-    const wf = clean(t.Well) !== '—' ? clean(t.Well) : clean(t.Facility)
+    // Prefer the explicit Location_Type column; fall back to whichever of
+    // Well/Facility has a value so tickets without Location_Type set still
+    // get an accurate label.
+    const wfName = clean(t.Well) !== '—' ? clean(t.Well) : clean(t.Facility)
+    const locType = clean(t.Location_Type) !== '—'
+      ? clean(t.Location_Type)
+      : (clean(t.Well) !== '—' ? 'Well' : clean(t.Facility) !== '—' ? 'Facility' : '—')
     const url = `${APP_URL}/maintenance/${t.id}`
     const link = `<a href="${url}" style="color:#1B2E6B;font-weight:600;text-decoration:none;">#${t.id}</a>`
     const emoji = STATUS_EMOJI_EMAIL[t.Ticket_Status || ''] || '⚪'
@@ -365,7 +373,7 @@ export function weeklyReminderEmail(foremanName: string, tickets: ReminderTicket
     // for Outlook, which ignores white-space:nowrap on inner spans inside table
     // cells and would otherwise break "In Progress 🟣" across two lines.
     const statusBadge = `<span style="font-size:12px;color:#4B5563;font-weight:500;">${clean(t.Ticket_Status).replace(/\s/g, '&nbsp;')}&nbsp;${emoji}</span>`
-    return `<tr>${cell(link)}${nowrapCell(statusBadge)}${cell(clean(t.Asset))}${cell(wf)}${cell(clean(t.Equipment))}${cell(clean(t.assigned_foreman))}${cell(clean(t.Issue_Description))}</tr>`
+    return `<tr>${cell(link)}${nowrapCell(statusBadge)}${cell(clean(t.Asset))}${nowrapCell(locType)}${cell(wfName)}${cell(clean(t.Equipment))}${cell(clean(t.Created_by_Name))}${cell(clean(t.assigned_foreman))}${cell(clean(t.Issue_Description))}</tr>`
   }).join('')
 
   const ticketCount = tickets.length
@@ -380,8 +388,10 @@ export function weeklyReminderEmail(foremanName: string, tickets: ReminderTicket
           <th style="padding:8px 10px;text-align:left;">Ticket</th>
           <th style="padding:8px 10px;text-align:left;">Status</th>
           <th style="padding:8px 10px;text-align:left;">Asset</th>
+          <th style="padding:8px 10px;text-align:left;">Location Type</th>
           <th style="padding:8px 10px;text-align:left;">Well / Facility</th>
           <th style="padding:8px 10px;text-align:left;">Equipment</th>
+          <th style="padding:8px 10px;text-align:left;">Created By</th>
           <th style="padding:8px 10px;text-align:left;">Assigned Foreman</th>
           <th style="padding:8px 10px;text-align:left;">Issue</th>
         </tr>

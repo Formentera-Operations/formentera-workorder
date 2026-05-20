@@ -23,12 +23,14 @@ type TicketRow = {
   id: number
   Ticket_Status: string
   Issue_Date: string | null
+  Location_Type: string | null
   Asset: string | null
   Field: string | null
   Well: string | null
   Facility: string | null
   Equipment: string | null
   Issue_Description: string | null
+  Created_by_Name: string | null
   assigned_foreman: string | null
 }
 
@@ -83,7 +85,7 @@ export async function GET(req: NextRequest) {
 
   const ticketsQuery = (() => {
     let q = db.from('workorder_ticket_list')
-      .select('id, Ticket_Status, Issue_Date, Asset, Field, Well, Facility, Equipment, Issue_Description, assigned_foreman')
+      .select('id, Ticket_Status, Issue_Date, Location_Type, Asset, Field, Well, Facility, Equipment, Issue_Description, Created_by_Name, assigned_foreman')
       .in('Ticket_Status', ['Open', 'In Progress'])
     if (sinceIso) q = q.gte('Issue_Date', sinceIso)
     return q
@@ -124,11 +126,13 @@ export async function GET(req: NextRequest) {
       id: t.id,
       Ticket_Status: t.Ticket_Status,
       Issue_Date: t.Issue_Date || undefined,
+      Location_Type: t.Location_Type || undefined,
       Asset: t.Asset || undefined,
       Well: t.Well || undefined,
       Facility: t.Facility || undefined,
       Equipment: t.Equipment || undefined,
       Issue_Description: t.Issue_Description || undefined,
+      Created_by_Name: t.Created_by_Name || undefined,
       assigned_foreman: t.assigned_foreman || undefined,
     })))
 
