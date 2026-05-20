@@ -230,15 +230,26 @@ function MaintenancePageContent() {
                 <div>
                   <label className="form-label">Ticket Status</label>
                   <div className="flex gap-2 flex-wrap">
-                    {(['All', ...TICKET_STATUSES] as (TicketStatus | 'All')[]).map(s => (
-                      <button
-                        key={s}
-                        onClick={() => setStatusFilter(s)}
-                        className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${statusFilter === s ? 'bg-[#1B2E6B] text-white shadow-sm' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:shadow-sm hover:scale-105'}`}
-                      >
-                        {s}{s !== 'All' ? ` ${STATUS_EMOJI[s] ?? '⚪'}` : ''}
-                      </button>
-                    ))}
+                    {(['All', ...TICKET_STATUSES] as (TicketStatus | 'All')[]).map(s => {
+                      // statusFilter='Active' is the weekly-reminder email's
+                      // URL convention that expands to Open + In Progress on
+                      // the server. None of the real pills match 'Active', so
+                      // we highlight both Open AND In Progress to surface what
+                      // the API is actually filtering on. Clicking any single
+                      // pill still single-selects as usual.
+                      const isSelected =
+                        statusFilter === s ||
+                        (statusFilter === 'Active' && (s === 'Open' || s === 'In Progress'))
+                      return (
+                        <button
+                          key={s}
+                          onClick={() => setStatusFilter(s)}
+                          className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${isSelected ? 'bg-[#1B2E6B] text-white shadow-sm' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:shadow-sm hover:scale-105'}`}
+                        >
+                          {s}{s !== 'All' ? ` ${STATUS_EMOJI[s] ?? '⚪'}` : ''}
+                        </button>
+                      )
+                    })}
                   </div>
                 </div>
 
