@@ -32,16 +32,26 @@ export async function middleware(request: NextRequest) {
 
   // Allow auth routes through
   if (pathname.startsWith('/login') || pathname.startsWith('/auth')) {
-    // If already logged in and hitting login, redirect to home
+    // If already logged in and hitting login, honor ?next= so a deeplink
+    // (e.g. weekly-reminder email button) can still resume after a manual
+    // refresh of the login page.
     if (user && pathname === '/login') {
-      return NextResponse.redirect(new URL('/', request.url))
+      const next = request.nextUrl.searchParams.get('next')
+      const safeNext = next && next.startsWith('/') && !next.startsWith('//') ? next : '/'
+      return NextResponse.redirect(new URL(safeNext, request.url))
     }
     return supabaseResponse
   }
 
-  // Protect all other routes — redirect to login if not authenticated
+  // Protect all other routes — redirect to login if not authenticated.
+  // Preserve the originally requested path + query in ?next= so the login
+  // flow can return the user there after sign-in (used by deeplinks from
+  // outside the app, e.g. weekly reminder email buttons).
   if (!user) {
-    return NextResponse.redirect(new URL('/login', request.url))
+    const loginUrl = new URL('/login', request.url)
+    const intended = pathname + (request.nextUrl.search || '')
+    if (intended && intended !== '/') loginUrl.searchParams.set('next', intended)
+    return NextResponse.redirect(loginUrl)
   }
 
   return supabaseResponse

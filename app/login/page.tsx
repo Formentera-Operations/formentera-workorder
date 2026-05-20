@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createSupabaseBrowserClient } from '@/lib/supabase-browser'
 import Image from 'next/image'
 import { Wrench } from 'lucide-react'
@@ -12,16 +12,27 @@ export default function LoginPage() {
   const [msLoading, setMsLoading] = useState(false)
   const [showHelp, setShowHelp] = useState(false)
   const [showEmail, setShowEmail] = useState(false)
+  // Read ?next=<path> from the URL so deeplinks (e.g. weekly reminder email
+  // buttons) survive the login round-trip. Only relative paths are accepted
+  // so a malicious ?next=https://evil.com can't redirect users off-site.
+  // useEffect (not a useState initializer) to avoid SSR hydration mismatch.
+  const [nextPath, setNextPath] = useState('/')
+  useEffect(() => {
+    const raw = new URLSearchParams(window.location.search).get('next') || '/'
+    if (raw.startsWith('/') && !raw.startsWith('//')) setNextPath(raw)
+  }, [])
   const supabase = createSupabaseBrowserClient()
 
   async function handleMicrosoftLogin() {
     setMsLoading(true)
     setError('')
+    const callback = new URL('/auth/callback', window.location.origin)
+    if (nextPath && nextPath !== '/') callback.searchParams.set('next', nextPath)
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'azure',
       options: {
         scopes: 'email',
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: callback.toString(),
       },
     })
     if (error) {
@@ -41,7 +52,7 @@ export default function LoginPage() {
       setError(error.message)
       setLoading(false)
     } else {
-      window.location.href = '/'
+      window.location.href = nextPath
     }
   }
 
