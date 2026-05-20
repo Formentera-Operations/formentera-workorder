@@ -57,6 +57,13 @@ export async function GET(req: NextRequest) {
   // Pair with testTo to send a single representative email instead of one
   // per foreman during a test.
   const foremanFilter = (url.searchParams.get('foreman') || '').trim().toLowerCase()
+  // days=N: only include tickets with Issue_Date in the last N days. Useful
+  // for previewing a slim test email; production runs leave this off so
+  // long-standing open tickets still get reminded.
+  const daysRaw = parseInt(url.searchParams.get('days') || '', 10)
+  const sinceIso = Number.isFinite(daysRaw) && daysRaw > 0
+    ? new Date(Date.now() - daysRaw * 24 * 60 * 60 * 1000).toISOString()
+    : null
   if (isTestMode) {
     const validTestTo = /^[^\s,@]+@[^\s,@]+\.[^\s,@]+$/.test(testToRaw)
     if (!validTestTo) {
@@ -74,13 +81,19 @@ export async function GET(req: NextRequest) {
 
   const db = supabaseAdmin()
 
+  const ticketsQuery = (() => {
+    let q = db.from('workorder_ticket_list')
+      .select('id, Ticket_Status, Issue_Date, Asset, Field, Well, Facility, Equipment, Issue_Description, assigned_foreman')
+      .in('Ticket_Status', ['Open', 'In Progress'])
+    if (sinceIso) q = q.gte('Issue_Date', sinceIso)
+    return q
+  })()
+
   const [foremenRes, ticketsRes] = await Promise.all([
     db.from('employees')
       .select('name, work_email, assets')
       .eq('role', 'foreman'),
-    db.from('workorder_ticket_list')
-      .select('id, Ticket_Status, Issue_Date, Asset, Field, Well, Facility, Equipment, Issue_Description, assigned_foreman')
-      .in('Ticket_Status', ['Open', 'In Progress']),
+    ticketsQuery,
   ])
 
   if (foremenRes.error) {
