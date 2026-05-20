@@ -299,3 +299,97 @@ export function selfDispatchEmail(r: TicketRow, dispatch: DispatchExtras) {
     html: deeplinkHtml + dispatchHtml + sectionsHtml,
   }
 }
+
+type ReminderTicket = {
+  id: number
+  Ticket_Status?: string
+  Issue_Date?: string
+  Asset?: string
+  Well?: string
+  Facility?: string
+  Equipment?: string
+  Issue_Description?: string
+  assigned_foreman?: string
+}
+
+export function weeklyReminderEmail(foremanName: string, tickets: ReminderTicket[]) {
+  const firstName = (foremanName.trim().split(/\s+/)[0] || '')
+    .toLowerCase()
+    .replace(/^\w/, c => c.toUpperCase())
+  const todayLabel = new Date().toLocaleDateString('en-US', {
+    weekday: 'long', month: 'long', day: 'numeric', timeZone: 'America/Chicago',
+  })
+
+  if (tickets.length === 0) {
+    return {
+      subject: `Weekly Reminder — No Open Tickets`,
+      html: `
+        <p>Hi ${firstName},</p>
+        <p>You have no open or in-progress tickets on your assigned assets as of ${todayLabel}. Have a great weekend!</p>
+      `,
+    }
+  }
+
+  // Open first (need dispatching), then In Progress, then by asset and date.
+  const sorted = [...tickets].sort((a, b) => {
+    const order = (s?: string) => s === 'Open' ? 0 : s === 'In Progress' ? 1 : 2
+    const so = order(a.Ticket_Status) - order(b.Ticket_Status)
+    if (so !== 0) return so
+    const ao = (a.Asset || '').localeCompare(b.Asset || '')
+    if (ao !== 0) return ao
+    return (a.Issue_Date || '').localeCompare(b.Issue_Date || '')
+  })
+
+  const cell = (v: string) =>
+    `<td style="padding:8px 10px;border-bottom:1px solid #eee;vertical-align:top;">${v}</td>`
+
+  // Match the app's StatusBadge: status text followed by an emoji that
+  // carries the color. Same map as STATUS_EMOJI in lib/utils.ts — kept
+  // inline so this file has no app-runtime imports.
+  const STATUS_EMOJI_EMAIL: Record<string, string> = {
+    'Open': '🟢',
+    'Backlogged': '🟡',
+    'In Progress': '🟣',
+    'Awaiting Cost': '⚫',
+    'Closed': '🔴',
+  }
+
+  const rowsHtml = sorted.map(t => {
+    const wf = clean(t.Well) !== '—' ? clean(t.Well) : clean(t.Facility)
+    const url = `${APP_URL}/maintenance/${t.id}`
+    const link = `<a href="${url}" style="color:#1B2E6B;font-weight:600;text-decoration:none;">#${t.id}</a>`
+    const emoji = STATUS_EMOJI_EMAIL[t.Ticket_Status || ''] || '⚪'
+    const statusBadge = `<span style="font-size:12px;color:#4B5563;font-weight:500;white-space:nowrap;">${clean(t.Ticket_Status)} ${emoji}</span>`
+    return `<tr>${cell(link)}${cell(statusBadge)}${cell(clean(t.Asset))}${cell(wf)}${cell(clean(t.Equipment))}${cell(clean(t.assigned_foreman))}${cell(clean(t.Issue_Description))}</tr>`
+  }).join('')
+
+  const ticketCount = tickets.length
+  const plural = ticketCount === 1 ? 'ticket' : 'tickets'
+
+  const html = `
+    <p>Hi ${firstName},</p>
+    <p>Here are the open / in-progress ${plural} on your assigned assets as of ${todayLabel}:</p>
+    <table style="border-collapse:collapse;width:100%;font-size:13px;font-family:Arial,Helvetica,sans-serif;">
+      <thead>
+        <tr style="background:#1B2E6B;color:#fff;">
+          <th style="padding:8px 10px;text-align:left;">Ticket</th>
+          <th style="padding:8px 10px;text-align:left;">Status</th>
+          <th style="padding:8px 10px;text-align:left;">Asset</th>
+          <th style="padding:8px 10px;text-align:left;">Well / Facility</th>
+          <th style="padding:8px 10px;text-align:left;">Equipment</th>
+          <th style="padding:8px 10px;text-align:left;">Assigned Foreman</th>
+          <th style="padding:8px 10px;text-align:left;">Issue</th>
+        </tr>
+      </thead>
+      <tbody>${rowsHtml}</tbody>
+    </table>
+    <p style="margin-top:18px;color:#666;font-size:12px;">
+      Open tickets still need a foreman dispatched. In-Progress tickets are dispatched but not closed out.
+    </p>
+  `
+
+  return {
+    subject: `Weekly Reminder: ${ticketCount} Open / In-Progress ${plural === 'ticket' ? 'Ticket' : 'Tickets'}`,
+    html,
+  }
+}
