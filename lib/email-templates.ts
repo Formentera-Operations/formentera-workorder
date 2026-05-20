@@ -342,6 +342,8 @@ export function weeklyReminderEmail(foremanName: string, tickets: ReminderTicket
 
   const cell = (v: string) =>
     `<td style="padding:8px 10px;border-bottom:1px solid #eee;vertical-align:top;">${v}</td>`
+  const nowrapCell = (v: string) =>
+    `<td style="padding:8px 10px;border-bottom:1px solid #eee;vertical-align:top;white-space:nowrap;">${v}</td>`
 
   // Match the app's StatusBadge: status text followed by an emoji that
   // carries the color. Same map as STATUS_EMOJI in lib/utils.ts — kept
@@ -359,8 +361,11 @@ export function weeklyReminderEmail(foremanName: string, tickets: ReminderTicket
     const url = `${APP_URL}/maintenance/${t.id}`
     const link = `<a href="${url}" style="color:#1B2E6B;font-weight:600;text-decoration:none;">#${t.id}</a>`
     const emoji = STATUS_EMOJI_EMAIL[t.Ticket_Status || ''] || '⚪'
-    const statusBadge = `<span style="font-size:12px;color:#4B5563;font-weight:500;white-space:nowrap;">${clean(t.Ticket_Status)} ${emoji}</span>`
-    return `<tr>${cell(link)}${cell(statusBadge)}${cell(clean(t.Asset))}${cell(wf)}${cell(clean(t.Equipment))}${cell(clean(t.assigned_foreman))}${cell(clean(t.Issue_Description))}</tr>`
+    // &nbsp; between text and emoji + nowrap on the <td> — belt-and-suspenders
+    // for Outlook, which ignores white-space:nowrap on inner spans inside table
+    // cells and would otherwise break "In Progress 🟣" across two lines.
+    const statusBadge = `<span style="font-size:12px;color:#4B5563;font-weight:500;">${clean(t.Ticket_Status).replace(/\s/g, '&nbsp;')}&nbsp;${emoji}</span>`
+    return `<tr>${cell(link)}${nowrapCell(statusBadge)}${cell(clean(t.Asset))}${cell(wf)}${cell(clean(t.Equipment))}${cell(clean(t.assigned_foreman))}${cell(clean(t.Issue_Description))}</tr>`
   }).join('')
 
   const ticketCount = tickets.length
