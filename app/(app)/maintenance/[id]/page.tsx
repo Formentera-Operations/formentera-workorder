@@ -319,6 +319,20 @@ export default function MaintenanceTicketPage() {
     role === 'admin' ? false :
     role === 'foreman' ? !isInMyAsset :
     !isSelfDispatchedByMe // field_user default
+  // Back-fill case: a field_user who created the ticket without picking a
+  // foreman can come back and add one. Save routes through /api/dispatch so
+  // the foreman gets the same Dispatch row + email as if they'd been picked
+  // at submission. Gated to: role is field_user, current user is the
+  // original submitter, no foreman is assigned yet, and the ticket wasn't
+  // self-dispatched. Once dispatched, assigned_foreman is filled and this
+  // affordance disappears.
+  const isOriginalSubmitter = !!ticket.Created_by_Email &&
+    String(ticket.Created_by_Email).toLowerCase() === (userEmail || '').toLowerCase()
+  const canSetInitialForeman =
+    role === 'field_user' &&
+    isOriginalSubmitter &&
+    !ticket.assigned_foreman &&
+    !ticket.Self_Dispatch_Assignee
   const repairs = (data?.repairs || {}) as Record<string, unknown>
   const vendorData = (data?.vendors || {}) as Record<string, unknown>
   const serverComments = (data?.comments || []) as Record<string, unknown>[]
@@ -413,6 +427,50 @@ export default function MaintenanceTicketPage() {
       } else {
         await refreshData()
         toast.success('Initial report updated.', { duration: 5000 })
+      }
+    } finally { setSaving(false) }
+  }
+
+  // Back-fill: field_user creator picks a foreman after submission. Routes
+  // through /api/dispatch so the Dispatch row + email mirror what would have
+  // happened if the foreman had been picked at submission time.
+  async function saveBackfilledForeman() {
+    const foreman = String(irForm.assigned_foreman || '').trim()
+    if (!foreman) {
+      toast.message('Pick a foreman first.', { duration: 4000 })
+      return
+    }
+    setSaving(true)
+    try {
+      const loadedTs = ((data?.ticket as Record<string, unknown> | undefined)?.updated_at as string | undefined) || null
+      const result = await queuedMutate('/api/dispatch', {
+        method: 'POST',
+        description: `Assign foreman to ticket #${id}`,
+        body: {
+          ticket_id: id,
+          work_order_decision: 'Proceed with Repair',
+          maintenance_foreman: foreman,
+          production_foreman: null,
+          date_assigned: new Date().toISOString(),
+          current_user_email: userEmail,
+          client_request_id: newRequestId(),
+          client_updated_at: loadedTs,
+        },
+      })
+      if (result.status === 412) {
+        toast.error('This ticket was changed by someone else. Reloading to show the latest version — your edits weren\'t saved.', { duration: 7000 })
+        await refreshData()
+        return
+      }
+      if (!result.ok) {
+        toast.error(result.error || 'Could not assign foreman.', { duration: 6000 })
+        return
+      }
+      if (result.queued) {
+        toast.message('Saved offline — will sync when you\'re back online.', { duration: 5000 })
+      } else {
+        await refreshData()
+        toast.success('Foreman assigned.', { duration: 5000 })
       }
     } finally { setSaving(false) }
   }
@@ -878,7 +936,7 @@ export default function MaintenanceTicketPage() {
                     options={employees.map(emp => emp.name)}
                     placeholder="Select Foreman"
                     placeholderValue=""
-                    disabled
+                    disabled={!canSetInitialForeman}
                     onChange={v => setIr('assigned_foreman', v)}
                   />
                 )}
@@ -969,9 +1027,15 @@ export default function MaintenanceTicketPage() {
               </div>
             </div>
 
-            {!isReadOnly && (
-              <button className="btn-primary" onClick={saveInitialReport} disabled={saving}>
-                {saving ? 'Updating…' : 'Update'}
+            {(!isReadOnly || canSetInitialForeman) && (
+              <button
+                className="btn-primary"
+                onClick={canSetInitialForeman && isReadOnly ? saveBackfilledForeman : saveInitialReport}
+                disabled={saving}
+              >
+                {saving
+                  ? (canSetInitialForeman && isReadOnly ? 'Assigning…' : 'Updating…')
+                  : (canSetInitialForeman && isReadOnly ? 'Assign Foreman' : 'Update')}
               </button>
             )}
           </div>
