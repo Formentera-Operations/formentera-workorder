@@ -39,9 +39,13 @@ export async function GET(req: Request) {
       return NextResponse.json([])
     }
 
+    // WELLNAME IS NOT NULL alone is the right gate: it excludes facility-only
+    // Wheeler rows (which have NULL WELLNAME) while letting through FP
+    // WHEELER UPSTREAM wells (which have real WELLNAME values). A prior
+    // version hardcoded a Wheeler asset exclusion here, which silently
+    // blocked UPSTREAM foremen from seeing any wells.
     const whereParts: string[] = [
       `WELLNAME IS NOT NULL`,
-      `"Asset" NOT IN ('FP WHEELER MIDSTREAM', 'FP WHEELER UPSTREAM', 'FP WHEELER')`,
     ]
     const binds: string[] = []
 
