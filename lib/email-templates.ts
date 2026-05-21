@@ -88,7 +88,7 @@ function buildEmailParts(r: TicketRow) {
     ? r.Issue_Photos.filter(Boolean)
     : []
 
-  const ticketUrl = `${APP_URL}/tickets/${id}`
+  const ticketUrl = `${APP_URL}/maintenance/${id}`
 
   const deeplinkHtml = `
     <div style="margin:16px 0 24px;">
