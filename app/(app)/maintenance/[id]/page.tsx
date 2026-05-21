@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { toast } from 'sonner'
-import { ArrowLeft, ChevronDown, Camera, X } from 'lucide-react'
+import { ArrowLeft, ChevronDown, Camera, X, Trash2 } from 'lucide-react'
 import Accordion from '@/components/ui/Accordion'
 import LocationDropdowns from '@/components/forms/LocationDropdowns'
 import FilterSelect from '@/components/ui/FilterSelect'
@@ -52,6 +52,10 @@ export default function MaintenanceTicketPage() {
   const [repairPhotos, setRepairPhotos] = useState<string[]>([])
   const [uploadingRepairPhotos, setUploadingRepairPhotos] = useState(false)
   const [deleteRepairPhotoIdx, setDeleteRepairPhotoIdx] = useState<number | null>(null)
+  // Ticket-delete confirmation modal.
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [deleteReason, setDeleteReason] = useState('')
+  const [deletingTicket, setDeletingTicket] = useState(false)
 
   // Mirror the new-ticket form's Wheeler lock on the Initial Report tab so a
   // foreman whose assigned assets have zero wells in the well-facility data is
@@ -338,6 +342,17 @@ export default function MaintenanceTicketPage() {
     isOriginalSubmitter &&
     !ticket.assigned_foreman &&
     !ticket.Self_Dispatch_Assignee
+  // Delete authorization. Server re-checks this against the session cookie,
+  // so a client-side bypass would just get a 403 from the API.
+  //   admin       — any ticket
+  //   foreman     — any ticket on their assigned assets
+  //   field_user  — only tickets they personally submitted
+  //   analyst     — never
+  const canDelete =
+    role === 'admin' ? true :
+    role === 'foreman' ? isInMyAsset :
+    role === 'field_user' ? isOriginalSubmitter :
+    false
   const repairs = (data?.repairs || {}) as Record<string, unknown>
   const vendorData = (data?.vendors || {}) as Record<string, unknown>
   const serverComments = (data?.comments || []) as Record<string, unknown>[]
@@ -602,6 +617,43 @@ export default function MaintenanceTicketPage() {
     } finally { setSaving(false) }
   }
 
+  // Snapshot the ticket into deleted_tickets and cascade-delete it + its
+  // children. Server re-validates the caller's identity and role from the
+  // session cookie, so we don't worry about client-side spoofing here.
+  // Always online — no outbox path — to avoid orphan deletes mid-sync.
+  async function deleteTicket() {
+    const reason = deleteReason.trim()
+    if (!reason) {
+      toast.error('Please enter a reason for deleting this ticket.', { duration: 5000 })
+      return
+    }
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      toast.error('You\'re offline. Reconnect to delete this ticket.', { duration: 6000 })
+      return
+    }
+    setDeletingTicket(true)
+    try {
+      const res = await fetch(`/api/tickets/${id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason }),
+      })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        toast.error(body.error || 'Failed to delete ticket.', { duration: 7000 })
+        return
+      }
+      toast.success(`Ticket #${id} deleted.`, { duration: 5000 })
+      router.push('/maintenance')
+    } catch (err) {
+      console.error('Delete ticket error:', err)
+      toast.error('Failed to delete ticket.', { duration: 7000 })
+    } finally {
+      setDeletingTicket(false)
+      setShowDeleteModal(false)
+    }
+  }
+
   const TABS: Tab[] = ['Summary', 'Initial Report', 'Dispatch', 'Repairs / Closeout']
 
   return (
@@ -612,6 +664,16 @@ export default function MaintenanceTicketPage() {
           <ArrowLeft size={20} className="text-gray-700" />
         </button>
         <h1 className="page-title">Maintenance Ticket #{id}</h1>
+        {canDelete && (
+          <button
+            onClick={() => { setDeleteReason(''); setShowDeleteModal(true) }}
+            className="ml-auto p-1.5 -mr-1 text-gray-400 hover:text-red-600 transition-colors"
+            title="Delete ticket"
+            aria-label="Delete ticket"
+          >
+            <Trash2 size={18} />
+          </button>
+        )}
       </div>
 
       {/* Workflow tabs */}
@@ -1043,6 +1105,45 @@ export default function MaintenanceTicketPage() {
                   : (canSetInitialForeman && isReadOnly ? 'Assign Foreman' : 'Update')}
               </button>
             )}
+          </div>
+        )}
+
+        {/* Delete ticket confirmation modal */}
+        {showDeleteModal && (
+          <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center p-4">
+            <div className="bg-white rounded-2xl w-full max-w-sm p-6 space-y-4">
+              <h3 className="text-lg font-bold text-gray-900">Delete Ticket #{id}?</h3>
+              <p className="text-sm text-gray-500">
+                This will move the ticket and its history out of the active workorder list. The action cannot be undone from the app.
+              </p>
+              <div>
+                <label className="form-label">Reason for deletion (required)</label>
+                <textarea
+                  className="form-textarea"
+                  placeholder="Why are you deleting this ticket?"
+                  value={deleteReason}
+                  onChange={e => setDeleteReason(e.target.value)}
+                  disabled={deletingTicket}
+                  rows={3}
+                />
+              </div>
+              <button
+                type="button"
+                className="w-full py-3 rounded-xl bg-red-600 text-white font-semibold disabled:opacity-50"
+                onClick={deleteTicket}
+                disabled={deletingTicket || !deleteReason.trim()}
+              >
+                {deletingTicket ? 'Deleting…' : 'Delete Ticket'}
+              </button>
+              <button
+                type="button"
+                className="w-full py-3 rounded-xl border border-gray-200 text-gray-700 font-semibold disabled:opacity-50"
+                onClick={() => setShowDeleteModal(false)}
+                disabled={deletingTicket}
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         )}
 
