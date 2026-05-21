@@ -667,11 +667,12 @@ export default function MaintenanceTicketPage() {
         {canDelete && (
           <button
             onClick={() => { setDeleteReason(''); setShowDeleteModal(true) }}
-            className="ml-auto p-1.5 -mr-1 text-gray-400 hover:text-red-600 transition-colors"
+            className="ml-auto -mr-1 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 hover:text-red-700 hover:border-red-300 transition-colors text-sm font-semibold"
             title="Delete ticket"
             aria-label="Delete ticket"
           >
-            <Trash2 size={18} />
+            <Trash2 size={16} />
+            <span>Delete</span>
           </button>
         )}
       </div>
