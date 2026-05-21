@@ -26,8 +26,16 @@ export function useServiceWorkerUpdate(): { updateReady: boolean; applyUpdate: (
       })
     }).catch(() => {})
 
+    // Snapshot whether the page had a controller at load time. If it didn't,
+    // any controllerchange we see is the FIRST-EVER activation of the worker
+    // on this device/origin — not an update — and reloading would force an
+    // unwanted second page load (visible as the 4-second flicker users
+    // reported after signing in via SSO to a freshly-installed PWA).
+    const hadControllerOnLoad = !!navigator.serviceWorker.controller
+
     let reloading = false
     const onControllerChange = () => {
+      if (!hadControllerOnLoad) return
       if (reloading) return
       reloading = true
       window.location.reload()
