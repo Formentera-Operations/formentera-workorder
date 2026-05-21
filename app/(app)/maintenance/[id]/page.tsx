@@ -23,7 +23,7 @@ type Tab = 'Summary' | 'Initial Report' | 'Dispatch' | 'Repairs / Closeout'
 export default function MaintenanceTicketPage() {
   const router = useRouter()
   const { id } = useParams()
-  const { userName, userEmail, role, assets: userAssets } = useAuth()
+  const { userName, userEmail, role, assets: userAssets, loading: authLoading } = useAuth()
   const { actions: outboxActions } = useOutbox()
   const [tab, setTab] = useState<Tab>('Summary')
   const [expandAll, setExpandAll] = useState(false)
@@ -299,7 +299,12 @@ export default function MaintenanceTicketPage() {
     prevHadPendingRef.current = optimistic.hasPending
   }, [optimistic.hasPending, loading, id])
 
-  if (loading) return (
+  // Block render until both the ticket payload AND auth (role + assets)
+  // are ready — otherwise isReadOnly is derived from defaults
+  // (role=field_user, userAssets=[]) and the form briefly renders disabled
+  // before flipping to editable when AuthProvider settles. That flip is
+  // the flicker users see on deeplinks.
+  if (loading || authLoading) return (
     <div className="flex items-center justify-center min-h-screen">
       <div className="text-sm text-gray-400">Loading…</div>
     </div>
