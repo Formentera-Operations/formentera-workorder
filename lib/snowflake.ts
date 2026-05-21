@@ -61,6 +61,10 @@ export async function snowflakeQuery<T = Record<string, unknown>>(
 // into Facility_Name when TYP1 = 'facility' so those rows show up in the
 // cascade dropdown as facilities. Wells (UPSTREAM rows with WELLNAME
 // populated) and Wheeler rows with non-facility TYP1 pass through unchanged.
+// FP WHEELER (the bare parent asset) is excluded from both halves of the
+// UNION so it doesn't appear in any asset dropdown. We still keep
+// FP WHEELER UPSTREAM (has wells) and FP WHEELER MIDSTREAM (facility-only,
+// gets the NAME → Facility_Name promotion below).
 export const WELL_FACILITY_QUERY = `
 SELECT
   "UNITID",
@@ -70,7 +74,7 @@ SELECT
   "FIELD",
   "WELLNAME",
   CASE
-    WHEN "Asset" IN ('FP WHEELER MIDSTREAM', 'FP WHEELER UPSTREAM', 'FP WHEELER')
+    WHEN "Asset" IN ('FP WHEELER MIDSTREAM', 'FP WHEELER UPSTREAM')
       AND "WELLNAME" IS NULL
       AND "Facility_Name" IS NULL
       AND LOWER("TYP1") = 'facility'
@@ -78,6 +82,7 @@ SELECT
     ELSE "Facility_Name"
   END AS "Facility_Name"
 FROM FO_STAGE_DB.DEV_INTERMEDIATE.RETOOL_WELL_FACILITY
+WHERE "Asset" <> 'FP WHEELER'
 UNION ALL
 SELECT
   "UNITID",
@@ -88,6 +93,7 @@ SELECT
   "WELLNAME",
   "FACILITY_NAME"
 FROM FO_STAGE_DB.DEV_INTERMEDIATE.RETOOL_WELL_FACILITY_CUSTOM
+WHERE "ASSET" <> 'FP WHEELER'
 `
 
 // Query to get distinct vendor names (the only field the dropdown uses).
