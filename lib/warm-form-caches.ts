@@ -19,6 +19,13 @@ export async function warmFormCaches(userAssets: string[]): Promise<void> {
     cachedFetch('/api/well-facility', { cacheKey: 'well-facility' }).catch(() => null)
   )
 
+  // Compressor station list — small fixed set, used by the Compressor Station
+  // location type (FP WHEELER MIDSTREAM). Warmed unconditionally so it's
+  // available offline; the API caches it server-side too.
+  tasks.push(
+    cachedFetch('/api/compressors', { cacheKey: 'compressors' }).catch(() => null)
+  )
+
   // Wells and foremen vary by asset — prefetch one of each per assigned asset.
   for (const asset of userAssets) {
     tasks.push(

@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 import { ArrowLeft, ChevronDown, Camera, X, AlertTriangle } from 'lucide-react'
 import LocationDropdowns from '@/components/forms/LocationDropdowns'
 import FilterSelect from '@/components/ui/FilterSelect'
-import { DEPARTMENTS, LOCATION_TYPES, newRequestId } from '@/lib/utils'
+import { DEPARTMENTS, COMPRESSOR_STATION_ASSET, locationTypesFor, newRequestId } from '@/lib/utils'
 import { useAuth } from '@/components/AuthProvider'
 import { cachedFetch, cachedFetchSwr } from '@/lib/cached-fetch'
 import { queuedMutate } from '@/lib/queued-mutate'
@@ -107,11 +107,27 @@ export default function MaintenanceFormPage() {
     return true
   })()
 
+  // Location types this user can pick. The Wheeler lock removes 'Well' for
+  // facility-only foremen; compressor-eligible users additionally get
+  // 'Compressor Station'. We only hard-lock the select when a single option
+  // remains (classic facility-only foreman with no compressor access) — when
+  // they can also pick a compressor station, the select stays interactive.
+  const visibleLocationTypes = (() => {
+    const types = locationTypesFor(userAssets)
+    return lockedToFacility ? types.filter(t => t !== 'Well') : types
+  })()
+  const lockSelect = lockedToFacility && visibleLocationTypes.length === 1
+
   useEffect(() => {
-    if (lockedToFacility) {
+    if (lockSelect) {
       setForm(f => f.Location_Type === 'Facility' ? f : { ...f, Location_Type: 'Facility' })
     }
-  }, [lockedToFacility])
+  }, [lockSelect])
+
+  // Compressor stations reuse the Facility equipment library — there's no
+  // separate compressor equipment set, so map the location type to 'Facility'
+  // for the equipment lookups (and share Facility's warmed cache).
+  const equipmentMatch = form.Location_Type === 'Compressor Station' ? 'Facility' : form.Location_Type
 
   useEffect(() => {
     if (form.Location_Type) {
@@ -123,30 +139,30 @@ export default function MaintenanceFormPage() {
       setEquipmentTypes([])
       setEquipment([])
       cachedFetchSwr<typeof equipmentTypes>(
-        `/api/equipment?type=types&locationMatch=${encodeURIComponent(form.Location_Type)}`,
+        `/api/equipment?type=types&locationMatch=${encodeURIComponent(equipmentMatch)}`,
         {
-          cacheKey: `equipment-types:${form.Location_Type}`,
+          cacheKey: `equipment-types:${equipmentMatch}`,
           onCached: (data) => setEquipmentTypes(data),
         }
       )
         .then(({ data }) => setEquipmentTypes(data))
         .catch(() => {})
     }
-  }, [form.Location_Type])
+  }, [form.Location_Type, equipmentMatch])
 
   useEffect(() => {
     if (form.Equipment_Type && form.Location_Type) {
       cachedFetchSwr<typeof equipment>(
-        `/api/equipment?type=equipment&equipmentType=${encodeURIComponent(form.Equipment_Type)}&locationMatch=${form.Location_Type}`,
+        `/api/equipment?type=equipment&equipmentType=${encodeURIComponent(form.Equipment_Type)}&locationMatch=${equipmentMatch}`,
         {
-          cacheKey: `equipment:${form.Location_Type}:${form.Equipment_Type}`,
+          cacheKey: `equipment:${equipmentMatch}:${form.Equipment_Type}`,
           onCached: (data) => setEquipment(data),
         }
       )
         .then(({ data }) => setEquipment(data))
         .catch(() => {})
     }
-  }, [form.Equipment_Type, form.Location_Type])
+  }, [form.Equipment_Type, form.Location_Type, equipmentMatch])
 
   // Warm the active-tickets cache (and the rest of the form's reference
   // data) on mount when online — covers foremen who navigate straight to
@@ -351,9 +367,9 @@ export default function MaintenanceFormPage() {
           <label className="form-label form-label-required">Location Type</label>
           <div className="relative">
             <select
-              className={`form-select${lockedToFacility ? ' opacity-60 cursor-not-allowed' : ''}`}
+              className={`form-select${lockSelect ? ' opacity-60 cursor-not-allowed' : ''}`}
               value={form.Location_Type}
-              disabled={lockedToFacility}
+              disabled={lockSelect}
               onChange={e => {
                 set('Location_Type', e.target.value)
                 set('Well', ''); set('Well_UNITID', ''); set('Facility', '')
@@ -361,7 +377,7 @@ export default function MaintenanceFormPage() {
               }}
             >
               <option value="">Select a location type</option>
-              {LOCATION_TYPES.map(l => <option key={l} value={l}>{l}</option>)}
+              {visibleLocationTypes.map(l => <option key={l} value={l}>{l}</option>)}
             </select>
             <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
           </div>

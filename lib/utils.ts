@@ -97,6 +97,22 @@ export const DEPARTMENTS = [
 
 export const LOCATION_TYPES = ['Well', 'Facility']
 
+// Compressor stations are an FP WHEELER MIDSTREAM-only location type. The
+// 'Compressor Station' option is surfaced only for users who can act on that
+// asset (or admins, who see all assets); everyone else sees just Well/Facility.
+export const COMPRESSOR_STATION_ASSET = 'FP WHEELER MIDSTREAM'
+
+// Location types visible to a given user. Pass the ticket's current asset
+// (edit form) so an existing compressor-station ticket keeps the option even
+// if the viewer isn't otherwise eligible.
+export function locationTypesFor(userAssets: string[], currentAsset?: string): string[] {
+  const eligible =
+    userAssets.length === 0 ||
+    userAssets.includes(COMPRESSOR_STATION_ASSET) ||
+    currentAsset === COMPRESSOR_STATION_ASSET
+  return eligible ? [...LOCATION_TYPES, 'Compressor Station'] : [...LOCATION_TYPES]
+}
+
 export const TICKET_STATUSES: TicketStatus[] = [
   'Open', 'Closed', 'In Progress', 'Backlogged', 'Awaiting Cost'
 ]

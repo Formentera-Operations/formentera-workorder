@@ -5,8 +5,20 @@ import FilterSelect from '@/components/ui/FilterSelect'
 import WellSearchPicker from '@/components/forms/WellSearchPicker'
 import { cachedFetch } from '@/lib/cached-fetch'
 
+type CompressorStation = {
+  station: string
+  compressorId: string
+  asset: string
+  area: string
+  route: string
+  field: string
+  foreman: string
+  productionEngineer: string
+  unitId: string
+}
+
 interface LocationDropdownsProps {
-  locationType: 'Well' | 'Facility' | ''
+  locationType: 'Well' | 'Facility' | 'Compressor Station' | ''
   onChange: (vals: {
     asset: string; field: string; well: string; facility: string;
     area: string; route: string;
@@ -30,11 +42,22 @@ export default function LocationDropdowns({ locationType, onChange, initialValue
   const [well, setWell] = useState(initialValues?.well || '')
   const [facility, setFacility] = useState(initialValues?.facility || '')
 
+  const [compressors, setCompressors] = useState<CompressorStation[]>([])
+
   useEffect(() => {
     cachedFetch<WFData>('/api/well-facility', { cacheKey: 'well-facility' })
       .then(({ data }) => { setWfData(data); setLoading(false) })
       .catch(() => setLoading(false))
   }, [])
+
+  // Compressor station list — only needed when the Compressor Station location
+  // type is active. Small fixed list, cached for the session.
+  useEffect(() => {
+    if (locationType !== 'Compressor Station') return
+    cachedFetch<CompressorStation[]>('/api/compressors', { cacheKey: 'compressors' })
+      .then(({ data }) => setCompressors(data))
+      .catch(() => {})
+  }, [locationType])
 
   // Derive hidden area/route/unitId from current selections
   const getDerived = useCallback((a: string, f: string, w: string, fac: string) => {
@@ -123,6 +146,12 @@ export default function LocationDropdowns({ locationType, onChange, initialValue
   const fields = filterOptions(wfData, 'FIELD', { Asset: asset || null })
   const facilities = filterOptions(wfData, 'Facility_Name', { Asset: asset || null, FIELD: field || null })
 
+  // Compressor stations narrow by the chosen asset/field (all belong to
+  // FP WHEELER MIDSTREAM, split across the STILES RANCH and MILLS RANCH fields).
+  const compressorStations = compressors
+    .filter(c => (!asset || c.asset === asset) && (!field || c.field === field))
+    .map(c => c.station)
+
   const singleAsset = userAssets.length === 1
 
   // Pre-populate when user has exactly one asset
@@ -200,6 +229,36 @@ export default function LocationDropdowns({ locationType, onChange, initialValue
           disabled={disabled}
           allowClear
           onChange={v => { setFacility(v); setWell(''); emit(asset, field, '', v) }}
+        />
+      )}
+
+      {/* Compressor Station — only shown if locationType = Compressor Station.
+          Stored in the same Facility field as facilities; selecting a station
+          auto-fills the asset/field/area/route from the station's record. */}
+      {locationType === 'Compressor Station' && (
+        <FilterSelect
+          label="Compressor Station"
+          value={facility}
+          options={compressorStations}
+          placeholder="Select a Compressor Station"
+          placeholderValue=""
+          required
+          disabled={disabled}
+          allowClear
+          onChange={v => {
+            const chosen = compressors.find(c => c.station === v)
+            setWell('')
+            setFacility(v)
+            if (chosen) {
+              const nextAsset = asset || chosen.asset
+              const nextField = chosen.field || field
+              if (nextAsset !== asset) setAsset(nextAsset)
+              if (nextField !== field) setField(nextField)
+              emit(nextAsset, nextField, '', v, { area: chosen.area, route: chosen.route })
+            } else {
+              emit(asset, field, '', v)
+            }
+          }}
         />
       )}
     </div>

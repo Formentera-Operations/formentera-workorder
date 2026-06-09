@@ -7,7 +7,7 @@ import Accordion from '@/components/ui/Accordion'
 import LocationDropdowns from '@/components/forms/LocationDropdowns'
 import FilterSelect from '@/components/ui/FilterSelect'
 import { useAuth } from '@/components/AuthProvider'
-import { formatDate, formatDateShort, DEPARTMENTS, LOCATION_TYPES, WORK_ORDER_DECISIONS, FINAL_STATUSES, PRIORITY_OPTIONS, utcToLocalInput, localInputToUtc, diffEqual, newRequestId } from '@/lib/utils'
+import { formatDate, formatDateShort, DEPARTMENTS, COMPRESSOR_STATION_ASSET, locationTypesFor, WORK_ORDER_DECISIONS, FINAL_STATUSES, PRIORITY_OPTIONS, utcToLocalInput, localInputToUtc, diffEqual, newRequestId } from '@/lib/utils'
 import CommentsSection from '@/components/ui/CommentsSection'
 import { queuedMutate } from '@/lib/queued-mutate'
 import { cachedFetch, cachedFetchSwr } from '@/lib/cached-fetch'
@@ -170,6 +170,11 @@ export default function MaintenanceTicketPage() {
     })
   }, [id])
 
+  // Compressor stations reuse the Facility equipment library (no separate
+  // compressor equipment set), so map the location type to 'Facility' for the
+  // equipment lookups.
+  const equipmentMatch = irForm.Location_Type === 'Compressor Station' ? 'Facility' : (irForm.Location_Type as string)
+
   useEffect(() => {
     const locType = irForm.Location_Type as string
     if (locType) {
@@ -178,32 +183,32 @@ export default function MaintenanceTicketPage() {
       // here didn't use the cache at all, so editing Location Type on
       // the detail page always blocked on a fresh network call.
       cachedFetchSwr<typeof equipmentTypes>(
-        `/api/equipment?type=types&locationMatch=${encodeURIComponent(locType)}`,
+        `/api/equipment?type=types&locationMatch=${encodeURIComponent(equipmentMatch)}`,
         {
-          cacheKey: `equipment-types:${locType}`,
+          cacheKey: `equipment-types:${equipmentMatch}`,
           onCached: (data) => setEquipmentTypes(data),
         }
       )
         .then(({ data }) => setEquipmentTypes(data))
         .catch(() => {})
     }
-  }, [irForm.Location_Type])
+  }, [irForm.Location_Type, equipmentMatch])
 
   useEffect(() => {
     const eqType = irForm.Equipment_Type as string
     const locType = irForm.Location_Type as string
     if (eqType && locType) {
       cachedFetchSwr<typeof equipment>(
-        `/api/equipment?type=equipment&equipmentType=${encodeURIComponent(eqType)}&locationMatch=${locType}`,
+        `/api/equipment?type=equipment&equipmentType=${encodeURIComponent(eqType)}&locationMatch=${equipmentMatch}`,
         {
-          cacheKey: `equipment:${locType}:${eqType}`,
+          cacheKey: `equipment:${equipmentMatch}:${eqType}`,
           onCached: (data) => setEquipment(data),
         }
       )
         .then(({ data }) => setEquipment(data))
         .catch(() => {})
     }
-  }, [irForm.Equipment_Type, irForm.Location_Type])
+  }, [irForm.Equipment_Type, irForm.Location_Type, equipmentMatch])
 
   useEffect(() => {
     const wot = String(repForm.Work_Order_Type || '')
@@ -770,7 +775,9 @@ export default function MaintenanceTicketPage() {
                   ['Field', ticket.Field],
                   ['Route', ticket.Route],
                   ['Location Type', ticket.Location_Type],
-                  ticket.Location_Type === 'Well' ? ['Well', ticket.Well] : ['Facility', ticket.Facility],
+                  ticket.Location_Type === 'Well' ? ['Well', ticket.Well]
+                    : ticket.Location_Type === 'Compressor Station' ? ['Compressor Station', ticket.Facility]
+                    : ['Facility', ticket.Facility],
                 ].map(([label, value]) => (
                   <div key={label as string} className="detail-row">
                     <span className="detail-label">{label as string}</span>
@@ -926,10 +933,10 @@ export default function MaintenanceTicketPage() {
             <FilterSelect
               label="Location Type"
               value={irForm.Location_Type as string}
-              options={[...LOCATION_TYPES]}
+              options={locationTypesFor(userAssets, irForm.Asset as string)}
               placeholder="Select a location type"
               placeholderValue=""
-              disabled={isReadOnly || (lockedToFacility && (irForm.Location_Type === '' || irForm.Location_Type === 'Facility'))}
+              disabled={isReadOnly || (lockedToFacility && (irForm.Asset as string) !== COMPRESSOR_STATION_ASSET && !userAssets.includes(COMPRESSOR_STATION_ASSET) && userAssets.length > 0 && (irForm.Location_Type === '' || irForm.Location_Type === 'Facility'))}
               onChange={v => { setIr('Location_Type', v); setIr('Well', ''); setIr('Facility', '') }}
             />
 

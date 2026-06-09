@@ -11,7 +11,7 @@ export type Department =
   | '🧪 Chemical'
   | '📒 Engineering'
 
-export type LocationType = 'Well' | 'Facility'
+export type LocationType = 'Well' | 'Facility' | 'Compressor Station'
 
 export type PriorityOfIssue = 'Low' | 'Medium' | 'High' | 'Urgent / Critical'
 
