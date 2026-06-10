@@ -1,5 +1,10 @@
 import AppShell from '@/components/layout/AppShell'
+import CutoverGate from '@/components/CutoverGate'
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
-  return <AppShell>{children}</AppShell>
+  return (
+    <CutoverGate>
+      <AppShell>{children}</AppShell>
+    </CutoverGate>
+  )
 }
