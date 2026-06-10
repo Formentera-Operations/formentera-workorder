@@ -170,10 +170,13 @@ export default function MaintenanceTicketPage() {
     })
   }, [id])
 
-  // Compressor stations reuse the Facility equipment library (no separate
-  // compressor equipment set), so map the location type to 'Facility' for the
-  // equipment lookups.
-  const equipmentMatch = irForm.Location_Type === 'Compressor Station' ? 'Facility' : (irForm.Location_Type as string)
+  // Compressor stations and midstream master meters reuse the Facility
+  // equipment library (no separate equipment set for either), so map those
+  // location types to 'Facility' for the equipment lookups.
+  const equipmentMatch =
+    irForm.Location_Type === 'Compressor Station' || irForm.Location_Type === 'Midstream Master Meters'
+      ? 'Facility'
+      : (irForm.Location_Type as string)
 
   useEffect(() => {
     const locType = irForm.Location_Type as string
@@ -777,6 +780,7 @@ export default function MaintenanceTicketPage() {
                   ['Location Type', ticket.Location_Type],
                   ticket.Location_Type === 'Well' ? ['Well', ticket.Well]
                     : ticket.Location_Type === 'Compressor Station' ? ['Compressor Station', ticket.Facility]
+                    : ticket.Location_Type === 'Midstream Master Meters' ? ['Master Meters', ticket.Facility]
                     : ['Facility', ticket.Facility],
                 ].map(([label, value]) => (
                   <div key={label as string} className="detail-row">

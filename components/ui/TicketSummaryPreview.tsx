@@ -41,6 +41,7 @@ export default function TicketSummaryPreview({ ticketId, onClose }: TicketSummar
     ['Field', t.Field],
     t.Location_Type === 'Well' ? ['Well', t.Well]
       : t.Location_Type === 'Compressor Station' ? ['Compressor Station', t.Facility]
+      : t.Location_Type === 'Midstream Master Meters' ? ['Master Meters', t.Facility]
       : ['Facility', t.Facility],
     ['Equipment Type', t.Equipment_Type],
     ['Equipment', t.Equipment],

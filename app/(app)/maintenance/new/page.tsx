@@ -124,10 +124,14 @@ export default function MaintenanceFormPage() {
     }
   }, [lockSelect])
 
-  // Compressor stations reuse the Facility equipment library — there's no
-  // separate compressor equipment set, so map the location type to 'Facility'
-  // for the equipment lookups (and share Facility's warmed cache).
-  const equipmentMatch = form.Location_Type === 'Compressor Station' ? 'Facility' : form.Location_Type
+  // Compressor stations and midstream master meters reuse the Facility
+  // equipment library — there's no separate equipment set for either, so map
+  // those location types to 'Facility' for the equipment lookups (and share
+  // Facility's warmed cache).
+  const equipmentMatch =
+    form.Location_Type === 'Compressor Station' || form.Location_Type === 'Midstream Master Meters'
+      ? 'Facility'
+      : form.Location_Type
 
   useEffect(() => {
     if (form.Location_Type) {

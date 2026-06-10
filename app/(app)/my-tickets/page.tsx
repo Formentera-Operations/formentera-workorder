@@ -288,6 +288,7 @@ export default function MyTicketsPage() {
               type === 'Facility' ? `Facility: ${blank(fac) ? '—' : fac}` :
               type === 'Well'     ? `Well: ${blank(well) ? '—' : well}` :
               type === 'Compressor Station' ? `Compressor Station: ${blank(fac) ? '—' : fac}` :
+              type === 'Midstream Master Meters' ? `Master Meters: ${blank(fac) ? '—' : fac}` :
               !blank(fac)         ? `Facility: ${fac}` :
               !blank(well)        ? `Well: ${well}` : '—'
             return (
@@ -329,6 +330,7 @@ export default function MyTicketsPage() {
               type === 'Facility' ? `Facility: ${blank(fac) ? '—' : fac}` :
               type === 'Well'     ? `Well: ${blank(well) ? '—' : well}` :
               type === 'Compressor Station' ? `Compressor Station: ${blank(fac) ? '—' : fac}` :
+              type === 'Midstream Master Meters' ? `Master Meters: ${blank(fac) ? '—' : fac}` :
               !blank(fac)         ? `Facility: ${fac}` :
               !blank(well)        ? `Well: ${well}` : '—'
             const tid = ticket.id as number

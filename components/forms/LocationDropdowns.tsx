@@ -17,8 +17,19 @@ type CompressorStation = {
   unitId: string
 }
 
+type MasterMeter = {
+  meter: string
+  asset: string
+  area: string
+  route: string
+  field: string
+  foreman: string
+  productionEngineer: string
+  unitId: string
+}
+
 interface LocationDropdownsProps {
-  locationType: 'Well' | 'Facility' | 'Compressor Station' | ''
+  locationType: 'Well' | 'Facility' | 'Compressor Station' | 'Midstream Master Meters' | ''
   onChange: (vals: {
     asset: string; field: string; well: string; facility: string;
     area: string; route: string;
@@ -43,6 +54,7 @@ export default function LocationDropdowns({ locationType, onChange, initialValue
   const [facility, setFacility] = useState(initialValues?.facility || '')
 
   const [compressors, setCompressors] = useState<CompressorStation[]>([])
+  const [masterMeters, setMasterMeters] = useState<MasterMeter[]>([])
 
   useEffect(() => {
     cachedFetch<WFData>('/api/well-facility', { cacheKey: 'well-facility' })
@@ -56,6 +68,15 @@ export default function LocationDropdowns({ locationType, onChange, initialValue
     if (locationType !== 'Compressor Station') return
     cachedFetch<CompressorStation[]>('/api/compressors', { cacheKey: 'compressors' })
       .then(({ data }) => setCompressors(data))
+      .catch(() => {})
+  }, [locationType])
+
+  // Master meter list — only needed when the Midstream Master Meters location
+  // type is active. Small fixed list, cached for the session.
+  useEffect(() => {
+    if (locationType !== 'Midstream Master Meters') return
+    cachedFetch<MasterMeter[]>('/api/master-meters', { cacheKey: 'master-meters' })
+      .then(({ data }) => setMasterMeters(data))
       .catch(() => {})
   }, [locationType])
 
@@ -152,6 +173,12 @@ export default function LocationDropdowns({ locationType, onChange, initialValue
     .filter(c => (!asset || c.asset === asset) && (!field || c.field === field))
     .map(c => c.station)
 
+  // Master meters narrow by the chosen asset/field the same way (all belong to
+  // FP WHEELER MIDSTREAM, split across the STILES RANCH and MILLS RANCH fields).
+  const masterMeterNames = masterMeters
+    .filter(m => (!asset || m.asset === asset) && (!field || m.field === field))
+    .map(m => m.meter)
+
   const singleAsset = userAssets.length === 1
 
   // Pre-populate when user has exactly one asset
@@ -247,6 +274,38 @@ export default function LocationDropdowns({ locationType, onChange, initialValue
           allowClear
           onChange={v => {
             const chosen = compressors.find(c => c.station === v)
+            setWell('')
+            setFacility(v)
+            if (chosen) {
+              const nextAsset = asset || chosen.asset
+              const nextField = chosen.field || field
+              if (nextAsset !== asset) setAsset(nextAsset)
+              if (nextField !== field) setField(nextField)
+              emit(nextAsset, nextField, '', v, { area: chosen.area, route: chosen.route })
+            } else {
+              emit(asset, field, '', v)
+            }
+          }}
+        />
+      )}
+
+      {/* Master Meters — only shown if locationType = Midstream Master Meters.
+          Sourced from Snowflake (the FP WHEELER MIDSTREAM master-meter facility
+          rows, which are kept out of the Facility dropdown). Stored in the same
+          Facility field as facilities; selecting one auto-fills the
+          asset/field/area/route from the meter's record. */}
+      {locationType === 'Midstream Master Meters' && (
+        <FilterSelect
+          label="Master Meters"
+          value={facility}
+          options={masterMeterNames}
+          placeholder="Select a Master Meter"
+          placeholderValue=""
+          required
+          disabled={disabled}
+          allowClear
+          onChange={v => {
+            const chosen = masterMeters.find(m => m.meter === v)
             setWell('')
             setFacility(v)
             if (chosen) {

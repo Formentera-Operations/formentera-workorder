@@ -26,6 +26,13 @@ export async function warmFormCaches(userAssets: string[]): Promise<void> {
     cachedFetch('/api/compressors', { cacheKey: 'compressors' }).catch(() => null)
   )
 
+  // Master meter list — small fixed set, used by the Midstream Master Meters
+  // location type (FP WHEELER MIDSTREAM). Warmed unconditionally so it's
+  // available offline; the API caches it server-side too.
+  tasks.push(
+    cachedFetch('/api/master-meters', { cacheKey: 'master-meters' }).catch(() => null)
+  )
+
   // Wells and foremen vary by asset — prefetch one of each per assigned asset.
   for (const asset of userAssets) {
     tasks.push(
