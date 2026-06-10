@@ -128,7 +128,9 @@ const TABS = [
   { key: 'tickets',      label: 'Tickets',         icon: List },
   { key: 'equipCosts',   label: 'Equipment Costs', icon: DollarSign },
   { key: 'pivot',        label: 'Pivot',           icon: LayoutGrid },
-  { key: 'chat',         label: 'Ask AI',          icon: MessageSquare },
+  // Temporarily hidden — Ask AI tab not surfaced for now. The 'chat' tab
+  // content + state below are left intact; restore this entry to re-enable.
+  // { key: 'chat',         label: 'Ask AI',          icon: MessageSquare },
 ] as const
 
 const CHART_COLORS_LIST = ['#1B2E6B', '#3B82F6', '#F59E0B', '#10B981', '#EF4444', '#8B5CF6']
