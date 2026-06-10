@@ -21,9 +21,7 @@ import { useAuth } from '@/components/AuthProvider'
 const CUTOVER_AT = Date.parse('2026-06-10T22:30:00Z')
 
 // Only these emails keep full access before the cutoff.
-// TEMP: emptied for testing the holding page — add the email back before deploy:
-// const BYPASS_EMAILS = ['alejandro.benavides@formenteraops.com']
-const BYPASS_EMAILS: string[] = []
+const BYPASS_EMAILS = ['alejandro.benavides@formenteraops.com']
 
 function HoldingPage() {
   return (
