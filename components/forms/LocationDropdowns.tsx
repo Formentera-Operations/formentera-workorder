@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { filterOptions } from '@/lib/utils'
 import FilterSelect from '@/components/ui/FilterSelect'
 import WellSearchPicker from '@/components/forms/WellSearchPicker'
@@ -148,8 +148,12 @@ export default function LocationDropdowns({ locationType, onChange, initialValue
     const candFacility = uniq(idx.map(i => FacilityArr[i]))
     const newAsset    = !asset    && candAsset.length    === 1 ? candAsset[0]    : asset
     const newField    = !field    && candField.length    === 1 ? candField[0]    : field
-    const newWell     = !well     && candWell.length     === 1 ? candWell[0]     : well
-    const newFacility = !facility && candFacility.length === 1 ? candFacility[0] : facility
+    // Only auto-fill the location field that matches the active type — never
+    // cross-fill. A well's row also carries its single-well battery in
+    // Facility_Name, so without this guard picking a Well would silently derive
+    // a Facility (and surface it the moment you switch to the Facility view).
+    const newWell     = locationType === 'Well'     && !well     && candWell.length     === 1 ? candWell[0]     : well
+    const newFacility = locationType === 'Facility' && !facility && candFacility.length === 1 ? candFacility[0] : facility
 
     const changed = newAsset !== asset || newField !== field || newWell !== well || newFacility !== facility
     if (!changed) return
@@ -160,7 +164,22 @@ export default function LocationDropdowns({ locationType, onChange, initialValue
     if (newFacility !== facility) setFacility(newFacility)
 
     emit(newAsset, newField, newWell, newFacility)
-  }, [asset, field, well, facility, wfData, emit])
+  }, [asset, field, well, facility, wfData, emit, locationType])
+
+  // When the location type changes, clear the type-specific selection (well /
+  // facility) so a prior pick doesn't bleed across the switch. Asset and field
+  // are shared across types, so they're kept. The ref guards the initial mount
+  // so edit-mode initialValues (an existing well/facility) aren't wiped.
+  const lastLocationType = useRef(locationType)
+  useEffect(() => {
+    if (lastLocationType.current === locationType) return
+    lastLocationType.current = locationType
+    if (well || facility) {
+      setWell('')
+      setFacility('')
+      emit(asset, field, '', '')
+    }
+  }, [locationType, asset, field, well, facility, emit])
 
   const allAssets = filterOptions(wfData, 'Asset', {})
   const assets = userAssets.length > 0 ? allAssets.filter(a => userAssets.includes(a)) : allAssets
