@@ -166,18 +166,20 @@ export default function LocationDropdowns({ locationType, onChange, initialValue
     emit(newAsset, newField, newWell, newFacility)
   }, [asset, field, well, facility, wfData, emit, locationType])
 
-  // When the location type changes, clear the type-specific selection (well /
-  // facility) so a prior pick doesn't bleed across the switch. Asset and field
-  // are shared across types, so they're kept. The ref guards the initial mount
-  // so edit-mode initialValues (an existing well/facility) aren't wiped.
+  // When the location type changes, clear the dependent selections (field +
+  // well + facility) so nothing bleeds across the switch — Field shouldn't
+  // persist from a prior Well/Facility pick. Asset (top of the cascade, and
+  // locked for single-asset foremen) is kept. The ref guards the initial mount
+  // so edit-mode initialValues (an existing field/well/facility) aren't wiped.
   const lastLocationType = useRef(locationType)
   useEffect(() => {
     if (lastLocationType.current === locationType) return
     lastLocationType.current = locationType
-    if (well || facility) {
+    if (field || well || facility) {
+      setField('')
       setWell('')
       setFacility('')
-      emit(asset, field, '', '')
+      emit(asset, '', '', '')
     }
   }, [locationType, asset, field, well, facility, emit])
 
