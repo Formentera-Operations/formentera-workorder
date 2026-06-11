@@ -7,7 +7,7 @@ import Accordion from '@/components/ui/Accordion'
 import LocationDropdowns from '@/components/forms/LocationDropdowns'
 import FilterSelect from '@/components/ui/FilterSelect'
 import { useAuth } from '@/components/AuthProvider'
-import { formatDate, formatDateShort, DEPARTMENTS, COMPRESSOR_STATION_ASSET, locationTypesFor, WORK_ORDER_DECISIONS, FINAL_STATUSES, PRIORITY_OPTIONS, utcToLocalInput, localInputToUtc, diffEqual, newRequestId } from '@/lib/utils'
+import { formatDate, formatDateShort, DEPARTMENTS, COMPRESSOR_STATION_ASSET, locationTypesForAsset, WORK_ORDER_DECISIONS, FINAL_STATUSES, PRIORITY_OPTIONS, utcToLocalInput, localInputToUtc, diffEqual, newRequestId } from '@/lib/utils'
 import CommentsSection from '@/components/ui/CommentsSection'
 import { queuedMutate } from '@/lib/queued-mutate'
 import { cachedFetch, cachedFetchSwr } from '@/lib/cached-fetch'
@@ -937,7 +937,14 @@ export default function MaintenanceTicketPage() {
             <FilterSelect
               label="Location Type"
               value={irForm.Location_Type as string}
-              options={locationTypesFor(userAssets, irForm.Asset as string)}
+              options={(() => {
+                // Narrow to the options that have data for this ticket's asset,
+                // but always keep the ticket's current type selectable (a legacy
+                // ticket may carry a type the asset wouldn't otherwise offer).
+                const avail = locationTypesForAsset(irForm.Asset as string, wfData, userAssets)
+                const cur = irForm.Location_Type as string
+                return cur && !avail.includes(cur) ? [...avail, cur] : avail
+              })()}
               placeholder="Select a location type"
               placeholderValue=""
               disabled={isReadOnly || (lockedToFacility && (irForm.Asset as string) !== COMPRESSOR_STATION_ASSET && !userAssets.includes(COMPRESSOR_STATION_ASSET) && userAssets.length > 0 && (irForm.Location_Type === '' || irForm.Location_Type === 'Facility'))}

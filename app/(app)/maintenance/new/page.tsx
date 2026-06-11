@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 import { ArrowLeft, ChevronDown, Camera, X, AlertTriangle } from 'lucide-react'
 import LocationDropdowns from '@/components/forms/LocationDropdowns'
 import FilterSelect from '@/components/ui/FilterSelect'
-import { DEPARTMENTS, COMPRESSOR_STATION_ASSET, locationTypesFor, newRequestId } from '@/lib/utils'
+import { DEPARTMENTS, locationTypesForAsset, newRequestId } from '@/lib/utils'
 import { useAuth } from '@/components/AuthProvider'
 import { cachedFetch, cachedFetchSwr } from '@/lib/cached-fetch'
 import { queuedMutate } from '@/lib/queued-mutate'
@@ -75,10 +75,7 @@ export default function MaintenanceFormPage() {
       .catch(() => {})
   }, [form.Asset, userAssets])
 
-  // Lock Location_Type to 'Facility' when the foreman's assigned assets have
-  // zero well rows in the well-facility data. Data-driven so that if Wheeler
-  // (or any other currently-facility-only asset) gets a well row in Snowflake
-  // later, the lock auto-unlocks on the next form load — no code change needed.
+  // Well-facility payload drives the Location Type options (see below).
   // LocationDropdowns also fetches this payload; cachedFetch dedupes the call
   // via the shared cacheKey, so the second fetch is effectively free.
   const [wfData, setWfData] = useState<Record<string, string[]> | null>(null)
@@ -88,41 +85,28 @@ export default function MaintenanceFormPage() {
       .catch(() => {})
   }, [])
 
-  // Loading-aware: while wfData hasn't resolved, lockedToFacility is false and
-  // the select stays enabled. For a returning foreman the cache fills it on the
-  // first frame; for a brand-new install there's a brief moment before the
-  // dropdown locks. Acceptable since the form's other reference data has the
-  // same race today.
-  const lockedToFacility = (() => {
-    if (userAssets.length === 0) return false
-    const assetCol = wfData?.Asset
-    const wellCol = wfData?.WELLNAME
-    if (!assetCol || !wellCol) return false
-    const userSet = new Set(userAssets)
-    for (let i = 0; i < assetCol.length; i++) {
-      if (userSet.has(assetCol[i]) && wellCol[i] && String(wellCol[i]).trim() !== '') {
-        return false
-      }
-    }
-    return true
-  })()
+  // Location Type options are driven by what the *selected asset* actually has:
+  // Well/Facility from the well-facility payload, and Compressor Station /
+  // Midstream Master Meters only for the Wheeler midstream asset. So an upstream
+  // asset hides compressor/meter, and a facility-only asset (e.g. FP WHEELER
+  // MIDSTREAM) hides Well. Until an asset is chosen (or the payload loads) we
+  // can't narrow, so it falls back to the eligibility-based list.
+  const visibleLocationTypes = locationTypesForAsset(form.Asset, wfData, userAssets)
+  const lockSelect = visibleLocationTypes.length === 1
 
-  // Location types this user can pick. The Wheeler lock removes 'Well' for
-  // facility-only foremen; compressor-eligible users additionally get
-  // 'Compressor Station'. We only hard-lock the select when a single option
-  // remains (classic facility-only foreman with no compressor access) — when
-  // they can also pick a compressor station, the select stays interactive.
-  const visibleLocationTypes = (() => {
-    const types = locationTypesFor(userAssets)
-    return lockedToFacility ? types.filter(t => t !== 'Well') : types
-  })()
-  const lockSelect = lockedToFacility && visibleLocationTypes.length === 1
-
+  // Keep Location Type consistent with the selected asset's options: auto-pick
+  // when only one is valid, and clear a now-invalid choice when the asset
+  // changes (e.g. 'Well' selected, then switch to a facility-only asset). Only
+  // acts once the asset is known and the payload has loaded.
   useEffect(() => {
-    if (lockSelect) {
-      setForm(f => f.Location_Type === 'Facility' ? f : { ...f, Location_Type: 'Facility' })
+    if (!form.Asset || !wfData) return
+    if (visibleLocationTypes.length === 1) {
+      const only = visibleLocationTypes[0] as LocationType
+      setForm(f => f.Location_Type === only ? f : { ...f, Location_Type: only, Well: '', Well_UNITID: '', Facility: '' })
+    } else if (form.Location_Type && !visibleLocationTypes.includes(form.Location_Type)) {
+      setForm(f => ({ ...f, Location_Type: '', Well: '', Well_UNITID: '', Facility: '' }))
     }
-  }, [lockSelect])
+  }, [form.Asset, form.Location_Type, wfData, visibleLocationTypes])
 
   // Compressor stations and midstream master meters reuse the Facility
   // equipment library — there's no separate equipment set for either, so map

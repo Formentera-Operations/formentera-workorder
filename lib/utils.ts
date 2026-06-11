@@ -115,6 +115,40 @@ export function locationTypesFor(userAssets: string[], currentAsset?: string): s
     : [...LOCATION_TYPES]
 }
 
+// Location types that actually have data for the selected asset. Well/Facility
+// are derived from the well-facility payload, so a facility-only asset (e.g.
+// FP WHEELER MIDSTREAM) hides Well, and an asset with no facility rows hides
+// Facility. Compressor Station + Midstream Master Meters exist only for the
+// Wheeler midstream asset. Until an asset is chosen (or the payload hasn't
+// loaded) we can't narrow, so we fall back to the eligibility-based list.
+export function locationTypesForAsset(
+  asset: string,
+  wfData: Record<string, string[]> | null,
+  userAssets: string[],
+): string[] {
+  if (!asset || !wfData?.Asset) return locationTypesFor(userAssets, asset)
+  const assetCol = wfData.Asset
+  const wellCol = wfData.WELLNAME ?? []
+  const facCol = wfData.Facility_Name ?? []
+  const good = (v: unknown) =>
+    v != null && String(v).trim() !== '' && String(v).toLowerCase() !== 'null'
+  let hasWell = false
+  let hasFacility = false
+  for (let i = 0; i < assetCol.length; i++) {
+    if (assetCol[i] !== asset) continue
+    if (good(wellCol[i])) hasWell = true
+    if (good(facCol[i])) hasFacility = true
+    if (hasWell && hasFacility) break
+  }
+  const types: string[] = []
+  if (hasWell) types.push('Well')
+  if (hasFacility) types.push('Facility')
+  if (asset === COMPRESSOR_STATION_ASSET) types.push('Compressor Station', 'Midstream Master Meters')
+  // Data anomaly guard: an asset with no well/facility rows would otherwise
+  // leave the picker empty — fall back to the eligibility-based list.
+  return types.length > 0 ? types : locationTypesFor(userAssets, asset)
+}
+
 export const TICKET_STATUSES: TicketStatus[] = [
   'Open', 'Closed', 'In Progress', 'Backlogged', 'Awaiting Cost'
 ]
