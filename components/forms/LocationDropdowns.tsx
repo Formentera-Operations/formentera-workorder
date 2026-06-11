@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { filterOptions } from '@/lib/utils'
+import { filterOptions, COMPRESSOR_STATION_ASSET } from '@/lib/utils'
 import FilterSelect from '@/components/ui/FilterSelect'
 import WellSearchPicker from '@/components/forms/WellSearchPicker'
 import { cachedFetch } from '@/lib/cached-fetch'
@@ -166,22 +166,53 @@ export default function LocationDropdowns({ locationType, onChange, initialValue
     emit(newAsset, newField, newWell, newFacility)
   }, [asset, field, well, facility, wfData, emit, locationType])
 
-  // When the location type changes, clear the dependent selections (field +
-  // well + facility) so nothing bleeds across the switch — Field shouldn't
-  // persist from a prior Well/Facility pick. Asset (top of the cascade, and
-  // locked for single-asset foremen) is kept. The ref guards the initial mount
-  // so edit-mode initialValues (an existing field/well/facility) aren't wiped.
+  // Which of the user's assigned assets actually support a given location type.
+  // Well/Facility come from the well-facility payload; Compressor Station and
+  // Midstream Master Meters exist only for the Wheeler midstream asset.
+  const assetsSupporting = useCallback((type: string): string[] => {
+    if (type === 'Compressor Station' || type === 'Midstream Master Meters') {
+      return userAssets.filter(a => a === COMPRESSOR_STATION_ASSET)
+    }
+    if (type === 'Well' || type === 'Facility') {
+      const assetCol = wfData.Asset ?? []
+      const valCol = (type === 'Well' ? wfData.WELLNAME : wfData.Facility_Name) ?? []
+      const good = (v: unknown) =>
+        v != null && String(v).trim() !== '' && String(v).toLowerCase() !== 'null'
+      const set = new Set<string>()
+      for (let i = 0; i < assetCol.length; i++) {
+        if (userAssets.includes(assetCol[i]) && good(valCol[i])) set.add(assetCol[i])
+      }
+      return [...set]
+    }
+    return []
+  }, [wfData, userAssets])
+
+  // When the location type changes: (1) clear the dependent selections (field +
+  // well + facility) so nothing bleeds across the switch, and (2) auto-select
+  // the asset when exactly one of the user's assigned assets supports that type
+  // (e.g. only FP WHEELER UPSTREAM has wells, only FP WHEELER MIDSTREAM has
+  // compressors/meters). Auto-select is skipped when an asset is already chosen
+  // or the choice is ambiguous. The ref guards the initial mount so edit-mode
+  // initialValues aren't wiped.
   const lastLocationType = useRef(locationType)
   useEffect(() => {
     if (lastLocationType.current === locationType) return
     lastLocationType.current = locationType
-    if (field || well || facility) {
+
+    let nextAsset = asset
+    if (!asset && locationType) {
+      const candidates = assetsSupporting(locationType)
+      if (candidates.length === 1) nextAsset = candidates[0]
+    }
+
+    if (field || well || facility || nextAsset !== asset) {
+      if (nextAsset !== asset) setAsset(nextAsset)
       setField('')
       setWell('')
       setFacility('')
-      emit(asset, '', '', '')
+      emit(nextAsset, '', '', '')
     }
-  }, [locationType, asset, field, well, facility, emit])
+  }, [locationType, asset, field, well, facility, emit, assetsSupporting])
 
   const allAssets = filterOptions(wfData, 'Asset', {})
   const assets = userAssets.length > 0 ? allAssets.filter(a => userAssets.includes(a)) : allAssets
