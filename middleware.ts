@@ -25,8 +25,13 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  // Refresh session so it doesn't expire
-  const { data: { user } } = await supabase.auth.getUser()
+  // Validate the session. getClaims() verifies the JWT signature locally
+  // against the project's published asymmetric keys (ES256) — no network
+  // round-trip to the Auth server on every request, unlike getUser(). When
+  // the access token is expired it transparently refreshes (firing the
+  // cookie setAll above), so session refresh is preserved.
+  const { data } = await supabase.auth.getClaims()
+  const claims = data?.claims ?? null
 
   const { pathname } = request.nextUrl
 
@@ -35,7 +40,7 @@ export async function middleware(request: NextRequest) {
     // If already logged in and hitting login, honor ?next= so a deeplink
     // (e.g. weekly-reminder email button) can still resume after a manual
     // refresh of the login page.
-    if (user && pathname === '/login') {
+    if (claims && pathname === '/login') {
       const next = request.nextUrl.searchParams.get('next')
       const safeNext = next && next.startsWith('/') && !next.startsWith('//') ? next : '/'
       return NextResponse.redirect(new URL(safeNext, request.url))
@@ -47,7 +52,7 @@ export async function middleware(request: NextRequest) {
   // Preserve the originally requested path + query in ?next= so the login
   // flow can return the user there after sign-in (used by deeplinks from
   // outside the app, e.g. weekly reminder email buttons).
-  if (!user) {
+  if (!claims) {
     const loginUrl = new URL('/login', request.url)
     const intended = pathname + (request.nextUrl.search || '')
     if (intended && intended !== '/') loginUrl.searchParams.set('next', intended)
