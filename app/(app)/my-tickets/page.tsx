@@ -214,7 +214,7 @@ export default function MyTicketsPage() {
                   <input
                     type="text"
                     className="form-input pl-9"
-                    placeholder="Search Well, Facility…"
+                    placeholder="Search Well, Facility, Description…"
                     value={search}
                     onChange={e => setSearch(e.target.value)}
                   />

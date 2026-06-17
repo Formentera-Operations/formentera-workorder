@@ -222,7 +222,7 @@ function MaintenancePageContent() {
 
                 <div className="relative">
                   <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input type="text" className="form-input pl-9" placeholder="Search Well, Facility, Foreman…" value={search} onChange={e => setSearch(e.target.value)} />
+                  <input type="text" className="form-input pl-9" placeholder="Search Well, Facility, Description…" value={search} onChange={e => setSearch(e.target.value)} />
                 </div>
 
                 <button className="btn-primary" onClick={() => { resetFilters(); setFiltersOpen(false) }}>Reset Filters</button>
