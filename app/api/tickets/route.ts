@@ -50,9 +50,24 @@ export async function GET(req: NextRequest) {
     // Filters
     if (ticketId) query = query.eq('id', parseInt(ticketId))
     if (search) {
-      query = query.or(
-        `id::text.ilike.%${search}%,Route.ilike.%${search}%,Equipment.ilike.%${search}%,Issue_Description.ilike.%${search}%,Facility.ilike.%${search}%,Field.ilike.%${search}%,Well.ilike.%${search}%,Created_by_Name.ilike.%${search}%,assigned_foreman.ilike.%${search}%`
-      )
+      // Split the query into whitespace-separated tokens so a foreman can type
+      // the parts of a well/facility/foreman name in any order — e.g. "txl 0832"
+      // finds "TXL N #0832". Each token must match at least one text column
+      // (OR across columns), and every token must match (AND across tokens) —
+      // chaining .or() calls ANDs the groups together in PostgREST. Tokens are
+      // stripped of the logic-tree delimiters , ( ) so a stray one can't break
+      // parsing of the whole filter.
+      //
+      // The previous single-substring filter led with `id::text.ilike`, whose
+      // cast isn't valid inside an .or() tree — PostgREST failed to parse the
+      // entire logic tree and the request 500'd, so NO search term matched
+      // anything. Ticket-ID lookup has its own exact-match field above, so it's
+      // intentionally left out of this text search.
+      const searchCols = ['Route', 'Equipment', 'Issue_Description', 'Facility', 'Field', 'Well', 'Created_by_Name', 'assigned_foreman']
+      const tokens = search.split(/\s+/).map(t => t.replace(/[,()]/g, '').trim()).filter(Boolean)
+      for (const token of tokens) {
+        query = query.or(searchCols.map(c => `${c}.ilike.%${token}%`).join(','))
+      }
     }
     if (startDate) query = query.gte('Issue_Date', startDate)
     if (endDate) query = query.lte('Issue_Date', endDate + 'T23:59:59')
