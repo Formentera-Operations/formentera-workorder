@@ -46,7 +46,15 @@ export default function FilterSelect({
   const [mounted, setMounted] = useState(false)
   useEffect(() => { setMounted(true) }, [])
   const showSearch = options.length > SEARCH_THRESHOLD
-  const filtered = q ? options.filter(o => o.toLowerCase().includes(q.toLowerCase())) : options
+  // Token-AND match: every whitespace-separated word in the query must appear
+  // somewhere in the option, in any order. A plain substring match failed on
+  // names with punctuation/words between the terms — e.g. searching "tubb c"
+  // wouldn't find "TUBB, JB C" because ", JB " breaks the contiguous string,
+  // yet it would wrongly surface "JB TUBB CTB".
+  const tokens = q.toLowerCase().split(/\s+/).filter(Boolean)
+  const filtered = tokens.length
+    ? options.filter(o => { const lower = o.toLowerCase(); return tokens.every(t => lower.includes(t)) })
+    : options
   const close = () => { setOpen(false); setQ('') }
   const isPlaceholder = value === placeholderValue
   const showClear = allowClear && !isPlaceholder && !disabled
