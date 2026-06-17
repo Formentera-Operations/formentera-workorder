@@ -544,7 +544,7 @@ export default function MaintenanceTicketPage() {
       } else {
         toast.success(`${hdr} - Dispatched`, { duration: 5000 })
       }
-      router.push('/maintenance')
+      returnToList()
     } finally { setSaving(false) }
   }
 
@@ -553,6 +553,33 @@ export default function MaintenanceTicketPage() {
     const updated = await res.json()
     setData(updated)
     initForms(updated)
+  }
+
+  // After a dispatch / closeout / delete, return the user to the list they
+  // came from — preserving BOTH which list (My Tickets vs Maintenance) and
+  // their pagination position, both of which the App Router restores on a
+  // back navigation (the same thing the header back arrow does). A plain
+  // router.push('/maintenance') instead always landed them on the
+  // Maintenance tab at page 1, regardless of where they started.
+  //
+  // We first signal the list pages to refresh so the ticket they just
+  // changed reflects its new status — offline saves already show optimistic
+  // state via the outbox, but an online save isn't in the outbox, so without
+  // this nudge the restored (cached) list would show the pre-save status.
+  // The event carries no `descriptions`, so OfflineBanner stays silent.
+  //
+  // Falls back to the Maintenance list only when there's no in-app history to
+  // pop — e.g. a deeplink straight into this ticket from the weekly-reminder
+  // email, where there's no list behind us to return to.
+  function returnToList() {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('formentera:sync-success'))
+      if (window.history.length > 1) {
+        router.back()
+        return
+      }
+    }
+    router.push('/maintenance')
   }
 
   const AUTO_COMPLETE_STATUSES = [
@@ -621,7 +648,7 @@ export default function MaintenanceTicketPage() {
       } else {
         toast.success(`${hdr} - Updated`, { duration: 5000 })
       }
-      router.push('/maintenance')
+      returnToList()
     } finally { setSaving(false) }
   }
 
@@ -652,7 +679,7 @@ export default function MaintenanceTicketPage() {
         return
       }
       toast.success(`Ticket #${id} deleted.`, { duration: 5000 })
-      router.push('/maintenance')
+      returnToList()
     } catch (err) {
       console.error('Delete ticket error:', err)
       toast.error('Failed to delete ticket.', { duration: 7000 })
