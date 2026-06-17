@@ -50,25 +50,25 @@ export async function GET(req: NextRequest) {
     // Filters
     if (ticketId) query = query.eq('id', parseInt(ticketId))
     if (search) {
-      // Split the query into whitespace-separated tokens so a foreman can type
-      // the parts of a well/facility name in any order — e.g. "txl 0832" finds
-      // "TXL N #0832". Each token must match at least one text column (OR across
-      // columns), and every token must match (AND across tokens) — chaining
-      // .or() calls ANDs the groups together in PostgREST. Tokens are stripped
-      // of the logic-tree delimiters , ( ) so a stray one can't break parsing of
-      // the whole filter.
+      // Split the query into whitespace-separated tokens, then require EVERY
+      // token to appear within a SINGLE column — `or(and(col~t1, col~t2, …))`
+      // per column. So "sat 9" matches a facility literally named "… SAT 9",
+      // and "txl 0832" matches the well "TXL N #0832", but a word can't be
+      // satisfied by one column while another word is satisfied by a different
+      // column. That cross-column spread was the bug: "sat 9" matched any
+      // "SAT …" facility whose well number merely contained a 9 (e.g. #2904),
+      // flooding the results and burying the real "SAT 9". Tokens are stripped
+      // of the logic-tree delimiters , ( ) so a stray one can't break parsing.
       //
-      // The previous single-substring filter led with `id::text.ilike`, whose
-      // cast isn't valid inside an .or() tree — PostgREST failed to parse the
-      // entire logic tree and the request 500'd, so NO search term matched
-      // anything. Ticket-ID lookup has its own exact-match field above, so it's
-      // intentionally left out of this text search. Foreman, Submitted By,
-      // Equipment, Field, and Route are likewise excluded — they each have their
-      // own filter dropdown, so searching them here only added noise.
+      // Ticket-ID lookup has its own exact-match field above, so it's left out
+      // (an id::text cast isn't valid inside an .or() tree anyway). Foreman,
+      // Submitted By, Equipment, Field, and Route are excluded too — they each
+      // have their own filter dropdown.
       const searchCols = ['Issue_Description', 'Facility', 'Well']
       const tokens = search.split(/\s+/).map(t => t.replace(/[,()]/g, '').trim()).filter(Boolean)
-      for (const token of tokens) {
-        query = query.or(searchCols.map(c => `${c}.ilike.%${token}%`).join(','))
+      if (tokens.length) {
+        const groups = searchCols.map(c => `and(${tokens.map(t => `${c}.ilike.%${t}%`).join(',')})`).join(',')
+        query = query.or(groups)
       }
     }
     if (startDate) query = query.gte('Issue_Date', startDate)
