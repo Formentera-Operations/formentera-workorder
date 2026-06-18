@@ -27,12 +27,18 @@ type FilterSelectProps = {
   // pill label style). The `label` value is still used for the desktop
   // modal heading.
   labelHidden?: boolean
+  // Options to surface in a small group at the very top of the list, in the
+  // given order (e.g. a user's most-used vendors). They're shown under
+  // `pinnedLabel` and removed from the main list so nothing appears twice.
+  pinnedOptions?: string[]
+  pinnedLabel?: string
 }
 
 export default function FilterSelect({
   label, value, onChange, options,
   placeholder = 'All', placeholderValue = 'All', required = false,
   disabled = false, allowClear = false, labelHidden = false,
+  pinnedOptions = [], pinnedLabel = 'Most used',
 }: FilterSelectProps) {
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
@@ -52,9 +58,12 @@ export default function FilterSelect({
   // wouldn't find "TUBB, JB C" because ", JB " breaks the contiguous string,
   // yet it would wrongly surface "JB TUBB CTB".
   const tokens = q.toLowerCase().split(/\s+/).filter(Boolean)
-  const filtered = tokens.length
-    ? options.filter(o => { const lower = o.toLowerCase(); return tokens.every(t => lower.includes(t)) })
-    : options
+  const matches = (o: string) => !tokens.length || tokens.every(t => o.toLowerCase().includes(t))
+  // Pinned options render first, in their given order; the main list drops
+  // them so they don't appear twice.
+  const pinnedSet = new Set(pinnedOptions)
+  const pinnedFiltered = pinnedOptions.filter(matches)
+  const filtered = options.filter(o => !pinnedSet.has(o) && matches(o))
   const close = () => { setOpen(false); setQ('') }
   const isPlaceholder = value === placeholderValue
   const showClear = allowClear && !isPlaceholder && !disabled
@@ -86,6 +95,28 @@ export default function FilterSelect({
       </li>
     )
   }
+
+  // Shared list body for both the mobile sheet and desktop modal: the
+  // placeholder row, then the optional pinned group (header + rows + divider),
+  // then the main list, then a No-results fallback.
+  const renderListBody = () => (
+    <>
+      {renderRow(placeholder, placeholderValue)}
+      {pinnedFiltered.length > 0 && (
+        <>
+          <li className="px-3 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+            {pinnedLabel}
+          </li>
+          {pinnedFiltered.map(o => renderRow(o, o))}
+          {filtered.length > 0 && <li aria-hidden className="my-1 border-t border-gray-100" />}
+        </>
+      )}
+      {filtered.map(o => renderRow(o, o))}
+      {pinnedFiltered.length === 0 && filtered.length === 0 && (
+        <li className="px-4 py-3 text-sm text-gray-400 text-center">No results</li>
+      )}
+    </>
+  )
 
   const triggerExtraPadding = showClear ? ' pr-16' : ''
   const disabledClasses = disabled ? ' opacity-50 cursor-not-allowed' : ''
@@ -159,11 +190,7 @@ export default function FilterSelect({
             )}
             <ul className="flex-1 overflow-y-auto px-2 space-y-0.5
                            pb-[calc(env(safe-area-inset-bottom)+1rem)]">
-              {renderRow(placeholder, placeholderValue)}
-              {filtered.map(o => renderRow(o, o))}
-              {filtered.length === 0 && (
-                <li className="px-4 py-3 text-sm text-gray-400 text-center">No results</li>
-              )}
+              {renderListBody()}
             </ul>
           </div>
         </div>,
@@ -221,11 +248,7 @@ export default function FilterSelect({
                 </div>
               )}
               <ul className="flex-1 overflow-y-auto px-2 pb-4 space-y-0.5">
-                {renderRow(placeholder, placeholderValue)}
-                {filtered.map(o => renderRow(o, o))}
-                {filtered.length === 0 && (
-                  <li className="px-4 py-3 text-sm text-gray-400 text-center">No results</li>
-                )}
+                {renderListBody()}
               </ul>
             </div>
           </>

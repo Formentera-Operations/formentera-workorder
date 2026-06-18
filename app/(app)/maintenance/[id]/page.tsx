@@ -36,6 +36,10 @@ export default function MaintenanceTicketPage() {
   const [deletePhotoIdx, setDeletePhotoIdx] = useState<number | null>(null)
   const [employees, setEmployees] = useState<{ id: number; name: string }[]>([])
   const [vendors, setVendors] = useState<string[]>([])
+  // The current user's most-used vendors, pinned to the top of the vendor
+  // picker on the closeout tab. Fetched per user; degrades to an empty list
+  // (just the full vendor list) on error or for users with no history.
+  const [topVendors, setTopVendors] = useState<string[]>([])
   const [equipmentTypes, setEquipmentTypes] = useState<{ id: string; equipment_type: string }[]>([])
   const [equipment, setEquipment] = useState<{ id: number; equip_name: string }[]>([])
   const [afes, setAfes] = useState<{ number: string; description: string }[]>([])
@@ -73,6 +77,20 @@ export default function MaintenanceTicketPage() {
       .then(({ data }) => setWfData(data))
       .catch(() => {})
   }, [])
+
+  // The current user's most-used vendors, for the "Most used" group at the top
+  // of the vendor picker. Cached per user so it's instant on repeat closeouts
+  // and available offline.
+  useEffect(() => {
+    const name = (userName || '').trim()
+    if (!name) return
+    cachedFetch<{ vendors?: string[] }>(
+      `/api/vendors/most-used?user=${encodeURIComponent(name)}`,
+      { cacheKey: `vendors:most-used:${name.toLowerCase()}` }
+    )
+      .then(({ data }) => setTopVendors(Array.isArray(data.vendors) ? data.vendors : []))
+      .catch(() => {})
+  }, [userName])
 
   const lockedToFacility = (() => {
     if (userAssets.length === 0) return false
@@ -1647,6 +1665,7 @@ export default function MaintenanceTicketPage() {
                         labelHidden
                         value={row.vendor}
                         options={row.vendor && !vendors.includes(row.vendor) ? [row.vendor, ...vendors] : vendors}
+                        pinnedOptions={topVendors}
                         placeholder="Select Vendor"
                         placeholderValue=""
                         allowClear
