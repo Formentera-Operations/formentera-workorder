@@ -1,6 +1,6 @@
 'use client'
 import { Suspense } from 'react'
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { ChevronDown, ChevronUp, Search, Calendar, Wrench, SlidersHorizontal } from 'lucide-react'
 import TicketCard from '@/components/ui/TicketCard'
@@ -166,7 +166,14 @@ function MaintenancePageContent() {
     return () => { cancelled = true }
   }, [authLoading, page, ticketId, search, startDate, endDate, assetFilter, deptFilter, locationTypeFilter, equipFilter, statusFilter, foremanFilter, submittedByFilter, userAssets, refreshNonce])
 
-  useEffect(() => { setPage(0) }, [ticketId, search, startDate, endDate, assetFilter, deptFilter, locationTypeFilter, equipFilter, statusFilter, foremanFilter, submittedByFilter])
+  // Reset to the first page when a filter changes — but NOT on the initial
+  // mount, which would clobber a page restored from the URL (?page=N) when
+  // returning to the list (e.g. via the ticket back button).
+  const filtersInitedRef = useRef(false)
+  useEffect(() => {
+    if (!filtersInitedRef.current) { filtersInitedRef.current = true; return }
+    setPage(0)
+  }, [ticketId, search, startDate, endDate, assetFilter, deptFilter, locationTypeFilter, equipFilter, statusFilter, foremanFilter, submittedByFilter])
 
   function resetFilters() {
     setTicketId(''); setSearch(''); setStartDate(''); setEndDate('')

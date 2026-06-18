@@ -1,5 +1,5 @@
 'use client'
-import { Suspense, useState, useEffect, useMemo } from 'react'
+import { Suspense, useState, useEffect, useMemo, useRef } from 'react'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { ChevronDown, ChevronUp, Search, Calendar, SlidersHorizontal } from 'lucide-react'
 import TicketCard from '@/components/ui/TicketCard'
@@ -183,7 +183,14 @@ function MyTicketsPageContent() {
     return () => { cancelled = true }
   }, [page, ticketId, search, startDate, endDate, assetFilter, deptFilter, locationTypeFilter, equipFilter, statusFilter, userEmail, userName, userAssets, refreshNonce])
 
-  useEffect(() => { setPage(0) }, [ticketId, search, startDate, endDate, assetFilter, deptFilter, locationTypeFilter, equipFilter, statusFilter])
+  // Reset to the first page when a filter changes — but NOT on the initial
+  // mount, which would clobber a page restored from the URL (?page=N) when
+  // returning to the list (e.g. via the ticket back button).
+  const filtersInitedRef = useRef(false)
+  useEffect(() => {
+    if (!filtersInitedRef.current) { filtersInitedRef.current = true; return }
+    setPage(0)
+  }, [ticketId, search, startDate, endDate, assetFilter, deptFilter, locationTypeFilter, equipFilter, statusFilter])
 
   function resetFilters() {
     setTicketId(''); setSearch(''); setStartDate(''); setEndDate('')
