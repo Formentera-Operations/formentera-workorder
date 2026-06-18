@@ -1,6 +1,6 @@
 'use client'
-import { useState, useEffect, useMemo } from 'react'
-import { useRouter } from 'next/navigation'
+import { Suspense, useState, useEffect, useMemo } from 'react'
+import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { ChevronDown, ChevronUp, Search, Calendar, SlidersHorizontal } from 'lucide-react'
 import TicketCard from '@/components/ui/TicketCard'
 import QueuedTicketCard from '@/components/ui/QueuedTicketCard'
@@ -17,15 +17,37 @@ import type { TicketStatus } from '@/types'
 
 const PAGE_SIZE = 20
 
-export default function MyTicketsPage() {
+function MyTicketsPageContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const pathname = usePathname()
   const { userEmail, userName, assets: userAssets } = useAuth()
   const { actions: outboxActions } = useOutbox()
   const [tickets, setTickets] = useState<Record<string, unknown>[]>([])
   const [loading, setLoading] = useState(true)
   const [filtersOpen, setFiltersOpen] = useState(false)
-  const [page, setPage] = useState(0)
+  // Seed the page from the URL so navigating back into the list (e.g. after
+  // closing out a ticket) lands on the page the user left, not page 1.
+  const [page, setPage] = useState(() => {
+    const p = parseInt(searchParams.get('page') || '0', 10)
+    return Number.isFinite(p) && p > 0 ? p : 0
+  })
   const [totalCount, setTotalCount] = useState(0)
+
+  // Mirror the current page into the URL (?page=N). The browser's back entry
+  // carries the query string, so returning to the list restores the page even
+  // if React state was rebuilt — what makes "close out a ticket → land back on
+  // page 6" reliable. A bare tab navigation has no ?page and starts at page 1.
+  // Deps are [page] only: we react to local page changes, and reading the
+  // snapshot's params is fine since nothing else writes the URL here.
+  useEffect(() => {
+    const params = new URLSearchParams(Array.from(searchParams.entries()))
+    if (page > 0) params.set('page', String(page))
+    else params.delete('page')
+    const qs = params.toString()
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page])
 
   // Bumped when the outbox drains so the list re-fetches and shows the
   // freshly-synced server state (without this, the Syncing pill clears
@@ -378,5 +400,13 @@ export default function MyTicketsPage() {
       </div>
 
     </div>
+  )
+}
+
+export default function MyTicketsPage() {
+  return (
+    <Suspense>
+      <MyTicketsPageContent />
+    </Suspense>
   )
 }

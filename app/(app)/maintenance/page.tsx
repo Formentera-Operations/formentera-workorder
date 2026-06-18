@@ -1,7 +1,7 @@
 'use client'
 import { Suspense } from 'react'
 import { useState, useEffect, useMemo } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { ChevronDown, ChevronUp, Search, Calendar, Wrench, SlidersHorizontal } from 'lucide-react'
 import TicketCard from '@/components/ui/TicketCard'
 import FilterSelect from '@/components/ui/FilterSelect'
@@ -20,6 +20,7 @@ const PAGE_SIZE = 20
 function MaintenancePageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const pathname = usePathname()
   const { assets: userAssets, role, loading: authLoading } = useAuth()
   const { actions: outboxActions } = useOutbox()
 
@@ -38,8 +39,29 @@ function MaintenancePageContent() {
   // below the trigger already reflects the filter, so popping the panel
   // open just gets in the way.
   const [filtersOpen, setFiltersOpen] = useState(false)
-  const [page, setPage] = useState(0)
+  // Seed the page from the URL so navigating back into the list (e.g. after
+  // closing out a ticket) lands on the page the user left, not page 1.
+  const [page, setPage] = useState(() => {
+    const p = parseInt(searchParams.get('page') || '0', 10)
+    return Number.isFinite(p) && p > 0 ? p : 0
+  })
   const [totalCount, setTotalCount] = useState(0)
+
+  // Mirror the current page into the URL (?page=N). The browser's back entry
+  // carries the query string, so returning to the list restores the page even
+  // if React state was rebuilt — this is what makes "close out a ticket → land
+  // back on page 6" reliable. A bare tab navigation has no ?page and starts at
+  // page 1, the one reset case that's expected. Deps are [page] only: we react
+  // to local page changes, and reading the latest filter params off the
+  // snapshot is fine since we never write filters to the URL here.
+  useEffect(() => {
+    const params = new URLSearchParams(Array.from(searchParams.entries()))
+    if (page > 0) params.set('page', String(page))
+    else params.delete('page')
+    const qs = params.toString()
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page])
 
   const [ticketId, setTicketId] = useState('')
   const [search, setSearch] = useState('')
