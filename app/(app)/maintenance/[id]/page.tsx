@@ -53,6 +53,11 @@ export default function MaintenanceTicketPage() {
   // Repairs form state
   const [repForm, setRepForm] = useState<Record<string, string | boolean>>({})
   const [vendorRows, setVendorRows] = useState<{ vendor: string; cost: string; pending: boolean }[]>([{ vendor: '', cost: '', pending: false }])
+  // True when the foreman deliberately closes out with no vendor cost (e.g. a
+  // utility restored power, no third-party charge). Gates the otherwise-
+  // required vendor+cost so a no-cost closeout is an explicit choice rather
+  // than a silently dropped value.
+  const [noVendorCost, setNoVendorCost] = useState(false)
   const [repairPhotos, setRepairPhotos] = useState<string[]>([])
   const [uploadingRepairPhotos, setUploadingRepairPhotos] = useState(false)
   const [deleteRepairPhotoIdx, setDeleteRepairPhotoIdx] = useState<number | null>(null)
@@ -172,6 +177,9 @@ export default function MaintenanceTicketPage() {
     const awaitingFinalCost = rc.final_status === 'Repaired - Awaiting Final Cost'
     if (rows.length === 0) rows.push({ vendor: '', cost: '', pending: awaitingFinalCost })
     setVendorRows(rows)
+    // Pre-check "No vendor cost" when re-opening a closeout that was already
+    // finalized with no vendor, so editing it doesn't suddenly demand one.
+    setNoVendorCost(!!rc.final_status && !awaitingFinalCost && !rows.some(r => r.vendor))
   }
 
   useEffect(() => {
@@ -613,7 +621,7 @@ export default function MaintenanceTicketPage() {
       return
     }
     setSaving(true)
-    const filledVendors = vendorRows.filter(r => r.vendor)
+    const filledVendors = noVendorCost ? [] : vendorRows.filter(r => r.vendor)
     const hasPendingCost = filledVendors.some(r => r.pending || !r.cost)
     const effectiveFinalStatus = hasPendingCost ? 'Repaired - Awaiting Final Cost' : repForm.final_status as string
     if (hasPendingCost && repForm.final_status !== 'Repaired - Awaiting Final Cost') {
@@ -1652,7 +1660,26 @@ export default function MaintenanceTicketPage() {
                 )}
               </div>
 
+              {/* No-vendor-cost toggle — a deliberate way to close out a job
+                  that had no vendor charge (e.g. a utility restored power),
+                  instead of leaving vendor/cost blank by accident. */}
+              {!isReadOnly && (
+                <label className="flex items-center gap-2 cursor-pointer w-fit">
+                  <input
+                    type="checkbox"
+                    checked={noVendorCost}
+                    className="w-3.5 h-3.5 accent-[#1B2E6B]"
+                    onChange={e => {
+                      setNoVendorCost(e.target.checked)
+                      if (e.target.checked) setVendorRows([{ vendor: '', cost: '', pending: false }])
+                    }}
+                  />
+                  <span className="text-sm text-gray-700">No vendor cost (no third-party charge)</span>
+                </label>
+              )}
+
               {/* Vendor rows */}
+              {!noVendorCost && (<>
               {vendorRows.map((row, i) => (
                 <div key={i} className="space-y-2">
                   <div className="grid grid-cols-[2fr_1fr] gap-3">
@@ -1735,6 +1762,7 @@ export default function MaintenanceTicketPage() {
                   Delete Vendor
                 </button>
               )}
+              </>)}
 
               <div>
                 <label className="form-label">Date Completed</label>
@@ -1759,7 +1787,7 @@ export default function MaintenanceTicketPage() {
                   (String(repForm.Work_Order_Type || '').startsWith('AFE') && !repForm.AFE_Number) ||
                   !repForm.final_status ||
                   !String(repForm.repair_details || '').trim() ||
-                  (vendorRows.every(r => !r.cost) && repForm.final_status !== 'Repaired - Awaiting Final Cost') ||
+                  (!noVendorCost && repForm.final_status !== 'Repaired - Awaiting Final Cost' && !vendorRows.some(r => r.vendor && r.cost)) ||
                   (!!repForm.start_date && !!repForm.date_completed && new Date(repForm.date_completed as string) < new Date(repForm.start_date as string))
                 }>
                   {saving ? 'Submitting…' : 'Submit'}
