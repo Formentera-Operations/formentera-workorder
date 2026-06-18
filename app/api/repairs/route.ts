@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
         repair_details: body.repair_details || null,
         repair_images: body.repair_images || [],
         vendor: body.vendor || null,
-        total_repair_cost: body.total_repair_cost || null,
+        total_repair_cost: body.total_repair_cost ?? null,
         date_completed: body.date_completed || null,
         final_status: body.final_status || null,
         Work_Order_Type: body.Work_Order_Type || null,

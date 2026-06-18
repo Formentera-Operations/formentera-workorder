@@ -643,6 +643,9 @@ export default function MaintenanceTicketPage() {
           date_completed: autoDateCompleted,
           repair_images: repairPhotos,
           vendors: filledVendors.map(r => ({ vendor: r.vendor, cost: (r.pending || !r.cost) ? null : parseFloat(r.cost) })),
+          // "No Vendor Cost" records an explicit $0 so the closeout reads as a
+          // confirmed zero rather than a blank/missing total.
+          ...(noVendorCost ? { total_repair_cost: 0 } : {}),
           created_by: userName,
           current_user_email: userEmail,
           assigned_foreman: dispatch.maintenance_foreman || dispatch.production_foreman || null,
@@ -957,7 +960,7 @@ export default function MaintenanceTicketPage() {
                   ))
                 })()}
                 {[
-                  ['Total Repair Cost', vendorData.total_cost ? `$${vendorData.total_cost}` : repairs.total_repair_cost ? `$${repairs.total_repair_cost}` : '—'],
+                  ['Total Repair Cost', vendorData.total_cost != null ? `$${vendorData.total_cost}` : repairs.total_repair_cost != null ? `$${repairs.total_repair_cost}` : '—'],
                   ['Date Completed', repairs.date_completed ? formatDateShort(repairs.date_completed as string) : '—'],
                 ].map(([label, value]) => (
                   <div key={label as string} className="detail-row">
@@ -1674,7 +1677,7 @@ export default function MaintenanceTicketPage() {
                       if (e.target.checked) setVendorRows([{ vendor: '', cost: '', pending: false }])
                     }}
                   />
-                  <span className="text-sm text-gray-700">No vendor cost (no third-party charge)</span>
+                  <span className="text-sm text-gray-700">No Vendor Cost</span>
                 </label>
               )}
 
