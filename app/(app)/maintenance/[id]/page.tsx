@@ -1677,7 +1677,7 @@ export default function MaintenanceTicketPage() {
                       if (e.target.checked) setVendorRows([{ vendor: '', cost: '', pending: false }])
                     }}
                   />
-                  <span className="text-sm text-gray-700">No Vendor Cost</span>
+                  <span className="text-sm font-bold text-gray-900">No Vendor Cost</span>
                 </label>
               )}
 
