@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
 
     let query = db
       .from('Maintenance_Form_Submission')
-      .select('Asset, Department, Equipment, assigned_foreman, Created_by_Name')
+      .select('Asset, Department, Location_Type, Equipment, assigned_foreman, Created_by_Name')
 
     if (mode === 'mine') {
       query = query.or(
@@ -39,17 +39,18 @@ export async function GET(req: NextRequest) {
     if (error) throw error
 
     const seen = new Set<string>()
-    const rows: { asset: string; department: string; equipment: string; foreman: string; submitter: string }[] = []
+    const rows: { asset: string; department: string; locationType: string; equipment: string; foreman: string; submitter: string }[] = []
     for (const r of data || []) {
       const asset = r.Asset || ''
       const department = r.Department || ''
+      const locationType = r.Location_Type || ''
       const equipment = r.Equipment || ''
       const foreman = r.assigned_foreman || ''
       const submitter = r.Created_by_Name || ''
-      const key = `${asset}|${department}|${equipment}|${foreman}|${submitter}`
+      const key = `${asset}|${department}|${locationType}|${equipment}|${foreman}|${submitter}`
       if (seen.has(key)) continue
       seen.add(key)
-      rows.push({ asset, department, equipment, foreman, submitter })
+      rows.push({ asset, department, locationType, equipment, foreman, submitter })
     }
 
     return NextResponse.json({ rows })

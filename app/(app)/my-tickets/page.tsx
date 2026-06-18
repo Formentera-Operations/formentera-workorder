@@ -60,6 +60,7 @@ export default function MyTicketsPage() {
   const [endDate, setEndDate] = useState('')
   const [assetFilter, setAssetFilter] = useState('All')
   const [deptFilter, setDeptFilter] = useState('All')
+  const [locationTypeFilter, setLocationTypeFilter] = useState('All')
   const [equipFilter, setEquipFilter] = useState('All')
   const [statusFilter, setStatusFilter] = useState<TicketStatus | 'All'>('All')
 
@@ -81,19 +82,20 @@ export default function MyTicketsPage() {
     if (endDate) params.set('endDate', endDate)
     cachedFetch<{ rows?: OptionRow[] }>(
       `/api/tickets/options?${params}`,
-      { cacheKey: `my-tickets:options:v3:${userEmail || userName}:${userAssets.join(',')}:${statusFilter}:${startDate}:${endDate}` }
+      { cacheKey: `my-tickets:options:v4:${userEmail || userName}:${userAssets.join(',')}:${statusFilter}:${startDate}:${endDate}` }
     )
       .then(({ data }) => setOptionRows(data.rows || []))
       .catch(() => {})
   }, [userEmail, userName, userAssets, statusFilter, startDate, endDate])
 
-  const { assets, departments, equipments } = useMemo(
+  const { assets, departments, locationTypes, equipments } = useMemo(
     () => deriveCascadingOptions(optionRows, {
       asset: assetFilter,
       department: deptFilter,
+      locationType: locationTypeFilter,
       equipment: equipFilter,
     }),
-    [optionRows, assetFilter, deptFilter, equipFilter],
+    [optionRows, assetFilter, deptFilter, locationTypeFilter, equipFilter],
   )
 
   // Pre-warm the new-ticket form's reference data so it works offline the
@@ -119,6 +121,7 @@ export default function MyTicketsPage() {
       userName,
       search, startDate, endDate,
       asset: assetFilter, department: deptFilter,
+      locationType: locationTypeFilter,
       equipment: equipFilter, status: statusFilter,
       page: String(page),
       pageSize: String(PAGE_SIZE),
@@ -128,7 +131,7 @@ export default function MyTicketsPage() {
     // covers the unfiltered "my tickets" view so it's available offline.
     // When online, we still fetch with the current filters; on offline cache
     // hit, the user sees their last-seen list.
-    const cacheKey = `my-tickets:list:${userEmail || userName}:${userAssets.join(',')}:${page}:${ticketId}:${search}:${startDate}:${endDate}:${assetFilter}:${deptFilter}:${equipFilter}:${statusFilter}`
+    const cacheKey = `my-tickets:list:${userEmail || userName}:${userAssets.join(',')}:${page}:${ticketId}:${search}:${startDate}:${endDate}:${assetFilter}:${deptFilter}:${locationTypeFilter}:${equipFilter}:${statusFilter}`
     cachedFetch<{ data?: Record<string, unknown>[]; count?: number }>(
       `/api/tickets?${params}`,
       { cacheKey }
@@ -156,13 +159,13 @@ export default function MyTicketsPage() {
       .catch(() => {})
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [page, ticketId, search, startDate, endDate, assetFilter, deptFilter, equipFilter, statusFilter, userEmail, userName, userAssets, refreshNonce])
+  }, [page, ticketId, search, startDate, endDate, assetFilter, deptFilter, locationTypeFilter, equipFilter, statusFilter, userEmail, userName, userAssets, refreshNonce])
 
-  useEffect(() => { setPage(0) }, [ticketId, search, startDate, endDate, assetFilter, deptFilter, equipFilter, statusFilter])
+  useEffect(() => { setPage(0) }, [ticketId, search, startDate, endDate, assetFilter, deptFilter, locationTypeFilter, equipFilter, statusFilter])
 
   function resetFilters() {
     setTicketId(''); setSearch(''); setStartDate(''); setEndDate('')
-    setAssetFilter('All'); setDeptFilter('All'); setEquipFilter('All'); setStatusFilter('All')
+    setAssetFilter('All'); setDeptFilter('All'); setLocationTypeFilter('All'); setEquipFilter('All'); setStatusFilter('All')
     setPage(0)
   }
 
@@ -263,6 +266,7 @@ export default function MyTicketsPage() {
                   <FilterSelect label="Asset" value={assetFilter} onChange={setAssetFilter} options={assets} />
                 )}
                 <FilterSelect label="Department" value={deptFilter} onChange={setDeptFilter} options={departments} />
+                <FilterSelect label="Location Type" value={locationTypeFilter} onChange={setLocationTypeFilter} options={locationTypes} />
                 <FilterSelect label="Equipment" value={equipFilter} onChange={setEquipFilter} options={equipments} />
               </div>
             </div>

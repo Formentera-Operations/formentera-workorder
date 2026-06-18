@@ -47,6 +47,7 @@ function MaintenancePageContent() {
   const [endDate, setEndDate] = useState(() => searchParams.get('endDate') || '')
   const [assetFilter, setAssetFilter] = useState('All')
   const [deptFilter, setDeptFilter] = useState(() => searchParams.get('department') || 'All')
+  const [locationTypeFilter, setLocationTypeFilter] = useState(() => searchParams.get('locationType') || 'All')
   const [equipFilter, setEquipFilter] = useState(() => searchParams.get('equipment') || 'All')
   const [foremanFilter, setForemanFilter] = useState('All')
   const [submittedByFilter, setSubmittedByFilter] = useState('All')
@@ -71,21 +72,22 @@ function MaintenancePageContent() {
     if (endDate) params.set('endDate', endDate)
     cachedFetch<{ rows?: OptionRow[] }>(
       `/api/tickets/options?${params}`,
-      { cacheKey: `maintenance:options:v3:${userAssets.join(',')}:${statusFilter}:${startDate}:${endDate}` }
+      { cacheKey: `maintenance:options:v4:${userAssets.join(',')}:${statusFilter}:${startDate}:${endDate}` }
     )
       .then(({ data }) => setOptionRows(data.rows || []))
       .catch(() => {})
   }, [authLoading, userAssets, statusFilter, startDate, endDate])
 
-  const { assets, departments, equipments, foremans, submitters } = useMemo(
+  const { assets, departments, locationTypes, equipments, foremans, submitters } = useMemo(
     () => deriveCascadingOptions(optionRows, {
       asset: assetFilter,
       department: deptFilter,
+      locationType: locationTypeFilter,
       equipment: equipFilter,
       foreman: foremanFilter,
       submitter: submittedByFilter,
     }),
-    [optionRows, assetFilter, deptFilter, equipFilter, foremanFilter, submittedByFilter],
+    [optionRows, assetFilter, deptFilter, locationTypeFilter, equipFilter, foremanFilter, submittedByFilter],
   )
 
   // Pre-warm new-ticket form reference data so it works offline. Also
@@ -112,13 +114,14 @@ function MaintenancePageContent() {
       ticketId,
       search, startDate, endDate,
       asset: assetFilter, department: deptFilter,
+      locationType: locationTypeFilter,
       equipment: equipFilter, status: statusFilter,
       foreman: foremanFilter, submittedBy: submittedByFilter,
       page: String(page),
       pageSize: String(PAGE_SIZE),
     })
     if (userAssets.length > 0) params.set('userAssets', userAssets.join(','))
-    const cacheKey = `maintenance:list:${userAssets.join(',')}:${page}:${ticketId}:${search}:${startDate}:${endDate}:${assetFilter}:${deptFilter}:${equipFilter}:${statusFilter}:${foremanFilter}:${submittedByFilter}`
+    const cacheKey = `maintenance:list:${userAssets.join(',')}:${page}:${ticketId}:${search}:${startDate}:${endDate}:${assetFilter}:${deptFilter}:${locationTypeFilter}:${equipFilter}:${statusFilter}:${foremanFilter}:${submittedByFilter}`
     cachedFetch<{ data?: Record<string, unknown>[]; count?: number }>(
       `/api/tickets?${params}`,
       { cacheKey }
@@ -139,13 +142,13 @@ function MaintenancePageContent() {
       .catch(() => {})
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [authLoading, page, ticketId, search, startDate, endDate, assetFilter, deptFilter, equipFilter, statusFilter, foremanFilter, submittedByFilter, userAssets, refreshNonce])
+  }, [authLoading, page, ticketId, search, startDate, endDate, assetFilter, deptFilter, locationTypeFilter, equipFilter, statusFilter, foremanFilter, submittedByFilter, userAssets, refreshNonce])
 
-  useEffect(() => { setPage(0) }, [ticketId, search, startDate, endDate, assetFilter, deptFilter, equipFilter, statusFilter, foremanFilter, submittedByFilter])
+  useEffect(() => { setPage(0) }, [ticketId, search, startDate, endDate, assetFilter, deptFilter, locationTypeFilter, equipFilter, statusFilter, foremanFilter, submittedByFilter])
 
   function resetFilters() {
     setTicketId(''); setSearch(''); setStartDate(''); setEndDate('')
-    setAssetFilter('All'); setDeptFilter('All'); setEquipFilter('All')
+    setAssetFilter('All'); setDeptFilter('All'); setLocationTypeFilter('All'); setEquipFilter('All')
     setForemanFilter('All'); setSubmittedByFilter('All')
     setStatusFilter('All')
     setPage(0)
@@ -160,6 +163,7 @@ function MaintenancePageContent() {
     (statusFilter !== 'All' ? 1 : 0) +
     (assetFilter !== 'All' ? 1 : 0) +
     (deptFilter !== 'All' ? 1 : 0) +
+    (locationTypeFilter !== 'All' ? 1 : 0) +
     (equipFilter !== 'All' ? 1 : 0) +
     (foremanFilter !== 'All' ? 1 : 0) +
     (submittedByFilter !== 'All' ? 1 : 0) +
@@ -277,6 +281,7 @@ function MaintenancePageContent() {
                   <FilterSelect label="Asset" value={assetFilter} onChange={setAssetFilter} options={assets} />
                 )}
                 <FilterSelect label="Department" value={deptFilter} onChange={setDeptFilter} options={departments} />
+                <FilterSelect label="Location Type" value={locationTypeFilter} onChange={setLocationTypeFilter} options={locationTypes} />
                 <FilterSelect label="Equipment" value={equipFilter} onChange={setEquipFilter} options={equipments} />
                 <FilterSelect label="Assigned Foreman" value={foremanFilter} onChange={setForemanFilter} options={foremans} />
                 <FilterSelect label="Submitted By" value={submittedByFilter} onChange={setSubmittedByFilter} options={submitters} />

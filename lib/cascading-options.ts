@@ -13,6 +13,7 @@
 export type OptionRow = {
   asset: string
   department: string
+  locationType: string
   equipment: string
   foreman: string
   submitter: string
@@ -21,6 +22,7 @@ export type OptionRow = {
 export type CascadeFilters = {
   asset?: string
   department?: string
+  locationType?: string
   equipment?: string
   foreman?: string
   submitter?: string
@@ -37,6 +39,7 @@ function isActive(value: string | undefined): value is string {
 function rowMatches(row: OptionRow, filters: CascadeFilters, exclude: Dim): boolean {
   if (exclude !== 'asset' && isActive(filters.asset) && row.asset !== filters.asset) return false
   if (exclude !== 'department' && isActive(filters.department) && row.department !== filters.department) return false
+  if (exclude !== 'locationType' && isActive(filters.locationType) && row.locationType !== filters.locationType) return false
   if (exclude !== 'equipment' && isActive(filters.equipment) && row.equipment !== filters.equipment) return false
   if (exclude !== 'foreman' && isActive(filters.foreman) && row.foreman !== filters.foreman) return false
   if (exclude !== 'submitter' && isActive(filters.submitter) && row.submitter !== filters.submitter) return false
@@ -61,6 +64,10 @@ export function deriveCascadingOptions(rows: OptionRow[], filters: CascadeFilter
     departments: ensureSelected(
       uniqueSorted(rows.filter(r => rowMatches(r, filters, 'department')).map(r => r.department)),
       filters.department,
+    ),
+    locationTypes: ensureSelected(
+      uniqueSorted(rows.filter(r => rowMatches(r, filters, 'locationType')).map(r => r.locationType)),
+      filters.locationType,
     ),
     equipments: ensureSelected(
       uniqueSorted(rows.filter(r => rowMatches(r, filters, 'equipment')).map(r => r.equipment)),
