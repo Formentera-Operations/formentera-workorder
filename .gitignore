@@ -9,6 +9,10 @@ node_modules/
 .env.development.local
 .env.test.local
 .env.production.local
+# Local backups/copies of env files (e.g. .env.local.prod-backup) — never commit.
+# Keep .env.local.example tracked (it's the placeholder template).
+.env.local.*
+!.env.local.example
 
 # Next.js
 .next/

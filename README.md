@@ -33,8 +33,10 @@ SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 
 SNOWFLAKE_ACCOUNT=your_account.region
 SNOWFLAKE_USERNAME=your_username
-SNOWFLAKE_PASSWORD=your_password
+# Key-pair (JWT) auth — PEM private key on one line with literal \n newlines
+SNOWFLAKE_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n
 SNOWFLAKE_DATABASE=FO_STAGE_DB
+SNOWFLAKE_SCHEMA=your_schema
 SNOWFLAKE_WAREHOUSE=your_warehouse
 SNOWFLAKE_ROLE=your_role
 ```
