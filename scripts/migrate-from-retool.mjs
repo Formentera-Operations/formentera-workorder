@@ -18,10 +18,10 @@ const POST_SQL_PATH = 'migrations/post_retool_load_sequence_bump.sql';
 const BATCH_SIZE = 100;
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const SERVICE_KEY = process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!SUPABASE_URL || !SERVICE_KEY) {
-  console.error('Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in env.');
+  console.error('Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SECRET_KEY in env.');
   console.error('Run with:  node --env-file=.env.local scripts/migrate-from-retool.mjs');
   process.exit(1);
 }
