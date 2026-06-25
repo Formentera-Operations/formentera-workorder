@@ -153,6 +153,16 @@ Do this on a branch, verify login works on the **preview deployment**, then merg
 keys, not the API key value — so swapping anon→publishable doesn't change login
 behavior.)
 
+**Later — retire the fallback (cleanup).** The `?? legacy` is a *transition
+bridge*, not permanent. Once **every** environment is on the new names — Vercel
+prod + preview (auto), your local `.env.local` (rename the vars; values can stay
+the same, Supabase still accepts legacy key values under the new names), and any
+scripts — remove the fallback so the code reads only the new names. Do it the same
+way: branch → verify login + data load locally *and* on the preview → merge. Order
+matters: rename `.env.local` and confirm local works **before** the fallback-free
+code reaches your machine, or local dev breaks with `URL and Key are required`.
+(Rarely-run utility scripts can keep their own fallback.)
+
 ### ⚠️ Gotcha: synced vars land in Production scope only
 The integration may sync vars to **Production** scope only. A **code-only** PR
 gets a Vercel preview but **no** preview database branch (because of "Supabase
@@ -312,7 +322,9 @@ npx supabase migration list --linked      # both columns should now match
 1. `db dump`/`db pull` need Docker → use a **Codespace**.
 2. Codespace auth → `SUPABASE_ACCESS_TOKEN` (then revoke); `mkdir` migrations first.
 3. Resync conflict → delete manual Supabase vars first.
-4. Integration uses **new key names** → read-new-fallback-to-old in code.
+4. Integration uses **new key names** → read-new-fallback-to-old in code; retire
+   the fallback later once all envs (Vercel, local `.env.local`, scripts) are on
+   the new names (rename `.env.local` first, or local dev breaks).
 5. Vars sync to **Production scope only** → add **Preview** scope.
 6. `.env.local` ≠ Vercel store → copy needed vars in locally.
 7. Trust connection code over `.example` for var names/auth (key-pair vs password).
