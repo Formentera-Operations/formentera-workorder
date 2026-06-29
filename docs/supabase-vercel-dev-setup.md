@@ -34,10 +34,11 @@ Other prerequisites worth checking up front:
   Read-only integrations (e.g. a reporting warehouse, a read-only external API)
   can safely share their production credentials with dev. In our case only
   **Supabase** needed isolation; Snowflake and the AFE API were read-only.
-- **How does login work?** Default plan: wire the app's real login (SSO) to the
-  dev branch so the sandbox mirrors production (Phase 4, Option A — needs access
-  to the SSO provider settings, often IT-controlled). If you can't reach those
-  settings, fall back to email/password — which requires the app to support it.
+- **How does login work?** Formentera apps all use **Microsoft Entra (Azure) SSO**,
+  so the default plan is to wire that to the dev branch so the sandbox mirrors
+  production (Phase 4, Option A — needs **Azure App Registration** access). Only if
+  you can't reach Azure, fall back to email/password — which requires the app to
+  support it.
 
 ---
 
@@ -201,32 +202,35 @@ write test data there.
    table's rows via SQL instead.)
 
 4. **Set up a way to log in to the sandbox.** Default to wiring the app's **real
-   login (SSO)** to the `dev` branch, so the sandbox logs in exactly like
-   production. (Verified working on Microsoft/Azure.)
+   login** to the `dev` branch, so the sandbox logs in exactly like production.
+   **Formentera apps all use Microsoft Entra (Azure) SSO**, so these steps are
+   written concretely for Azure (verified). *(A different provider would follow the
+   same shape — just substitute its console.)*
 
-   **Option A — wire the app's SSO to the dev branch (default / recommended):**
-   Needs access to the SSO provider's settings (e.g. an Azure App Registration —
-   often IT-controlled). The sign-in round-trip is: app → provider → the **dev
-   branch's** Supabase callback → back to the app, so each hop must be allowed.
-   1. From the **`main`** branch → Auth → Providers → *(provider)*, copy the
-      **Client ID**, **Secret**, and **Tenant/issuer URL**. (If the secret is
-      masked, create a fresh one in the provider during step 4.)
-   2. On **`dev`** → Auth → Providers → *(provider)*: enable it and paste those values.
-   3. On **`dev`** → Auth → **URL Configuration**: set **Site URL**
+   **Option A — wire Azure (Entra) SSO to the dev branch (default / recommended):**
+   You need access to the app's **Azure App Registration**. The sign-in round-trip
+   is: app → Microsoft → the **dev branch's** Supabase callback → back to the app,
+   so each hop must be allowed.
+   1. In Supabase on the **`main`** branch → **Auth → Providers → Azure**, copy the
+      **Application (client) ID**, the **Secret**, and the **Azure Tenant URL**.
+      (If the secret is masked, create a fresh client secret in Azure in step 4.)
+   2. On the **`dev`** branch → **Auth → Providers → Azure**: enable it and paste
+      those three values.
+   3. On **`dev`** → **Auth → URL Configuration**: set **Site URL**
       (e.g. `http://localhost:3000`) and add your dev app address(es) to the
       **Redirect URLs** allow-list (e.g. `http://localhost:3000/**`, plus any
       preview URL).
-   4. In the **SSO provider** (e.g. Azure → App registration → Authentication →
-      Redirect URIs), add the **dev branch's** Supabase callback:
+   4. In the **Azure portal → App registrations →** your app **→ Authentication →
+      Redirect URIs**, add the **dev branch's** Supabase callback:
       `https://<DEV_BRANCH_REF>.supabase.co/auth/v1/callback`.
-   5. Test: app pointed at `dev` → click the normal SSO button → it bounces through
-      the provider and lands you in the dev sandbox with your real identity.
+   5. Test: app pointed at `dev` → click **Sign in with Microsoft** → it bounces
+      through Microsoft and lands you in the dev sandbox with your real identity.
 
-   **Fallback — only if you can't reach the SSO provider settings:** if the app
+   **Fallback — only if you can't reach the Azure App Registration:** if the app
    *also* supports **email/password**, on `dev` → Authentication → Users → **Add
    user** → email + password + ✅ **Auto Confirm User**, then sign in via the app's
-   email path. (If the app is SSO-only *and* you can't touch the provider settings,
-   there's no shortcut — you'll need provider access to do Option A.)
+   email path. (If the app is SSO-only *and* you can't touch Azure, there's no
+   shortcut — get Azure App Registration access to do Option A.)
 
    Use an identity whose **email matches a seeded staff/profile row**, so you get a
    real role + permissions in the sandbox.
