@@ -37,7 +37,7 @@ Other prerequisites worth checking up front:
 - **How does login work?** Default plan: wire the app's real login (SSO) to the
   dev branch so the sandbox mirrors production (Phase 4, Option A — needs access
   to the SSO provider settings, often IT-controlled). If you can't reach those
-  settings, fall back to email/password (if the app supports it) or a magic link.
+  settings, fall back to email/password — which requires the app to support it.
 
 ---
 
@@ -219,15 +219,14 @@ write test data there.
    5. Test: app pointed at `dev` → click the normal SSO button → it bounces through
       the provider and lands you in the dev sandbox with your real identity.
 
-   **Fallback — if you can't reach the SSO provider settings (or want it quick):**
-   - If the app *also* supports **email/password**: on `dev` → Authentication →
-     Users → **Add user** → email + password + ✅ **Auto Confirm User**, then sign
-     in via the app's email path.
-   - Or generate a **one-time magic sign-in link** from Supabase admin for a test
-     user — no login screen needed.
+   **Fallback — only if you can't reach the SSO provider settings:** if the app
+   *also* supports **email/password**, on `dev` → Authentication → Users → **Add
+   user** → email + password + ✅ **Auto Confirm User**, then sign in via the app's
+   email path. (If the app is SSO-only *and* you can't touch the provider settings,
+   there's no shortcut — you'll need provider access to do Option A.)
 
-   Either way, use an identity whose **email matches a seeded staff/profile row**,
-   so you get a real role + permissions in the sandbox.
+   Use an identity whose **email matches a seeded staff/profile row**, so you get a
+   real role + permissions in the sandbox.
 
 5. **Point local dev at the branch.** Back up first, then swap the 3 Supabase
    values in `.env.local` to the **branch's** URL + keys (Supabase → on `dev` →
