@@ -14,16 +14,20 @@ placeholders (`<PROJECT_REF>`, `<DEV_BRANCH_URL>`, etc.) with your app's values.
 
 There are two ways to get a dev database:
 
-| You want… | Approach | Effort |
+| Your situation | Approach | Effort |
 |---|---|---|
-| Just a throwaway sandbox to poke at | Let Supabase **clone the prod schema** into a branch directly | Low |
-| A *production* app with schema under version control | **Capture schema into migration files** (this playbook) | Medium |
+| **Just experimenting** — a quick sandbox you don't need to keep | Let Supabase **copy the current database structure** into a branch automatically | Low |
+| **A live app people depend on** — you want the database structure tracked/repeatable | **Save the structure into migration files** (this playbook) | Medium |
 
-Supabase branching can pull your production schema into a branch on its own, so
-for a quick experiment you may not need the capture step at all. But for a real
-app, capturing the schema into `supabase/migrations/` gives you reviewable diffs,
-disaster recovery, and the "schema changes go through migrations, not the
-dashboard" workflow. **For anything production, do the capture.**
+> When asking the user which one they are, use plain language — avoid the jargon
+> "production" and "throwaway". e.g. *"Is this a live app people actually depend
+> on, or something you're just testing out?"*
+
+Supabase branching can copy your current database structure into a branch on its
+own, so if you're just experimenting you may not need the saving step at all. But
+for a live app, saving the structure into `supabase/migrations/` gives you
+reviewable diffs, disaster recovery, and the "schema changes go through migrations,
+not the dashboard" workflow. **For any app people depend on, do the capture.**
 
 Other prerequisites worth checking up front:
 - **Which systems does the app *write* to?** Only those need isolating for dev.
