@@ -34,9 +34,10 @@ Other prerequisites worth checking up front:
   Read-only integrations (e.g. a reporting warehouse, a read-only external API)
   can safely share their production credentials with dev. In our case only
   **Supabase** needed isolation; Snowflake and the AFE API were read-only.
-- **How does login work?** If it's SSO (e.g. Microsoft/Azure), check whether the
-  app *also* supports email/password — that's a far easier path for a test login
-  on a branch (see Phase 4).
+- **How does login work?** Default plan: wire the app's real login (SSO) to the
+  dev branch so the sandbox mirrors production (Phase 4, Option A — needs access
+  to the SSO provider settings, often IT-controlled). If you can't reach those
+  settings, fall back to email/password (if the app supports it) or a magic link.
 
 ---
 
@@ -196,11 +197,37 @@ write test data there.
    from CSV**. (Watch array/JSON columns — if a CSV import errors, insert that
    table's rows via SQL instead.)
 
-4. **Create a test login** on the `dev` branch: Authentication → Users → **Add
-   user** → email + password + ✅ **Auto Confirm User**. Use email/password (via
-   the app's "sign in with email" path) to avoid configuring SSO on the branch.
-   Tip: use an email that matches a seeded `employees`/profile row so you get a
-   real role + permissions.
+4. **Set up a way to log in to the sandbox.** Default to wiring the app's **real
+   login (SSO)** to the `dev` branch, so the sandbox logs in exactly like
+   production. (Verified working on Microsoft/Azure.)
+
+   **Option A — wire the app's SSO to the dev branch (default / recommended):**
+   Needs access to the SSO provider's settings (e.g. an Azure App Registration —
+   often IT-controlled). The sign-in round-trip is: app → provider → the **dev
+   branch's** Supabase callback → back to the app, so each hop must be allowed.
+   1. From the **`main`** branch → Auth → Providers → *(provider)*, copy the
+      **Client ID**, **Secret**, and **Tenant/issuer URL**. (If the secret is
+      masked, create a fresh one in the provider during step 4.)
+   2. On **`dev`** → Auth → Providers → *(provider)*: enable it and paste those values.
+   3. On **`dev`** → Auth → **URL Configuration**: set **Site URL**
+      (e.g. `http://localhost:3000`) and add your dev app address(es) to the
+      **Redirect URLs** allow-list (e.g. `http://localhost:3000/**`, plus any
+      preview URL).
+   4. In the **SSO provider** (e.g. Azure → App registration → Authentication →
+      Redirect URIs), add the **dev branch's** Supabase callback:
+      `https://<DEV_BRANCH_REF>.supabase.co/auth/v1/callback`.
+   5. Test: app pointed at `dev` → click the normal SSO button → it bounces through
+      the provider and lands you in the dev sandbox with your real identity.
+
+   **Fallback — if you can't reach the SSO provider settings (or want it quick):**
+   - If the app *also* supports **email/password**: on `dev` → Authentication →
+     Users → **Add user** → email + password + ✅ **Auto Confirm User**, then sign
+     in via the app's email path.
+   - Or generate a **one-time magic sign-in link** from Supabase admin for a test
+     user — no login screen needed.
+
+   Either way, use an identity whose **email matches a seeded staff/profile row**,
+   so you get a real role + permissions in the sandbox.
 
 5. **Point local dev at the branch.** Back up first, then swap the 3 Supabase
    values in `.env.local` to the **branch's** URL + keys (Supabase → on `dev` →
