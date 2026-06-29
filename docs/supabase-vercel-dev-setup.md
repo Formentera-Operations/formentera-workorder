@@ -216,8 +216,10 @@ write test data there.
       (If the secret is masked, create a fresh client secret in Azure in step 4.)
    2. On the **`dev`** branch → **Auth → Providers → Azure**: enable it and paste
       those three values.
-   3. On **`dev`** → **Auth → URL Configuration**: set **Site URL**
-      (e.g. `http://localhost:3000`) and add your dev app address(es) to the
+   3. On **`dev`** → **Auth → URL Configuration**: set **Site URL** to the local
+      address **`npm run dev` prints in your terminal** — usually
+      `http://localhost:3000`, but it may be `:3001`/`:3002` if that port is in
+      use, so use whatever it actually shows. Add that same address to the
       **Redirect URLs** allow-list (e.g. `http://localhost:3000/**`, plus any
       preview URL).
    4. In the **Azure portal → App registrations →** your app **→ Authentication →
