@@ -44,38 +44,31 @@ Other prerequisites worth checking up front:
 
 Goal: get your live schema into `supabase/migrations/` as a file in the repo.
 
+**Do this in a GitHub Codespace — it's the default, not a fallback.** The save
+command (`db dump`) needs Docker, and corporate laptops often don't have it (and
+can't easily install it). A Codespace is a cloud machine that already has Docker
+built in, so the command always works and you skip the "do I have Docker?"
+question entirely. Open one on the repo: green **Code** button → **Codespaces** →
+**Create codespace on main**. Then, in the Codespace terminal:
+
 ```bash
-# In the repo root
 npx supabase init                 # creates supabase/config.toml
 mkdir -p supabase/migrations       # ensure the folder exists
-npx supabase login                 # opens browser to authenticate
+npx supabase login                 # authenticate
 npx supabase link --project-ref <PROJECT_REF>   # ref = the xxxx in xxxx.supabase.co
 npx supabase db dump --linked -f supabase/migrations/<TIMESTAMP>_initial_schema.sql
-```
-
-`db dump` is **read-only** against production — it only reads structure, never
-writes. Then commit:
-
-```bash
 git add supabase/config.toml supabase/migrations/
 git commit -m "Capture production schema as first migration"
 git push
 ```
 
-### ⚠️ Gotcha: `db dump`/`db pull` require Docker
-The Supabase CLI runs a containerized Postgres to do schema work, so these
-commands fail on a machine without Docker (common on locked-down corporate
-laptops):
+`db dump` is **read-only** against production — it only reads structure, never
+writes. Docker is only needed for these schema commands, never for the running
+app. When done, **delete the Codespace** (it bills while it exists).
 
-> `failed to inspect docker image: ... the docker client must be run with
-> elevated privileges`
-
-**Fix without installing Docker locally: run it in a GitHub Codespace.** Open a
-Codespace on the repo (green **Code** button → Codespaces → Create) — Codespaces
-ship with Docker pre-installed (`docker-in-docker`), so the exact same command
-works there. Run `npx supabase login` + `link` + `db dump` in the Codespace
-terminal, commit, push, then delete the Codespace. Docker is only needed for
-these CLI schema commands, never for the running app.
+> Advanced: if you already have Docker Desktop running locally, you can run the
+> same commands on your own machine instead — but there's no need to check; just
+> default to the Codespace.
 
 ### ⚠️ Gotcha: Codespace auth + missing folder
 - In a fresh Codespace, `db dump` may report **"Access token not provided"** even
@@ -323,7 +316,7 @@ npx supabase migration list --linked      # both columns should now match
   `npm run build && npm start` for a faster local feel.
 
 ## Quick gotcha index
-1. `db dump`/`db pull` need Docker → use a **Codespace**.
+1. Do Phase 1 in a **Codespace** by default (it has Docker; laptops often don't).
 2. Codespace auth → `SUPABASE_ACCESS_TOKEN` (then revoke); `mkdir` migrations first.
 3. Resync conflict → delete manual Supabase vars first.
 4. Integration uses **new key names** → read-new-fallback-to-old in code; retire
