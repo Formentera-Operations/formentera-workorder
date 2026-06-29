@@ -105,18 +105,21 @@ Settings:
 
 ---
 
-## Phase 3 — Connect the Vercel integration
+## Phase 3 — Connect Supabase to Vercel (three steps — pace them)
 
-This auto-syncs Supabase credentials into Vercel and injects per-branch DB
-credentials into preview deployments.
+This connects the two systems so Vercel gets Supabase credentials automatically,
+and preview deploys get their own per-branch database credentials. It's **three
+distinct steps** — do them in order and confirm each before the next, rather than
+dumping all of it at once.
 
+### 3a — Install + link the integration, then resync
 1. Supabase → Settings → Integrations → **Vercel** → **Install Vercel Integration**.
 2. In Vercel, grant the integration access (choose the specific project).
 3. Back in Supabase, complete the **project-to-project link** (install ≠ link —
    you must map the Supabase project to the Vercel project for env-var sync).
 4. Trigger **Resync environment variables**.
 
-### ⚠️ Gotcha: "variable already exists" on resync
+#### ⚠️ Gotcha: "variable already exists" on resync
 If you already set Supabase vars in Vercel manually, resync fails:
 
 > `A variable with the name NEXT_PUBLIC_SUPABASE_URL already exists…`
@@ -126,7 +129,7 @@ Fix: delete the **manually-created** Supabase vars in Vercel
 the integration manages them. (Safe — Vercel env changes only take effect on the
 next deploy; the running app is unaffected during the swap.)
 
-### ⚠️ Gotcha: the integration uses Supabase's NEW key names
+### 3b — Make the app read the new key names
 The integration provisions variables under Supabase's **new** key names, which
 likely differ from what older app code reads:
 
@@ -161,7 +164,7 @@ matters: rename `.env.local` and confirm local works **before** the fallback-fre
 code reaches your machine, or local dev breaks with `URL and Key are required`.
 (Rarely-run utility scripts can keep their own fallback.)
 
-### ⚠️ Gotcha: synced vars land in Production scope only
+### 3c — Make sure preview builds have the Supabase keys
 The integration may sync vars to **Production** scope only. A **code-only** PR
 gets a Vercel preview but **no** preview database branch (because of "Supabase
 changes only"), so its build has *no* Supabase credentials and fails:
