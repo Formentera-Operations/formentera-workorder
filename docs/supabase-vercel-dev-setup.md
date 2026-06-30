@@ -10,24 +10,35 @@ placeholders (`<PROJECT_REF>`, `<DEV_BRANCH_URL>`, etc.) with your app's values.
 
 ---
 
-## 0. First decision: do you need schema-in-git?
+## 0. First, which situation are you in?
 
-There are two ways to get a dev database:
+**Does the app already have a live Supabase database, or are you starting fresh?**
+This is the key fork — it decides whether Phase 1 *captures* an existing structure
+or *creates* one, and whether you need a Codespace at all.
 
-| Your situation | Approach | Effort |
-|---|---|---|
-| **Just experimenting** — a quick sandbox you don't need to keep | Let Supabase **copy the current database structure** into a branch automatically | Low |
-| **A live app people depend on** — you want the database structure tracked/repeatable | **Save the structure into migration files** (this playbook) | Medium |
+| Situation | Phase 1 | Codespace needed? | Phase 6 (reconcile)? |
+|---|---|---|---|
+| **Existing app** — live, hand-built database | **Capture** the existing structure (`db dump`) | **Yes** — `db dump` needs Docker | **Yes** — hand-built DBs drift |
+| **Brand-new app** — no Supabase DB yet (or empty) | **Create** the structure as migrations from day one | **No** — nothing to dump | **No** — clean from the start |
 
-> When asking the user which one they are, use plain language — avoid the jargon
-> "production" and "throwaway". e.g. *"Is this a live app people actually depend
-> on, or something you're just testing out?"*
+Both paths **rejoin at Phase 2** (branching) — the dev sandbox, Vercel integration,
+and SSO wiring are identical either way. So a brand-new app is actually *simpler*:
+you skip the Codespace capture **and** the reconcile.
 
-Supabase branching can copy your current database structure into a branch on its
-own, so if you're just experimenting you may not need the saving step at all. But
-for a live app, saving the structure into `supabase/migrations/` gives you
-reviewable diffs, disaster recovery, and the "schema changes go through migrations,
-not the dashboard" workflow. **For any app people depend on, do the capture.**
+### Also decide: do you need schema-in-git?
+
+> Ask in plain language — avoid the jargon "production" and "throwaway". e.g.
+> *"Is this a live app people actually depend on, or something you're just testing
+> out?"*
+
+| Your situation | Approach |
+|---|---|
+| **Just experimenting** — a quick sandbox you don't need to keep | Let Supabase **copy the current structure** into a branch automatically |
+| **A live app people depend on** — structure tracked/repeatable | **Save the structure into migration files** (this playbook) |
+
+For any app people depend on, keep the structure in `supabase/migrations/` — you get
+reviewable diffs, disaster recovery, and the "changes go through migrations, not the
+dashboard" workflow.
 
 Other prerequisites worth checking up front:
 - **Which systems does the app *write* to?** Only those need isolating for dev.
@@ -42,7 +53,12 @@ Other prerequisites worth checking up front:
 
 ---
 
-## Phase 1 — Capture the production schema into version control
+## Phase 1 — Get your schema into version control
+
+Two paths, depending on Section 0. **New app? Skip to "Brand-new app" below** — no
+Codespace needed.
+
+### Phase 1 (existing app) — Capture the live schema
 
 Goal: get your live schema into `supabase/migrations/` as a file in the repo.
 
@@ -83,6 +99,30 @@ app. When done, **delete the Codespace** (it bills while it exists).
 - Don't commit `supabase/.temp/` (machine-local state). The default
   `supabase/.gitignore` excludes it; if `.temp` got committed, untrack it with
   `git rm -r --cached supabase/.temp`.
+
+### Phase 1 (brand-new app) — Create the schema as migrations (no Codespace)
+
+There's no existing structure to capture, so you write it from scratch — and
+because nothing gets *dumped*, **no Docker and no Codespace are needed.** Create
+the Supabase project first (dashboard → New project), then locally:
+
+```bash
+npx supabase init                                  # creates supabase/config.toml
+npx supabase login
+npx supabase link --project-ref <PROJECT_REF>      # your new project's ref
+npx supabase migration new initial_schema          # creates an EMPTY migration file
+#   → open supabase/migrations/<TS>_initial_schema.sql and write your CREATE TABLE…,
+#     RLS policies, etc. (this is your schema, authored by hand)
+npx supabase db push                               # applies your migrations to the project
+git add supabase/ && git commit -m "Initial schema as first migration" && git push
+```
+
+- `migration new` just **creates a file** (no Docker); `db push` **applies** your
+  migrations to the remote database (no Docker). So the whole step runs on your
+  laptop.
+- Your schema lives in `supabase/migrations/` from day one, so the change-record is
+  clean — **skip Phase 6 (reconcile) entirely**.
+- Then continue to Phase 2 like everyone else.
 
 ---
 
@@ -290,6 +330,9 @@ and never leaves your machine. You only rotate if a secret actually *leaks*
 ---
 
 ## Phase 6 — Reconcile migration history (one-time)
+
+> **Existing-app path only.** Brand-new apps (Phase 1 "new app") wrote their schema
+> as migrations from day one, so the ledger is already clean — **skip this phase.**
 
 If the production DB was originally built **by hand** (dashboard / import scripts)
 rather than through migrations, its migration *ledger* won't match your captured
