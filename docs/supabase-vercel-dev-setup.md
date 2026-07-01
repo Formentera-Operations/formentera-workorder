@@ -234,12 +234,16 @@ write test data there.
 2. **Confirm what cloned.** Branches clone **schema but not data** — expect the
    tables to be present but **empty**. Verify in the branch's Table Editor.
 
-3. **Seed reference data** (the lookup tables that make the app usable —
-   employees, equipment, etc.; leave transactional tables empty for your tests).
-   Easiest, no-terminal method: in the dashboard, switch to `main` → Table Editor
-   → table → `…` → **Export to CSV**; switch to `dev` → same table → **Import data
-   from CSV**. (Watch array/JSON columns — if a CSV import errors, insert that
-   table's rows via SQL instead.)
+3. **Seed the lookup tables** so the app's dropdowns work (staff, equipment, etc.;
+   leave transactional tables empty for your tests). How depends on the fork:
+   - **Existing app** — copy the reference data from production. Easiest,
+     no-terminal method: dashboard → switch to `main` → Table Editor → table → `…`
+     → **Export to CSV**; switch to `dev` → same table → **Import data from CSV**.
+     (Watch array/JSON columns — if a CSV import errors, insert that table's rows
+     via SQL instead.)
+   - **Brand-new app** — there's **nothing to copy** (prod is empty too). Just
+     start empty and add data as you build, or add a small `supabase/seed.sql` with
+     a few `INSERT`s for the lookup lists so branches come up pre-populated.
 
 4. **Set up a way to log in to the sandbox.** Default to wiring the app's **real
    login** to the `dev` branch, so the sandbox logs in exactly like production.
