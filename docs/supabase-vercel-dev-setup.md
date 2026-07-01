@@ -12,18 +12,21 @@ placeholders (`<PROJECT_REF>`, `<DEV_BRANCH_URL>`, etc.) with your app's values.
 
 ## 0. First, which situation are you in?
 
-**Does the app already have a live Supabase database, or are you starting fresh?**
-This is the key fork — it decides whether Phase 1 *captures* an existing structure
-or *creates* one, and whether you need a Codespace at all.
+**Ask about the *database*, not the app.** An app can already exist with **no
+database yet** — that's the case that trips people up, so don't let "I have an app"
+auto-route to the capture path. The real question: *"Does your Supabase database
+already have your tables in it?"* It decides whether Phase 1 *captures* an existing
+structure or *creates* one, and whether you need a Codespace at all.
 
-| Situation | Phase 1 | Codespace needed? | Phase 6 (reconcile)? |
+| Your situation | Phase 1 | Codespace? | Phase 6 (reconcile)? |
 |---|---|---|---|
-| **Existing app** — live, hand-built database | **Capture** the existing structure (`db dump`) | **Yes** — `db dump` needs Docker | **Yes** — hand-built DBs drift |
-| **Brand-new app** — no Supabase DB yet (or empty) | **Create** the structure as migrations from day one | **No** — nothing to dump | **No** — clean from the start |
+| **Database already has tables** (live, hand-built) | **Capture** it (`db dump`) | **Yes** — `db dump` needs Docker | **Yes** — hand-built DBs drift |
+| **No database yet, or an empty project** — *even if the app code exists* | **Create** the schema as migrations by hand | **No** — nothing to dump | **No** — clean from day one |
+| **Data lives in a *different* system** (another DB, Airtable, a sheet) | **Create** the empty schema here; the data move is a **separate task (out of scope)** | **No** | **No** |
 
 Both paths **rejoin at Phase 2** (branching) — the dev sandbox, Vercel integration,
-and SSO wiring are identical either way. So a brand-new app is actually *simpler*:
-you skip the Codespace capture **and** the reconcile.
+and SSO wiring are identical either way. So anything without an existing Supabase
+database is actually *simpler*: you skip the Codespace capture **and** the reconcile.
 
 ### Also decide: do you need schema-in-git?
 
