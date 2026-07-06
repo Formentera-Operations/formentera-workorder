@@ -1,56 +1,87 @@
 import snowflake from 'snowflake-sdk'
 
-let connectionPool: snowflake.Connection | null = null
+// Snowflake env vars that must be present. Missing any → an explicit error naming
+// which one, instead of a cryptic failure deep in the driver.
+const REQUIRED_ENV = [
+  'SNOWFLAKE_ACCOUNT',
+  'SNOWFLAKE_USERNAME',
+  'SNOWFLAKE_PRIVATE_KEY',
+  'SNOWFLAKE_WAREHOUSE',
+] as const
 
-function getConnection(): Promise<snowflake.Connection> {
+function assertEnv(): void {
+  const missing = REQUIRED_ENV.filter((k) => !process.env[k])
+  if (missing.length) {
+    throw new Error(`Missing required Snowflake env var(s): ${missing.join(', ')}`)
+  }
+}
+
+// Cache the in-flight connect PROMISE (not the resolved connection) so a burst of
+// simultaneous first calls — e.g. the new-ticket form fetching several dropdowns
+// at once — share ONE connect instead of each opening their own. Reset to null on
+// a failed or dropped connection so the next call redials.
+let connectionPromise: Promise<snowflake.Connection> | null = null
+
+function openConnection(): Promise<snowflake.Connection> {
+  assertEnv()
   return new Promise((resolve, reject) => {
-    if (connectionPool) {
-      resolve(connectionPool)
-      return
-    }
-
-    const privateKey = process.env.SNOWFLAKE_PRIVATE_KEY!.replace(/\\n/g, '\n')
-
     const connection = snowflake.createConnection({
       account: process.env.SNOWFLAKE_ACCOUNT!,
       username: process.env.SNOWFLAKE_USERNAME!,
       authenticator: 'SNOWFLAKE_JWT',
-      privateKey,
+      privateKey: process.env.SNOWFLAKE_PRIVATE_KEY!.replace(/\\n/g, '\n'),
       database: process.env.SNOWFLAKE_DATABASE || 'FO_STAGE_DB',
       schema: process.env.SNOWFLAKE_SCHEMA,
       warehouse: process.env.SNOWFLAKE_WAREHOUSE!,
       role: process.env.SNOWFLAKE_ROLE,
     })
-
     connection.connect((err, conn) => {
-      if (err) {
-        reject(err)
-        return
-      }
-      connectionPool = conn
-      resolve(conn)
+      if (err) reject(err)
+      else resolve(conn)
     })
   })
+}
+
+// Return a live connection: share one connect across concurrent callers, and if
+// Snowflake has dropped the cached one (idle timeout), reopen it.
+async function getConnection(): Promise<snowflake.Connection> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (!connectionPromise) {
+      connectionPromise = openConnection().catch((err) => {
+        connectionPromise = null // failed connect — don't cache the rejection
+        throw err
+      })
+    }
+    const conn = await connectionPromise
+    if (conn.isUp()) return conn
+    connectionPromise = null // dead connection — drop it and reopen
+  }
+  throw new Error('Snowflake connection unavailable after reconnect attempt')
 }
 
 export async function snowflakeQuery<T = Record<string, unknown>>(
   sql: string,
   binds: unknown[] = []
 ): Promise<T[]> {
-  const conn = await getConnection()
-  return new Promise((resolve, reject) => {
-    conn.execute({
-      sqlText: sql,
-      binds: binds as snowflake.Binds,
-      complete: (err, _stmt, rows) => {
-        if (err) {
-          reject(err)
-          return
-        }
-        resolve((rows as T[]) || [])
-      },
-    })
-  })
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const conn = await getConnection()
+    try {
+      return await new Promise<T[]>((resolve, reject) => {
+        conn.execute({
+          sqlText: sql,
+          binds: binds as snowflake.Binds,
+          complete: (err, _stmt, rows) => (err ? reject(err) : resolve((rows as T[]) || [])),
+        })
+      })
+    } catch (err) {
+      // Real query error (connection still up) → surface it. Dropped connection on
+      // the first try → reopen and retry once. Safe to retry: every Snowflake
+      // query in this app is a read-only SELECT.
+      if (attempt === 1 || conn.isUp()) throw err
+      connectionPromise = null
+    }
+  }
+  throw new Error('Snowflake query failed after retry')
 }
 
 // Query to get all well/facility data for cascade dropdowns.
