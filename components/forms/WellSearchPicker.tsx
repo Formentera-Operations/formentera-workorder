@@ -192,17 +192,25 @@ export default function WellSearchPicker({
               return (
                 <div
                   key={row.UNITID}
-                  className={`px-3 py-2.5 text-sm cursor-pointer transition-colors ${
-                    selected ? 'bg-[#1B2E6B] text-white' : 'text-gray-800 hover:bg-gray-50'
+                  className={`flex items-center gap-3 px-3 py-3 rounded-lg cursor-pointer ${
+                    selected ? 'bg-gray-100' : 'hover:bg-gray-50'
                   }`}
                   onClick={() => select(row)}
                 >
-                  <div>{row.WELLNAME}</div>
-                  {secondary && (
-                    <div className={`text-xs ${selected ? 'text-gray-200' : 'text-gray-400'}`}>
-                      {secondary}
-                    </div>
-                  )}
+                  {/* Radio bubble — matches FilterSelect (e.g. the Facility picker) */}
+                  <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                    selected ? 'border-[#1B2E6B]' : 'border-gray-300'
+                  }`}>
+                    {selected && <span className="w-2.5 h-2.5 rounded-full bg-[#1B2E6B]" />}
+                  </span>
+                  <span className="min-w-0">
+                    <span className={`block text-sm ${selected ? 'font-medium text-gray-900' : 'text-gray-700'}`}>
+                      {row.WELLNAME}
+                    </span>
+                    {secondary && (
+                      <span className="block text-xs text-gray-400">{secondary}</span>
+                    )}
+                  </span>
                 </div>
               )
             })
@@ -247,7 +255,7 @@ export default function WellSearchPicker({
                       />
                     </div>
                   </div>
-                  <div className="flex-1 overflow-y-auto px-2
+                  <div className="flex-1 overflow-y-auto px-2 space-y-0.5
                                   pb-[calc(env(safe-area-inset-bottom)+1rem)]">
                     {rowList}
                   </div>
@@ -287,7 +295,7 @@ export default function WellSearchPicker({
                     />
                   </div>
                 </div>
-                <div className="flex-1 overflow-y-auto px-2 pb-4">{rowList}</div>
+                <div className="flex-1 overflow-y-auto px-2 pb-4 space-y-0.5">{rowList}</div>
               </div>
             </div>
           </>
