@@ -209,15 +209,35 @@ WHERE "Asset" IN ('FP WHEELER', 'FP WHEELER MIDSTREAM')
 ORDER BY "NAME"
 `
 
+// Normalizes a vendor name into a comparison key: uppercased, punctuation
+// replaced with spaces, common corporate suffixes removed, whitespace collapsed.
+// e.g. "Peak Energy Solutions" and "PEAK ENERGY SOLUTIONS LLC" -> "PEAK ENERGY SOLUTIONS".
+// Used ONLY to drop free-text Retool custom vendors that duplicate a master vendor;
+// master names are never merged with each other (distinct entities share EINs, not names).
+const vendorNameKey = (col: string) =>
+  `TRIM(REGEXP_REPLACE(REGEXP_REPLACE(REGEXP_REPLACE(` +
+  `UPPER(${col}), '[^A-Z0-9 ]', ' '), ` +
+  `'\\\\b(LLC|INC|CO|CORP|LTD|LP|LLP|COMPANY|INCORPORATED)\\\\b', ''), '\\\\s+', ' '))`
+
 // Query to get distinct vendor names (the only field the dropdown uses).
-// UNION (not UNION ALL) dedupes across the two source tables and within each.
+// Source of truth is the active-only master (DIM_VENDOR); the legacy Retool
+// custom-vendor table is included only for names that don't already resolve to
+// a master vendor, so free-text variants don't appear as duplicates.
 export const VENDORS_QUERY = `
-SELECT VENDOR_NAME 
-FROM FO_PRODUCTION_DB.GOLD_SUPPLY_CHAIN.DIM_VENDOR
-WHERE VENDOR_NAME IS NOT NULL AND TRIM(VENDOR_NAME) <> ''
+WITH master AS (
+  SELECT VENDOR_NAME
+  FROM FO_PRODUCTION_DB.GOLD_SUPPLY_CHAIN.DIM_VENDOR
+  WHERE VENDOR_NAME IS NOT NULL AND TRIM(VENDOR_NAME) <> ''
+    AND IS_ACTIVE = TRUE
+),
+master_keys AS (
+  SELECT DISTINCT ${vendorNameKey('VENDOR_NAME')} AS nkey FROM master
+)
+SELECT VENDOR_NAME FROM master
 UNION
-SELECT VENDOR_NAME 
+SELECT VENDOR_NAME
 FROM FO_STAGE_DB.DEV_INTERMEDIATE.RETOOL_CUSTOM_VENDORS
 WHERE VENDOR_NAME IS NOT NULL AND TRIM(VENDOR_NAME) <> ''
+  AND ${vendorNameKey('VENDOR_NAME')} NOT IN (SELECT nkey FROM master_keys)
 ORDER BY VENDOR_NAME
 `
