@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
+import { searchExpr, ticketFilterExprs, TICKET_COLUMNS } from '@/lib/analysis-filters'
 import ExcelJS from 'exceljs'
 
 export const dynamic = 'force-dynamic'
@@ -21,54 +22,14 @@ export async function GET(req: NextRequest) {
       const page = parseInt(searchParams.get('page') || '0')
       const pageSize = parseInt(searchParams.get('pageSize') || '25')
       const search = searchParams.get('search') || ''
-      const statusFilter = searchParams.get('status') || ''
-      const deptFilter = searchParams.get('department') || ''
-      const workTypeFilter = searchParams.get('workType') || ''
-      const equipmentFilter = searchParams.get('equipment') || ''
-      const equipmentTypeFilter = searchParams.get('equipmentType') || ''
-      const fieldFilter = searchParams.get('field') || ''
 
       let query = db
         .from('workorder_ticket_summary')
-        .select(
-          'ticket_id, asset, field, department, work_order_type, location_type, well, facility, equipment_type, equipment_name, issue_description, ticket_status, issue_date, repair_date_closed, Estimate_Cost, repair_cost',
-          { count: 'exact' }
-        )
+        .select(TICKET_COLUMNS, { count: 'exact' })
 
       if (userAssets.length > 0) query = query.in('asset', userAssets)
-      if (search) {
-        const orParts = [
-          `equipment_name.ilike.%${search}%`,
-          `issue_description.ilike.%${search}%`,
-          `field.ilike.%${search}%`,
-          `well.ilike.%${search}%`,
-          `facility.ilike.%${search}%`,
-          `department.ilike.%${search}%`,
-        ]
-        if (/^\d+$/.test(search)) orParts.push(`ticket_id.eq.${search}`)
-        query = query.or(orParts.join(','))
-      }
-      if (statusFilter && statusFilter !== 'All') query = query.eq('ticket_status', statusFilter)
-      if (deptFilter && deptFilter !== 'All') query = query.eq('department', deptFilter)
-      if (equipmentFilter && equipmentFilter !== 'All') {
-        if (equipmentFilter === 'Unknown') query = query.or('equipment_name.is.null,equipment_name.eq.')
-        else query = query.eq('equipment_name', equipmentFilter)
-      }
-      if (equipmentTypeFilter && equipmentTypeFilter !== 'All') {
-        if (equipmentTypeFilter === 'Unknown') query = query.or('equipment_type.is.null,equipment_type.eq.')
-        else query = query.eq('equipment_type', equipmentTypeFilter)
-      }
-      if (fieldFilter && fieldFilter !== 'All') {
-        if (fieldFilter === 'Unknown') query = query.or('field.is.null,field.eq.')
-        else query = query.eq('field', fieldFilter)
-      }
-      if (workTypeFilter) {
-        if (workTypeFilter === 'Unspecified') {
-          query = query.or('work_order_type.is.null,work_order_type.eq.')
-        } else {
-          query = query.eq('work_order_type', workTypeFilter)
-        }
-      }
+      if (search) query = query.or(searchExpr(search))
+      for (const expr of ticketFilterExprs(searchParams)) query = query.or(expr)
       if (startDate) query = query.gte('issue_date', startDate)
       if (endDate) query = query.lte('issue_date', endDate + 'T23:59:59')
 
@@ -84,56 +45,19 @@ export async function GET(req: NextRequest) {
 
     if (mode === 'export') {
       const search = searchParams.get('search') || ''
-      const statusFilter = searchParams.get('status') || ''
-      const deptFilter = searchParams.get('department') || ''
-      const workTypeFilter = searchParams.get('workType') || ''
-      const equipmentFilter = searchParams.get('equipment') || ''
-      const equipmentTypeFilter = searchParams.get('equipmentType') || ''
-      const fieldFilter = searchParams.get('field') || ''
       const BATCH = 1000
       const exportRows: Record<string, unknown>[] = []
       let from = 0
       while (true) {
         let q = db
           .from('workorder_ticket_summary')
-          .select('ticket_id, asset, field, department, work_order_type, location_type, well, facility, equipment_type, equipment_name, issue_description, ticket_status, issue_date, repair_date_closed, Estimate_Cost, repair_cost')
+          .select(TICKET_COLUMNS)
           .order('issue_date', { ascending: false })
           .order('ticket_id', { ascending: false })
           .range(from, from + BATCH - 1)
         if (userAssets.length > 0) q = q.in('asset', userAssets)
-        if (search) {
-          const orParts = [
-            `equipment_name.ilike.%${search}%`,
-            `issue_description.ilike.%${search}%`,
-            `field.ilike.%${search}%`,
-            `well.ilike.%${search}%`,
-            `facility.ilike.%${search}%`,
-            `department.ilike.%${search}%`,
-          ]
-          if (/^\d+$/.test(search)) orParts.push(`ticket_id.eq.${search}`)
-          q = q.or(orParts.join(','))
-        }
-        if (statusFilter && statusFilter !== 'All') q = q.eq('ticket_status', statusFilter)
-        if (deptFilter && deptFilter !== 'All') q = q.eq('department', deptFilter)
-        if (equipmentFilter && equipmentFilter !== 'All') {
-          if (equipmentFilter === 'Unknown') q = q.or('equipment_name.is.null,equipment_name.eq.')
-          else q = q.eq('equipment_name', equipmentFilter)
-        }
-        if (equipmentTypeFilter && equipmentTypeFilter !== 'All') {
-          if (equipmentTypeFilter === 'Unknown') q = q.or('equipment_type.is.null,equipment_type.eq.')
-          else q = q.eq('equipment_type', equipmentTypeFilter)
-        }
-        if (fieldFilter && fieldFilter !== 'All') {
-          if (fieldFilter === 'Unknown') q = q.or('field.is.null,field.eq.')
-          else q = q.eq('field', fieldFilter)
-        }
-        if (workTypeFilter) {
-          if (workTypeFilter === 'Unspecified') {
-            q = q.or('work_order_type.is.null,work_order_type.eq.')
-          } else {
-            q = q.eq('work_order_type', workTypeFilter)
-          }
-        }
+        if (search) q = q.or(searchExpr(search))
+        for (const expr of ticketFilterExprs(searchParams)) q = q.or(expr)
         if (startDate) q = q.gte('issue_date', startDate)
         if (endDate) q = q.lte('issue_date', endDate + 'T23:59:59')
         const { data, error } = await q
@@ -174,56 +98,19 @@ export async function GET(req: NextRequest) {
 
     if (mode === 'excel') {
       const search = searchParams.get('search') || ''
-      const statusFilter = searchParams.get('status') || ''
-      const deptFilter = searchParams.get('department') || ''
-      const workTypeFilter = searchParams.get('workType') || ''
-      const equipmentFilter = searchParams.get('equipment') || ''
-      const equipmentTypeFilter = searchParams.get('equipmentType') || ''
-      const fieldFilter = searchParams.get('field') || ''
       const BATCH = 1000
       const exportRows: Record<string, unknown>[] = []
       let from = 0
       while (true) {
         let q = db
           .from('workorder_ticket_summary')
-          .select('ticket_id, asset, field, department, work_order_type, location_type, well, facility, equipment_type, equipment_name, issue_description, ticket_status, issue_date, repair_date_closed, Estimate_Cost, repair_cost')
+          .select(TICKET_COLUMNS)
           .order('issue_date', { ascending: false })
           .order('ticket_id', { ascending: false })
           .range(from, from + BATCH - 1)
         if (userAssets.length > 0) q = q.in('asset', userAssets)
-        if (search) {
-          const orParts = [
-            `equipment_name.ilike.%${search}%`,
-            `issue_description.ilike.%${search}%`,
-            `field.ilike.%${search}%`,
-            `well.ilike.%${search}%`,
-            `facility.ilike.%${search}%`,
-            `department.ilike.%${search}%`,
-          ]
-          if (/^\d+$/.test(search)) orParts.push(`ticket_id.eq.${search}`)
-          q = q.or(orParts.join(','))
-        }
-        if (statusFilter && statusFilter !== 'All') q = q.eq('ticket_status', statusFilter)
-        if (deptFilter && deptFilter !== 'All') q = q.eq('department', deptFilter)
-        if (equipmentFilter && equipmentFilter !== 'All') {
-          if (equipmentFilter === 'Unknown') q = q.or('equipment_name.is.null,equipment_name.eq.')
-          else q = q.eq('equipment_name', equipmentFilter)
-        }
-        if (equipmentTypeFilter && equipmentTypeFilter !== 'All') {
-          if (equipmentTypeFilter === 'Unknown') q = q.or('equipment_type.is.null,equipment_type.eq.')
-          else q = q.eq('equipment_type', equipmentTypeFilter)
-        }
-        if (fieldFilter && fieldFilter !== 'All') {
-          if (fieldFilter === 'Unknown') q = q.or('field.is.null,field.eq.')
-          else q = q.eq('field', fieldFilter)
-        }
-        if (workTypeFilter) {
-          if (workTypeFilter === 'Unspecified') {
-            q = q.or('work_order_type.is.null,work_order_type.eq.')
-          } else {
-            q = q.eq('work_order_type', workTypeFilter)
-          }
-        }
+        if (search) q = q.or(searchExpr(search))
+        for (const expr of ticketFilterExprs(searchParams)) q = q.or(expr)
         if (startDate) q = q.gte('issue_date', startDate)
         if (endDate) q = q.lte('issue_date', endDate + 'T23:59:59')
         const { data, error } = await q
@@ -423,6 +310,26 @@ export async function GET(req: NextRequest) {
     // data so the list tracks whatever categories actually exist.
     const equipmentTypeList = [...new Set(rows.map(r => r.equipment_type).filter(Boolean))].sort() as string[]
 
+    // 6b. Facet cube — one row per distinct combination of the six filterable
+    // Tickets-tab dimensions. The client narrows each filter's options by
+    // matching this cube against the *other* filters' selections, so dependent
+    // option lists cost no extra round trip. Distinct combinations are far
+    // fewer than tickets, which keeps the payload small. Blank values stay in
+    // the cube as '' so a ticket with, say, no equipment type still counts
+    // toward the other dimensions' options — the client drops '' when building
+    // a list, since blanks aren't offered as choices.
+    const facetKeys = new Set<string>()
+    for (const r of rows) {
+      facetKeys.add([
+        r.ticket_status || '', r.department || '', r.field || '',
+        r.work_order_type || '', r.equipment_type || '', r.equipment_name || '',
+      ].join('||'))
+    }
+    const facets = Array.from(facetKeys).map(key => {
+      const [status, dept, field, workType, equipType, equip] = key.split('||')
+      return { status, dept, field, workType, equipType, equip }
+    })
+
     // 9. Work type breakdown — closed tickets only
     const workTypeMap = new Map<string, number>()
     for (const r of rows) {
@@ -495,7 +402,7 @@ export async function GET(req: NextRequest) {
     }))
 
     return NextResponse.json(
-      { statusTables, fieldEquipChart, costByDept, monthlyTrend, departments, topEquipment, equipmentList: Array.from(equipCountMap.keys()).filter(Boolean).sort(), equipmentTypeList, fieldList: [...new Set(rows.map(r => r.field).filter(Boolean))].sort() as string[], costTrend, workTypeBreakdown, costMatrix },
+      { statusTables, fieldEquipChart, costByDept, monthlyTrend, departments, topEquipment, equipmentList: Array.from(equipCountMap.keys()).filter(Boolean).sort(), equipmentTypeList, fieldList: [...new Set(rows.map(r => r.field).filter(Boolean))].sort() as string[], costTrend, workTypeBreakdown, costMatrix, facets },
       { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate', 'Pragma': 'no-cache' } }
     )
   } catch (err) {

@@ -1,10 +1,14 @@
 'use client'
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
 import FilterSelect from '@/components/ui/FilterSelect'
 import PivotBuilder from '@/components/PivotBuilder'
 import EquipmentCosts from '@/components/EquipmentCosts'
+import {
+  FILTER_DIMS, type FilterDim, type FacetRow, type Selections,
+  appendSelectionParams, facetAvailability, toggleValue, withSelected,
+} from '@/lib/analysis-filters'
 import { Search, ChevronDown, ChevronUp, X, BarChart2, Table2, List, Download, ChevronRight, MessageSquare, Send, LayoutGrid, DollarSign } from 'lucide-react'
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -66,6 +70,55 @@ function ChartTooltip({ active, payload, label, valueFormatter }: {
   )
 }
 
+// One multi-select pill row in the Tickets filter card. "All" clears the
+// dimension; each value toggles. Options that no longer appear in any ticket
+// matching the other filters are dimmed and unclickable rather than removed —
+// the row keeps its shape, and users can still see the full set of choices and
+// why one is out of reach. Already-selected values always stay clickable so a
+// selection can never become impossible to undo.
+function FilterPills({ label, options, selected, available, onToggle, onClear }: {
+  label: string
+  options: string[]
+  selected: string[]
+  // Values still reachable given the other filters, or null for "don't narrow".
+  available: Set<string> | null
+  onToggle: (v: string) => void
+  onClear: () => void
+}) {
+  return (
+    <div>
+      <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">{label}</p>
+      <div className="flex gap-1.5 overflow-x-auto pb-2 scrollbar-thin-pills">
+        <button
+          className={`px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors shrink-0 ${selected.length === 0 ? 'bg-[#1B2E6B] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+          onClick={onClear}
+        >
+          All
+        </button>
+        {withSelected(options, selected).map(o => {
+          const isSelected = selected.includes(o)
+          const unavailable = available !== null && !isSelected && !available.has(o)
+          return (
+            <button
+              key={o}
+              disabled={unavailable}
+              title={unavailable ? `No tickets match ${o} with the current filters` : undefined}
+              className={`px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors shrink-0 ${
+                isSelected ? 'bg-[#1B2E6B] text-white'
+                  : unavailable ? 'bg-gray-50 text-gray-300 cursor-not-allowed'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+              onClick={() => onToggle(o)}
+            >
+              {o}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 // Pick a nice step size for the y-axis. Minimum step is $1K so small charts
 // tick every thousand; the step grows with the max value so a $400K chart
 // doesn't render 400 tick marks.
@@ -103,6 +156,7 @@ interface AggData {
     equipment: string
     est_cost: number
   }[]
+  facets: FacetRow[]
 }
 
 interface TableRow {
@@ -175,12 +229,13 @@ export default function AnalysisPage() {
   const [tablePage, setTablePage] = useState(0)
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState('All')
-  const [tableDeptFilter, setTableDeptFilter] = useState('All')
-  const [equipmentFilter, setEquipmentFilter] = useState('All')
-  const [equipmentTypeFilter, setEquipmentTypeFilter] = useState('All')
-  const [fieldFilter, setFieldFilter] = useState('All')
-  const [workTypeFilter, setWorkTypeFilter] = useState('All')
+  // Every Tickets-tab filter is multi-select; [] means unfiltered.
+  const [statusFilter, setStatusFilter] = useState<string[]>([])
+  const [tableDeptFilter, setTableDeptFilter] = useState<string[]>([])
+  const [equipmentFilter, setEquipmentFilter] = useState<string[]>([])
+  const [equipmentTypeFilter, setEquipmentTypeFilter] = useState<string[]>([])
+  const [fieldFilter, setFieldFilter] = useState<string[]>([])
+  const [workTypeFilter, setWorkTypeFilter] = useState<string[]>([])
   const [tableLoading, setTableLoading] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
 
@@ -233,6 +288,46 @@ export default function AnalysisPage() {
     return { effectiveStart: '', effectiveEnd: '' }
   }, [datePreset, customStart, customEnd])
 
+  // All six Tickets-tab selections in one keyed object, so the faceting and
+  // query-param code can iterate dimensions instead of naming each filter.
+  const selections = useMemo<Selections>(() => ({
+    status: statusFilter,
+    dept: tableDeptFilter,
+    field: fieldFilter,
+    workType: workTypeFilter,
+    equipType: equipmentTypeFilter,
+    equip: equipmentFilter,
+  }), [statusFilter, tableDeptFilter, fieldFilter, workTypeFilter, equipmentTypeFilter, equipmentFilter])
+
+  const setSelection = useMemo<Record<FilterDim, (v: string[]) => void>>(() => ({
+    status: setStatusFilter,
+    dept: setTableDeptFilter,
+    field: setFieldFilter,
+    workType: setWorkTypeFilter,
+    equipType: setEquipmentTypeFilter,
+    equip: setEquipmentFilter,
+  }), [])
+
+  const appendFilterParams = useCallback((params: URLSearchParams) => {
+    appendSelectionParams(params, selections)
+  }, [selections])
+
+  const clearAllFilters = useCallback(() => {
+    for (const dim of FILTER_DIMS) setSelection[dim]([])
+    setSearch('')
+  }, [setSelection])
+
+  const activeFilterCount = FILTER_DIMS.reduce((n, d) => n + selections[d].length, 0)
+
+  // Dependent (faceted) option lists — see facetAvailability. Narrowed by the
+  // other filters and by the date range (the cube is built server-side under
+  // the same date window), but not by the search box, which applies only to the
+  // ticket query. Null means "don't narrow anything".
+  const availableByDim = useMemo(
+    () => facetAvailability(aggData?.facets, selections),
+    [aggData, selections]
+  )
+
   // Redirect field_user
   useEffect(() => {
     if (!loading && role === 'field_user') router.replace('/')
@@ -264,7 +359,7 @@ export default function AnalysisPage() {
   useEffect(() => {
     setTablePage(0)
     setTableRows([])
-  }, [debouncedSearch, statusFilter, tableDeptFilter, equipmentFilter, equipmentTypeFilter, fieldFilter, workTypeFilter, effectiveStart, effectiveEnd])
+  }, [debouncedSearch, selections, effectiveStart, effectiveEnd])
 
   // Fetch ticket table
   useEffect(() => {
@@ -272,12 +367,7 @@ export default function AnalysisPage() {
     const params = new URLSearchParams({ mode: 'table', page: String(tablePage), pageSize: '25' })
     if (assets.length > 0) params.set('userAssets', assets.join(','))
     if (debouncedSearch) params.set('search', debouncedSearch)
-    if (statusFilter !== 'All') params.set('status', statusFilter)
-    if (tableDeptFilter !== 'All') params.set('department', tableDeptFilter)
-    if (equipmentFilter !== 'All') params.set('equipment', equipmentFilter)
-    if (equipmentTypeFilter !== 'All') params.set('equipmentType', equipmentTypeFilter)
-    if (fieldFilter !== 'All') params.set('field', fieldFilter)
-    if (workTypeFilter && workTypeFilter !== 'All') params.set('workType', workTypeFilter)
+    appendFilterParams(params)
     if (effectiveStart) params.set('startDate', effectiveStart)
     if (effectiveEnd) params.set('endDate', effectiveEnd)
     setTableLoading(true)
@@ -289,7 +379,7 @@ export default function AnalysisPage() {
       })
       .catch(() => {})
       .finally(() => setTableLoading(false))
-  }, [tab, tablePage, debouncedSearch, statusFilter, tableDeptFilter, equipmentFilter, equipmentTypeFilter, fieldFilter, workTypeFilter, assets, loading, effectiveStart, effectiveEnd])
+  }, [tab, tablePage, debouncedSearch, appendFilterParams, assets, loading, effectiveStart, effectiveEnd])
 
   // Auto-scroll chat to latest message
   useEffect(() => {
@@ -303,6 +393,21 @@ export default function AnalysisPage() {
     for (const r of aggData.fieldEquipChart) totals[r.dept] = (totals[r.dept] || 0) + r.count
     return Object.entries(totals).sort((a, b) => b[1] - a[1]).map(([d]) => d)
   }, [aggData])
+
+  // The two long-list pickers show only options still reachable under the other
+  // filters, keeping the canonical alphabetical order. Anything already selected
+  // stays in the list so a selection can never be stranded out of reach.
+  const equipmentTypeOptions = useMemo(() => {
+    const all = withSelected(aggData?.equipmentTypeList || [], equipmentTypeFilter)
+    const avail = availableByDim?.equipType
+    return avail ? all.filter(v => avail.has(v) || equipmentTypeFilter.includes(v)) : all
+  }, [aggData, availableByDim, equipmentTypeFilter])
+
+  const equipmentOptions = useMemo(() => {
+    const all = withSelected(aggData?.equipmentList || [], equipmentFilter)
+    const avail = availableByDim?.equip
+    return avail ? all.filter(v => avail.has(v) || equipmentFilter.includes(v)) : all
+  }, [aggData, availableByDim, equipmentFilter])
 
   // Pivot fieldEquipChart for stacked bar chart
   const { equipBreakdownData, topEquipTypes } = useMemo(() => {
@@ -408,12 +513,7 @@ export default function AnalysisPage() {
     const params = new URLSearchParams({ mode })
     if (assets.length > 0) params.set('userAssets', assets.join(','))
     if (debouncedSearch) params.set('search', debouncedSearch)
-    if (statusFilter !== 'All') params.set('status', statusFilter)
-    if (tableDeptFilter !== 'All') params.set('department', tableDeptFilter)
-    if (equipmentFilter !== 'All') params.set('equipment', equipmentFilter)
-    if (equipmentTypeFilter !== 'All') params.set('equipmentType', equipmentTypeFilter)
-    if (fieldFilter !== 'All') params.set('field', fieldFilter)
-    if (workTypeFilter && workTypeFilter !== 'All') params.set('workType', workTypeFilter)
+    appendFilterParams(params)
     if (effectiveStart) params.set('startDate', effectiveStart)
     if (effectiveEnd) params.set('endDate', effectiveEnd)
     return params
@@ -901,10 +1001,12 @@ export default function AnalysisPage() {
                                   title={clickable ? `View ${count} ticket${count === 1 ? '' : 's'} for ${fieldName} • ${eq}` : `${fieldName} • ${eq}: 0 tickets`}
                                   onClick={() => {
                                     if (!clickable) return
-                                    setFieldFilter(fieldName)
-                                    setEquipmentFilter(eq)
-                                    setEquipmentTypeFilter('All')
-                                    if (deptFilter !== 'All') setTableDeptFilter(deptFilter)
+                                    // Start from a clean slate so the ticket
+                                    // count matches the cell the user clicked.
+                                    clearAllFilters()
+                                    setFieldFilter([fieldName])
+                                    setEquipmentFilter([eq])
+                                    if (deptFilter !== 'All') setTableDeptFilter([deptFilter])
                                     setTab('tickets')
                                   }}
                                 >
@@ -953,7 +1055,15 @@ export default function AnalysisPage() {
                         <div
                           key={w.type}
                           className="flex items-center gap-3 -mx-1 px-1 py-1.5 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors active:scale-[0.99]"
-                          onClick={() => { setWorkTypeFilter(w.type === 'Unspecified' ? 'Unspecified' : w.type); setStatusFilter('Closed'); setTab('tickets') }}
+                          onClick={() => {
+                            // This chart counts closed tickets only, so the
+                            // drill-through pins Status to Closed. Other
+                            // filters clear so the ticket count matches the bar.
+                            clearAllFilters()
+                            setWorkTypeFilter([w.type])
+                            setStatusFilter(['Closed'])
+                            setTab('tickets')
+                          }}
                         >
                           <span className="text-xs text-gray-600 w-28 shrink-0 truncate">{w.type}</span>
                           <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
@@ -1070,13 +1180,10 @@ export default function AnalysisPage() {
                               className={`${i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'} cursor-pointer hover:bg-blue-50 transition-colors`}
                               title={`View ${r.count} ticket${r.count === 1 ? '' : 's'} in ${status}`}
                               onClick={() => {
-                                setStatusFilter(status)
-                                setTableDeptFilter(r.dept || 'All')
-                                setFieldFilter(r.field || 'Unknown')
-                                setEquipmentFilter('All')
-                                setEquipmentTypeFilter('All')
-                                setWorkTypeFilter('All')
-                                setSearch('')
+                                clearAllFilters()
+                                setStatusFilter([status])
+                                if (r.dept) setTableDeptFilter([r.dept])
+                                setFieldFilter([r.field || 'Unknown'])
                                 setTab('tickets')
                               }}
                             >
@@ -1147,108 +1254,92 @@ export default function AnalysisPage() {
               </div>
 
               {/* Status */}
-              <div>
-                <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Status</p>
-                <div className="flex gap-1.5 overflow-x-auto pb-2 scrollbar-thin-pills">
-                  {['All', ...STATUSES].map(s => (
-                    <button
-                      key={s}
-                      className={`px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors shrink-0 ${statusFilter === s ? 'bg-[#1B2E6B] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-                      onClick={() => setStatusFilter(s)}
-                    >
-                      {s}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              <FilterPills
+                label="Status"
+                options={STATUSES}
+                selected={statusFilter}
+                available={availableByDim?.status ?? null}
+                onToggle={v => setStatusFilter(toggleValue(statusFilter, v))}
+                onClear={() => setStatusFilter([])}
+              />
 
               {/* Department — sorted by total ticket count, descending */}
               {departmentsByCount.length > 0 && (
-                <div>
-                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Department</p>
-                  <div className="flex gap-1.5 overflow-x-auto pb-2 scrollbar-thin-pills">
-                    {['All', ...departmentsByCount].map(d => (
-                      <button
-                        key={d}
-                        className={`px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors shrink-0 ${tableDeptFilter === d ? 'bg-[#1B2E6B] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-                        onClick={() => setTableDeptFilter(d)}
-                      >
-                        {d}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                <FilterPills
+                  label="Department"
+                  options={departmentsByCount}
+                  selected={tableDeptFilter}
+                  available={availableByDim?.dept ?? null}
+                  onToggle={v => setTableDeptFilter(toggleValue(tableDeptFilter, v))}
+                  onClear={() => setTableDeptFilter([])}
+                />
               )}
 
               {/* Field */}
               {aggData?.fieldList && aggData.fieldList.length > 0 && (
-                <div>
-                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Field</p>
-                  <div className="flex gap-1.5 overflow-x-auto pb-2 scrollbar-thin-pills">
-                    {['All', ...aggData.fieldList].map(f => (
-                      <button
-                        key={f}
-                        className={`px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors shrink-0 ${fieldFilter === f ? 'bg-[#1B2E6B] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-                        onClick={() => setFieldFilter(f)}
-                      >
-                        {f}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                <FilterPills
+                  label="Field"
+                  options={aggData.fieldList}
+                  selected={fieldFilter}
+                  available={availableByDim?.field ?? null}
+                  onToggle={v => setFieldFilter(toggleValue(fieldFilter, v))}
+                  onClear={() => setFieldFilter([])}
+                />
               )}
 
-              {/* Work Type */}
-              <div>
-                <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Work Type</p>
-                <div className="flex gap-1.5 overflow-x-auto pb-2 scrollbar-thin-pills">
-                  {['All', ...WORK_TYPES.filter(w => w !== 'Unspecified')].map(w => (
-                    <button
-                      key={w}
-                      className={`px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors shrink-0 ${workTypeFilter === w ? 'bg-[#1B2E6B] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-                      onClick={() => { setWorkTypeFilter(w); if (w !== 'All') setStatusFilter('Closed') }}
-                    >
-                      {w}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              {/* Work Type. Selecting one no longer forces Status to Closed —
+                  the faceting already dims statuses that have no tickets of
+                  that work type, which shows the same constraint without
+                  overriding a status the user picked. */}
+              <FilterPills
+                label="Work Type"
+                options={WORK_TYPES.filter(w => w !== 'Unspecified')}
+                selected={workTypeFilter}
+                available={availableByDim?.workType ?? null}
+                onToggle={v => setWorkTypeFilter(toggleValue(workTypeFilter, v))}
+                onClear={() => setWorkTypeFilter([])}
+              />
 
-              {/* Equipment Type */}
+              {/* Equipment Type / Equipment — long lists, so unavailable
+                  options are dropped rather than dimmed. Anything currently
+                  selected is kept in the list so it can always be unselected. */}
               {aggData?.equipmentTypeList && aggData.equipmentTypeList.length > 0 && (
                 <div>
                   <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Equipment Type</p>
                   <FilterSelect
                     label="Equipment Type"
                     labelHidden
-                    value={equipmentTypeFilter}
-                    options={aggData.equipmentTypeList}
-                    onChange={v => setEquipmentTypeFilter(v || 'All')}
+                    options={equipmentTypeOptions}
+                    values={equipmentTypeFilter}
+                    onToggle={v => setEquipmentTypeFilter(toggleValue(equipmentTypeFilter, v))}
+                    onClearAll={() => setEquipmentTypeFilter([])}
+                    allowClear
                   />
                 </div>
               )}
 
-              {/* Equipment */}
               {aggData?.equipmentList && aggData.equipmentList.length > 0 && (
                 <div>
                   <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Equipment</p>
                   <FilterSelect
                     label="Equipment"
                     labelHidden
-                    value={equipmentFilter}
-                    options={aggData.equipmentList}
-                    onChange={v => setEquipmentFilter(v || 'All')}
+                    options={equipmentOptions}
+                    values={equipmentFilter}
+                    onToggle={v => setEquipmentFilter(toggleValue(equipmentFilter, v))}
+                    onClearAll={() => setEquipmentFilter([])}
+                    allowClear
                   />
                 </div>
               )}
 
               {/* Reset */}
-              {(search || statusFilter !== 'All' || tableDeptFilter !== 'All' || fieldFilter !== 'All' || equipmentTypeFilter !== 'All' || equipmentFilter !== 'All' || workTypeFilter !== 'All') && (
+              {(search || activeFilterCount > 0) && (
                 <button
                   className="w-full py-2 text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors border border-red-200"
-                  onClick={() => { setSearch(''); setStatusFilter('All'); setTableDeptFilter('All'); setFieldFilter('All'); setEquipmentTypeFilter('All'); setEquipmentFilter('All'); setWorkTypeFilter('All') }}
+                  onClick={clearAllFilters}
                 >
-                  ✕ Reset Filters
+                  ✕ Reset Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
                 </button>
               )}
             </div>

@@ -1,15 +1,17 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Search, ChevronDown, X } from 'lucide-react'
+import { Search, ChevronDown, X, Check } from 'lucide-react'
 
 // Lists shorter than this skip the search input entirely.
 const SEARCH_THRESHOLD = 12
 
 type FilterSelectProps = {
   label: string
-  value: string
-  onChange: (v: string) => void
+  // Single-select value/handler. Both are omitted in multi-select mode — see
+  // `values` below.
+  value?: string
+  onChange?: (v: string) => void
   options: string[]
   // Text shown in the trigger when value is the placeholder, and as the
   // first row in the option list. Default 'All' (filter semantics).
@@ -32,6 +34,14 @@ type FilterSelectProps = {
   // `pinnedLabel` and removed from the main list so nothing appears twice.
   pinnedOptions?: string[]
   pinnedLabel?: string
+  // Multi-select mode, opted into by passing `values`. Rows become checkboxes,
+  // the picker stays open across clicks so several can be chosen in one visit,
+  // and the trigger summarizes the selection. An empty array means "all" —
+  // i.e. no constraint. `value`/`onChange` are ignored in this mode; supply
+  // `onToggle` (add/remove one value) and `onClearAll` (back to all) instead.
+  values?: string[]
+  onToggle?: (v: string) => void
+  onClearAll?: () => void
 }
 
 export default function FilterSelect({
@@ -39,7 +49,9 @@ export default function FilterSelect({
   placeholder = 'All', placeholderValue = 'All', required = false,
   disabled = false, allowClear = false, labelHidden = false,
   pinnedOptions = [], pinnedLabel = 'Most used',
+  values, onToggle, onClearAll,
 }: FilterSelectProps) {
+  const multi = values !== undefined
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
   // Portal target: document.body. Tracked via state so SSR (where `document`
@@ -65,29 +77,49 @@ export default function FilterSelect({
   const pinnedFiltered = pinnedOptions.filter(matches)
   const filtered = options.filter(o => !pinnedSet.has(o) && matches(o))
   const close = () => { setOpen(false); setQ('') }
-  const isPlaceholder = value === placeholderValue
+  const isPlaceholder = multi ? values!.length === 0 : value === placeholderValue
   const showClear = allowClear && !isPlaceholder && !disabled
+  // What the trigger reads when something is selected. Multi-select collapses
+  // to a count past one value so the button can't outgrow its row.
+  const triggerText = !multi ? (value ?? '')
+    : values!.length === 1 ? values![0]
+    : `${values!.length} selected`
 
   const handleClear = (e: React.MouseEvent | React.TouchEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    onChange(placeholderValue)
+    if (multi) onClearAll?.()
+    else onChange?.(placeholderValue)
   }
 
   const renderRow = (rowLabel: string, optionValue: string) => {
-    const selected = value === optionValue
+    // In multi mode the placeholder row is the "clear everything" affordance,
+    // and reads as selected exactly when nothing else is.
+    const isPlaceholderRow = optionValue === placeholderValue
+    const selected = multi
+      ? (isPlaceholderRow ? values!.length === 0 : values!.includes(optionValue))
+      : value === optionValue
+    const handleClick = () => {
+      if (!multi) { onChange?.(optionValue); close(); return }
+      if (isPlaceholderRow) { onClearAll?.(); close(); return }
+      onToggle?.(optionValue) // stay open — let the user pick several at once
+    }
     return (
       <li
         key={optionValue}
-        onClick={() => { onChange(optionValue); close() }}
+        onClick={handleClick}
         className={`flex items-center gap-3 px-3 py-3 rounded-lg cursor-pointer ${
           selected ? 'bg-gray-100' : 'hover:bg-gray-50'
         }`}
       >
-        <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
-          selected ? 'border-[#1B2E6B]' : 'border-gray-300'
-        }`}>
-          {selected && <span className="w-2.5 h-2.5 rounded-full bg-[#1B2E6B]" />}
+        <span className={`w-5 h-5 border-2 flex items-center justify-center shrink-0 ${
+          multi && !isPlaceholderRow ? 'rounded-md' : 'rounded-full'
+        } ${selected ? 'border-[#1B2E6B]' : 'border-gray-300'}`}>
+          {selected && (
+            multi && !isPlaceholderRow
+              ? <Check size={13} strokeWidth={3} className="text-[#1B2E6B]" />
+              : <span className="w-2.5 h-2.5 rounded-full bg-[#1B2E6B]" />
+          )}
         </span>
         <span className={`text-sm ${selected ? 'font-medium text-gray-900' : 'text-gray-700'}`}>
           {rowLabel}
@@ -140,7 +172,7 @@ export default function FilterSelect({
           disabled={disabled}
         >
           <span className={isPlaceholder ? 'text-gray-400' : 'text-gray-900'}>
-            {isPlaceholder ? placeholder : value}
+            {isPlaceholder ? placeholder : triggerText}
           </span>
           <ChevronDown size={16} className="text-gray-400 shrink-0" />
         </button>
@@ -170,8 +202,14 @@ export default function FilterSelect({
                           rounded-t-2xl max-h-[80vh]">
             <div className="px-4 pt-3 pb-2 flex items-center justify-between">
               <h3 className="text-base font-semibold text-gray-900">{label}</h3>
-              <button type="button" onClick={close} className="text-sm text-gray-500 px-2 py-1">
-                Cancel
+              {/* Multi-select applies each toggle immediately, so the escape
+                  hatch is "Done", not "Cancel". */}
+              <button
+                type="button"
+                onClick={close}
+                className={`text-sm px-2 py-1 ${multi ? 'font-semibold text-[#1B2E6B]' : 'text-gray-500'}`}
+              >
+                {multi ? 'Done' : 'Cancel'}
               </button>
             </div>
             {showSearch && (
@@ -206,7 +244,7 @@ export default function FilterSelect({
           disabled={disabled}
         >
           <span className={isPlaceholder ? 'text-gray-400' : 'text-gray-900'}>
-            {isPlaceholder ? placeholder : value}
+            {isPlaceholder ? placeholder : triggerText}
           </span>
           <ChevronDown size={16} className="text-gray-400 shrink-0" />
         </button>
