@@ -89,6 +89,7 @@ interface AggData {
   monthlyTrend: { month: string; label: string; count: number }[]
   departments: string[]
   equipmentList: string[]
+  equipmentTypeList: string[]
   fieldList: string[]
   topEquipment: { name: string; count: number }[]
   costTrend: { month: string; label: string; estCost: number; repairCost: number }[]
@@ -113,6 +114,7 @@ interface TableRow {
   location_type: string
   well: string | null
   facility: string | null
+  equipment_type: string | null
   equipment_name: string
   issue_description: string
   ticket_status: string
@@ -176,6 +178,7 @@ export default function AnalysisPage() {
   const [statusFilter, setStatusFilter] = useState('All')
   const [tableDeptFilter, setTableDeptFilter] = useState('All')
   const [equipmentFilter, setEquipmentFilter] = useState('All')
+  const [equipmentTypeFilter, setEquipmentTypeFilter] = useState('All')
   const [fieldFilter, setFieldFilter] = useState('All')
   const [workTypeFilter, setWorkTypeFilter] = useState('All')
   const [tableLoading, setTableLoading] = useState(false)
@@ -261,7 +264,7 @@ export default function AnalysisPage() {
   useEffect(() => {
     setTablePage(0)
     setTableRows([])
-  }, [debouncedSearch, statusFilter, tableDeptFilter, equipmentFilter, fieldFilter, workTypeFilter, effectiveStart, effectiveEnd])
+  }, [debouncedSearch, statusFilter, tableDeptFilter, equipmentFilter, equipmentTypeFilter, fieldFilter, workTypeFilter, effectiveStart, effectiveEnd])
 
   // Fetch ticket table
   useEffect(() => {
@@ -272,6 +275,7 @@ export default function AnalysisPage() {
     if (statusFilter !== 'All') params.set('status', statusFilter)
     if (tableDeptFilter !== 'All') params.set('department', tableDeptFilter)
     if (equipmentFilter !== 'All') params.set('equipment', equipmentFilter)
+    if (equipmentTypeFilter !== 'All') params.set('equipmentType', equipmentTypeFilter)
     if (fieldFilter !== 'All') params.set('field', fieldFilter)
     if (workTypeFilter && workTypeFilter !== 'All') params.set('workType', workTypeFilter)
     if (effectiveStart) params.set('startDate', effectiveStart)
@@ -285,7 +289,7 @@ export default function AnalysisPage() {
       })
       .catch(() => {})
       .finally(() => setTableLoading(false))
-  }, [tab, tablePage, debouncedSearch, statusFilter, tableDeptFilter, equipmentFilter, fieldFilter, workTypeFilter, assets, loading, effectiveStart, effectiveEnd])
+  }, [tab, tablePage, debouncedSearch, statusFilter, tableDeptFilter, equipmentFilter, equipmentTypeFilter, fieldFilter, workTypeFilter, assets, loading, effectiveStart, effectiveEnd])
 
   // Auto-scroll chat to latest message
   useEffect(() => {
@@ -407,6 +411,7 @@ export default function AnalysisPage() {
     if (statusFilter !== 'All') params.set('status', statusFilter)
     if (tableDeptFilter !== 'All') params.set('department', tableDeptFilter)
     if (equipmentFilter !== 'All') params.set('equipment', equipmentFilter)
+    if (equipmentTypeFilter !== 'All') params.set('equipmentType', equipmentTypeFilter)
     if (fieldFilter !== 'All') params.set('field', fieldFilter)
     if (workTypeFilter && workTypeFilter !== 'All') params.set('workType', workTypeFilter)
     if (effectiveStart) params.set('startDate', effectiveStart)
@@ -898,6 +903,7 @@ export default function AnalysisPage() {
                                     if (!clickable) return
                                     setFieldFilter(fieldName)
                                     setEquipmentFilter(eq)
+                                    setEquipmentTypeFilter('All')
                                     if (deptFilter !== 'All') setTableDeptFilter(deptFilter)
                                     setTab('tickets')
                                   }}
@@ -1068,6 +1074,7 @@ export default function AnalysisPage() {
                                 setTableDeptFilter(r.dept || 'All')
                                 setFieldFilter(r.field || 'Unknown')
                                 setEquipmentFilter('All')
+                                setEquipmentTypeFilter('All')
                                 setWorkTypeFilter('All')
                                 setSearch('')
                                 setTab('tickets')
@@ -1207,6 +1214,20 @@ export default function AnalysisPage() {
                 </div>
               </div>
 
+              {/* Equipment Type */}
+              {aggData?.equipmentTypeList && aggData.equipmentTypeList.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Equipment Type</p>
+                  <FilterSelect
+                    label="Equipment Type"
+                    labelHidden
+                    value={equipmentTypeFilter}
+                    options={aggData.equipmentTypeList}
+                    onChange={v => setEquipmentTypeFilter(v || 'All')}
+                  />
+                </div>
+              )}
+
               {/* Equipment */}
               {aggData?.equipmentList && aggData.equipmentList.length > 0 && (
                 <div>
@@ -1222,10 +1243,10 @@ export default function AnalysisPage() {
               )}
 
               {/* Reset */}
-              {(search || statusFilter !== 'All' || tableDeptFilter !== 'All' || fieldFilter !== 'All' || equipmentFilter !== 'All' || workTypeFilter !== 'All') && (
+              {(search || statusFilter !== 'All' || tableDeptFilter !== 'All' || fieldFilter !== 'All' || equipmentTypeFilter !== 'All' || equipmentFilter !== 'All' || workTypeFilter !== 'All') && (
                 <button
                   className="w-full py-2 text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors border border-red-200"
-                  onClick={() => { setSearch(''); setStatusFilter('All'); setTableDeptFilter('All'); setFieldFilter('All'); setEquipmentFilter('All'); setWorkTypeFilter('All') }}
+                  onClick={() => { setSearch(''); setStatusFilter('All'); setTableDeptFilter('All'); setFieldFilter('All'); setEquipmentTypeFilter('All'); setEquipmentFilter('All'); setWorkTypeFilter('All') }}
                 >
                   ✕ Reset Filters
                 </button>
@@ -1311,6 +1332,7 @@ export default function AnalysisPage() {
                       <th className="text-left px-3 py-2.5 font-medium text-gray-500 whitespace-nowrap">Dept</th>
                       <th className="text-left px-3 py-2.5 font-medium text-gray-500 whitespace-nowrap">Work Order Type</th>
                       <th className="text-left px-3 py-2.5 font-medium text-gray-500 whitespace-nowrap">Location</th>
+                      <th className="text-left px-3 py-2.5 font-medium text-gray-500 whitespace-nowrap">Equipment Type</th>
                       <th className="text-left px-3 py-2.5 font-medium text-gray-500 whitespace-nowrap">Equipment</th>
                       <th className="text-left px-3 py-2.5 font-medium text-gray-500 whitespace-nowrap">Description</th>
                       <th className="text-left px-3 py-2.5 font-medium text-gray-500 whitespace-nowrap">Status</th>
@@ -1339,6 +1361,7 @@ export default function AnalysisPage() {
                           <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{r.department || '—'}</td>
                           <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{r.work_order_type || '—'}</td>
                           <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{location}</td>
+                          <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{r.equipment_type || '—'}</td>
                           <td className="px-3 py-2.5 text-gray-700 whitespace-nowrap">{r.equipment_name || '—'}</td>
                           <td className="px-3 py-2.5 text-gray-600 max-w-[160px] truncate">{r.issue_description || '—'}</td>
                           <td className="px-3 py-2.5 whitespace-nowrap">

@@ -25,12 +25,13 @@ export async function GET(req: NextRequest) {
       const deptFilter = searchParams.get('department') || ''
       const workTypeFilter = searchParams.get('workType') || ''
       const equipmentFilter = searchParams.get('equipment') || ''
+      const equipmentTypeFilter = searchParams.get('equipmentType') || ''
       const fieldFilter = searchParams.get('field') || ''
 
       let query = db
         .from('workorder_ticket_summary')
         .select(
-          'ticket_id, asset, field, department, work_order_type, location_type, well, facility, equipment_name, issue_description, ticket_status, issue_date, repair_date_closed, Estimate_Cost, repair_cost',
+          'ticket_id, asset, field, department, work_order_type, location_type, well, facility, equipment_type, equipment_name, issue_description, ticket_status, issue_date, repair_date_closed, Estimate_Cost, repair_cost',
           { count: 'exact' }
         )
 
@@ -52,6 +53,10 @@ export async function GET(req: NextRequest) {
       if (equipmentFilter && equipmentFilter !== 'All') {
         if (equipmentFilter === 'Unknown') query = query.or('equipment_name.is.null,equipment_name.eq.')
         else query = query.eq('equipment_name', equipmentFilter)
+      }
+      if (equipmentTypeFilter && equipmentTypeFilter !== 'All') {
+        if (equipmentTypeFilter === 'Unknown') query = query.or('equipment_type.is.null,equipment_type.eq.')
+        else query = query.eq('equipment_type', equipmentTypeFilter)
       }
       if (fieldFilter && fieldFilter !== 'All') {
         if (fieldFilter === 'Unknown') query = query.or('field.is.null,field.eq.')
@@ -83,6 +88,7 @@ export async function GET(req: NextRequest) {
       const deptFilter = searchParams.get('department') || ''
       const workTypeFilter = searchParams.get('workType') || ''
       const equipmentFilter = searchParams.get('equipment') || ''
+      const equipmentTypeFilter = searchParams.get('equipmentType') || ''
       const fieldFilter = searchParams.get('field') || ''
       const BATCH = 1000
       const exportRows: Record<string, unknown>[] = []
@@ -90,7 +96,7 @@ export async function GET(req: NextRequest) {
       while (true) {
         let q = db
           .from('workorder_ticket_summary')
-          .select('ticket_id, asset, field, department, work_order_type, location_type, well, facility, equipment_name, issue_description, ticket_status, issue_date, repair_date_closed, Estimate_Cost, repair_cost')
+          .select('ticket_id, asset, field, department, work_order_type, location_type, well, facility, equipment_type, equipment_name, issue_description, ticket_status, issue_date, repair_date_closed, Estimate_Cost, repair_cost')
           .order('issue_date', { ascending: false })
           .order('ticket_id', { ascending: false })
           .range(from, from + BATCH - 1)
@@ -112,6 +118,10 @@ export async function GET(req: NextRequest) {
         if (equipmentFilter && equipmentFilter !== 'All') {
           if (equipmentFilter === 'Unknown') q = q.or('equipment_name.is.null,equipment_name.eq.')
           else q = q.eq('equipment_name', equipmentFilter)
+        }
+        if (equipmentTypeFilter && equipmentTypeFilter !== 'All') {
+          if (equipmentTypeFilter === 'Unknown') q = q.or('equipment_type.is.null,equipment_type.eq.')
+          else q = q.eq('equipment_type', equipmentTypeFilter)
         }
         if (fieldFilter && fieldFilter !== 'All') {
           if (fieldFilter === 'Unknown') q = q.or('field.is.null,field.eq.')
@@ -146,12 +156,12 @@ export async function GET(req: NextRequest) {
         return [
           r.ticket_id, escape(r.asset), escape(r.field), escape(stripEmoji(r.department)),
           escape(r.work_order_type), escape(r.location_type), escape(r.well),
-          escape(r.facility), escape(r.equipment_name), escape(r.issue_description),
+          escape(r.facility), escape(r.equipment_type), escape(r.equipment_name), escape(r.issue_description),
           escape(r.ticket_status), r.issue_date, r.repair_date_closed,
           r.Estimate_Cost, r.repair_cost, savings,
         ].join(',')
       })
-      const header = 'Ticket ID,Asset,Field,Department,Work Order Type,Location Type,Well,Facility,Equipment,Description,Status,Submitted,Closed,Est. Cost,Repair Cost,Savings'
+      const header = 'Ticket ID,Asset,Field,Department,Work Order Type,Location Type,Well,Facility,Equipment Type,Equipment,Description,Status,Submitted,Closed,Est. Cost,Repair Cost,Savings'
       const csv = '﻿' + [header, ...csvRows].join('\n')
       const filename = `tickets-${new Date().toISOString().slice(0, 10)}.csv`
       return new Response(csv, {
@@ -168,6 +178,7 @@ export async function GET(req: NextRequest) {
       const deptFilter = searchParams.get('department') || ''
       const workTypeFilter = searchParams.get('workType') || ''
       const equipmentFilter = searchParams.get('equipment') || ''
+      const equipmentTypeFilter = searchParams.get('equipmentType') || ''
       const fieldFilter = searchParams.get('field') || ''
       const BATCH = 1000
       const exportRows: Record<string, unknown>[] = []
@@ -175,7 +186,7 @@ export async function GET(req: NextRequest) {
       while (true) {
         let q = db
           .from('workorder_ticket_summary')
-          .select('ticket_id, asset, field, department, work_order_type, location_type, well, facility, equipment_name, issue_description, ticket_status, issue_date, repair_date_closed, Estimate_Cost, repair_cost')
+          .select('ticket_id, asset, field, department, work_order_type, location_type, well, facility, equipment_type, equipment_name, issue_description, ticket_status, issue_date, repair_date_closed, Estimate_Cost, repair_cost')
           .order('issue_date', { ascending: false })
           .order('ticket_id', { ascending: false })
           .range(from, from + BATCH - 1)
@@ -197,6 +208,10 @@ export async function GET(req: NextRequest) {
         if (equipmentFilter && equipmentFilter !== 'All') {
           if (equipmentFilter === 'Unknown') q = q.or('equipment_name.is.null,equipment_name.eq.')
           else q = q.eq('equipment_name', equipmentFilter)
+        }
+        if (equipmentTypeFilter && equipmentTypeFilter !== 'All') {
+          if (equipmentTypeFilter === 'Unknown') q = q.or('equipment_type.is.null,equipment_type.eq.')
+          else q = q.eq('equipment_type', equipmentTypeFilter)
         }
         if (fieldFilter && fieldFilter !== 'All') {
           if (fieldFilter === 'Unknown') q = q.or('field.is.null,field.eq.')
@@ -232,6 +247,7 @@ export async function GET(req: NextRequest) {
         { header: 'Location Type', key: 'location_type', width: 14 },
         { header: 'Well', key: 'well', width: 22 },
         { header: 'Facility', key: 'facility', width: 22 },
+        { header: 'Equipment Type', key: 'equipment_type', width: 20 },
         { header: 'Equipment', key: 'equipment_name', width: 22 },
         { header: 'Description', key: 'issue_description', width: 50 },
         { header: 'Status', key: 'ticket_status', width: 14 },
@@ -262,6 +278,7 @@ export async function GET(req: NextRequest) {
           location_type: r.location_type ?? '',
           well: r.well ?? '',
           facility: r.facility ?? '',
+          equipment_type: r.equipment_type ?? '',
           equipment_name: r.equipment_name ?? '',
           issue_description: r.issue_description ?? '',
           ticket_status: r.ticket_status ?? '',
@@ -402,6 +419,10 @@ export async function GET(req: NextRequest) {
       .slice(0, 10)
       .map(([name, count]) => ({ name, count }))
 
+    // Equipment Type options for the Tickets-tab filter — derived from the
+    // data so the list tracks whatever categories actually exist.
+    const equipmentTypeList = [...new Set(rows.map(r => r.equipment_type).filter(Boolean))].sort() as string[]
+
     // 9. Work type breakdown — closed tickets only
     const workTypeMap = new Map<string, number>()
     for (const r of rows) {
@@ -474,7 +495,7 @@ export async function GET(req: NextRequest) {
     }))
 
     return NextResponse.json(
-      { statusTables, fieldEquipChart, costByDept, monthlyTrend, departments, topEquipment, equipmentList: Array.from(equipCountMap.keys()).filter(Boolean).sort(), fieldList: [...new Set(rows.map(r => r.field).filter(Boolean))].sort() as string[], costTrend, workTypeBreakdown, costMatrix },
+      { statusTables, fieldEquipChart, costByDept, monthlyTrend, departments, topEquipment, equipmentList: Array.from(equipCountMap.keys()).filter(Boolean).sort(), equipmentTypeList, fieldList: [...new Set(rows.map(r => r.field).filter(Boolean))].sort() as string[], costTrend, workTypeBreakdown, costMatrix },
       { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate', 'Pragma': 'no-cache' } }
     )
   } catch (err) {
