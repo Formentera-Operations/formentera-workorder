@@ -1,10 +1,20 @@
 import type { Metadata, Viewport } from 'next'
-import { Inter } from 'next/font/google'
+import localFont from 'next/font/local'
 import { AuthProvider } from '@/components/AuthProvider'
 import { Toaster } from 'sonner'
 import './globals.css'
 
-const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
+// Inter is self-hosted rather than pulled via next/font/google. The Google
+// loader downloads the font on the server at compile time, which fails with
+// EACCES anywhere the dev server has no outbound network and burns three
+// retries before silently falling back to a system font. Same font, same
+// latin subset, same --font-inter variable — just no build-time fetch.
+const inter = localFont({
+  src: './fonts/Inter-latin-variable.woff2',
+  weight: '100 900',
+  display: 'swap',
+  variable: '--font-inter',
+})
 
 // Next.js App Router auto-injects <meta charSet="utf-8" /> as the first
 // child of <head> from the metadata API, plus the apple-touch-icon and
