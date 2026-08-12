@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { supabaseAdmin } from '@/lib/supabase'
 import { runPivot } from '@/lib/pivot'
+import { getUserScope } from '@/lib/user-scope'
 
 export const dynamic = 'force-dynamic'
 
@@ -750,14 +751,24 @@ export async function POST(req: NextRequest) {
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
   try {
-    const { question, messages, userAssets, startDate, endDate, userName, role } = await req.json() as {
+    // Identity comes from the verified session, NOT the request body. The
+    // client still sends userAssets/userName/role for backwards compatibility;
+    // those values are deliberately ignored. Trusting them let any signed-in
+    // user post `userAssets: []` — which every query below reads as "no asset
+    // filter" — and read every asset's tickets.
+    const scope = await getUserScope()
+    if (!scope) {
+      return NextResponse.json({ error: 'Not authorized' }, { status: 401 })
+    }
+    const userAssets = scope.assets
+    const userName = scope.name
+    const role = scope.role
+
+    const { question, messages, startDate, endDate } = await req.json() as {
       question: string
       messages: { role: 'user' | 'assistant'; text?: string }[]
-      userAssets: string[]
       startDate: string
       endDate: string
-      userName: string
-      role: string
     }
 
     // Sanitize input

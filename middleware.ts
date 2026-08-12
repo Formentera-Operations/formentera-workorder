@@ -67,6 +67,15 @@ export const config = {
     // api/cron/* is excluded so Vercel Cron and external automation can hit
     // those endpoints with Bearer auth instead of being redirected to
     // /login. The cron routes do their own Authorization header check.
-    '/((?!_next/static|_next/image|favicon.ico|api/cron|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    //
+    // The MCP + OAuth endpoints below are excluded for the same reason: they
+    // authenticate with a Bearer token or are public discovery documents, and
+    // a cookie-based redirect to /login would break the protocol handshake.
+    // Each does its own check — /api/mcp verifies the bearer token on every
+    // request, and /api/oauth/token verifies the code + PKCE.
+    //
+    // /api/oauth/authorize is deliberately NOT excluded: it needs the login
+    // redirect to establish who is connecting.
+    '/((?!_next/static|_next/image|favicon.ico|api/cron|api/mcp|api/oauth/register|api/oauth/token|api/oauth/metadata|api/oauth/protected-resource|\\.well-known|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }

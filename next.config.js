@@ -106,6 +106,26 @@ const nextConfig = {
       },
     ]
   },
+  // OAuth discovery documents have to live at these exact well-known paths for
+  // MCP clients to find them. Next ignores app/ directories beginning with a
+  // dot, so the routes live under /api/oauth/* and are surfaced here.
+  async rewrites() {
+    return [
+      {
+        source: '/.well-known/oauth-authorization-server',
+        destination: '/api/oauth/metadata',
+      },
+      {
+        source: '/.well-known/oauth-protected-resource',
+        destination: '/api/oauth/protected-resource',
+      },
+      // Some clients append the resource path when probing.
+      {
+        source: '/.well-known/oauth-protected-resource/api/mcp',
+        destination: '/api/oauth/protected-resource',
+      },
+    ]
+  },
 }
 
 module.exports = withPWA(nextConfig)
