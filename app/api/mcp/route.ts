@@ -164,7 +164,9 @@ const TOOLS = [
       'Aggregate ticket counts and repair cost totals grouped by one dimension ' +
       '(asset, ticket_status, equipment_type, assigned_foreman, department, ' +
       'priority_of_issue, work_order_type). ' +
-      'Vendor is intentionally not a dimension here — use vendor_spend for that.',
+      'Vendor is intentionally not a dimension here — use vendor_spend for that. ' +
+      'Counts every ticket in range with no row cap; tickets_counted reports how ' +
+      'many were included.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -254,15 +256,16 @@ async function searchTickets(args: Record<string, unknown>, scope: UserScope) {
 /** Ticket ids whose payment row names a vendor matching `term`, any slot. */
 async function ticketIdsForVendor(term: string): Promise<number[]> {
   const e = escapeLike(term)
-  const { data, error } = await supabaseAdmin()
-    .from('vendor_payment_details')
-    .select('ticket_id')
-    .or(VENDOR_SLOTS.map((s) => `${s.vendorKey}.ilike.%${e}%`).join(','))
-    .limit(MAX_AGGREGATE_TICKETS)
-
-  if (error || !data) return []
-  return (data as { ticket_id: number | null }[])
-    .map((r) => r.ticket_id)
+  const { rows } = await fetchAllPages((from, to) =>
+    supabaseAdmin()
+      .from('vendor_payment_details')
+      .select('ticket_id')
+      .or(VENDOR_SLOTS.map((s) => `${s.vendorKey}.ilike.%${e}%`).join(','))
+      .order('ticket_id', { ascending: true })
+      .range(from, to)
+  )
+  return rows
+    .map((r) => (r as { ticket_id: number | null }).ticket_id)
     .filter((v): v is number => typeof v === 'number')
 }
 
@@ -335,8 +338,36 @@ async function vendorBreakdown(ticketId: number) {
   return unpivotVendors(data as Record<string, unknown>)
 }
 
-/** Cap on tickets pulled for an aggregate; reported back, never silently applied. */
-const MAX_AGGREGATE_TICKETS = 5000
+/**
+ * Page size for aggregate reads. Aggregates are NOT capped — they page until
+ * the table is exhausted, so totals cover everything in range.
+ *
+ * Paging rather than a single unbounded select is deliberate: PostgREST can
+ * enforce its own server-side row ceiling, so dropping .limit() would just move
+ * the truncation somewhere we can't see it. A short page that comes back
+ * smaller than requested is the only reliable end-of-data signal.
+ */
+const AGGREGATE_PAGE = 1000
+
+/**
+ * Read every row a query matches, one page at a time.
+ *
+ * The builder is a factory because a PostgREST query object can't be reused
+ * across requests — each page needs a fresh one. Ordering is applied by the
+ * caller and must be stable, or rows can repeat or vanish between pages.
+ */
+async function fetchAllPages(
+  build: (from: number, to: number) => PromiseLike<{ data: unknown; error: { message: string } | null }>
+): Promise<{ rows: Record<string, unknown>[]; error?: string }> {
+  const rows: Record<string, unknown>[] = []
+  for (let from = 0; ; from += AGGREGATE_PAGE) {
+    const { data, error } = await build(from, from + AGGREGATE_PAGE - 1)
+    if (error) return { rows, error: error.message }
+    const page = (data ?? []) as Record<string, unknown>[]
+    rows.push(...page)
+    if (page.length < AGGREGATE_PAGE) return { rows }
+  }
+}
 /** PostgREST puts filters in the URL, so .in() lists have to stay short. */
 const ID_CHUNK = 300
 
@@ -349,18 +380,20 @@ const ID_CHUNK = 300
  * no path here that reads the table unfiltered.
  */
 async function vendorSpend(args: Record<string, unknown>, scope: UserScope) {
-  let tq = supabaseAdmin()
-    .from('workorder_ticket_summary')
-    .select('ticket_id')
-    .limit(MAX_AGGREGATE_TICKETS)
-  tq = applyAssetScope(tq, scope)
-  if (text(args.start_date)) tq = tq.gte('issue_date', text(args.start_date))
-  if (text(args.end_date)) tq = tq.lte('issue_date', text(args.end_date))
+  const { rows: tickets, error: tErr } = await fetchAllPages((from, to) => {
+    let tq = supabaseAdmin()
+      .from('workorder_ticket_summary')
+      .select('ticket_id')
+      .order('ticket_id', { ascending: true })
+      .range(from, to)
+    tq = applyAssetScope(tq, scope)
+    if (text(args.start_date)) tq = tq.gte('issue_date', text(args.start_date))
+    if (text(args.end_date)) tq = tq.lte('issue_date', text(args.end_date))
+    return tq
+  })
+  if (tErr) return { error: tErr }
 
-  const { data: tickets, error: tErr } = await tq
-  if (tErr) return { error: tErr.message }
-
-  const ids = (tickets ?? [])
+  const ids = tickets
     .map((t) => (t as { ticket_id: number | null }).ticket_id)
     .filter((v): v is number => typeof v === 'number')
 
@@ -399,12 +432,9 @@ async function vendorSpend(args: Record<string, unknown>, scope: UserScope) {
     .map((v) => ({ vendor: v.vendor, spend: Math.round(v.spend), ticket_count: v.tickets.size }))
     .sort((a, b) => b.spend - a.spend)
 
-  return {
-    vendors,
-    tickets_considered: ids.length,
-    // Surface the cap rather than letting a partial answer look complete.
-    truncated: ids.length >= MAX_AGGREGATE_TICKETS,
-  }
+  // No cap: fetchAllPages walked every matching ticket, so this covers the
+  // whole range rather than a leading slice of it.
+  return { vendors, tickets_considered: ids.length }
 }
 
 async function ticketStats(args: Record<string, unknown>, scope: UserScope) {
@@ -422,21 +452,21 @@ async function ticketStats(args: Record<string, unknown>, scope: UserScope) {
     return { error: `group_by must be one of: ${[...GROUPABLE].join(', ')}` }
   }
 
-  let q = supabaseAdmin()
-    .from('workorder_ticket_summary')
-    .select(`${groupBy}, repair_cost, total_repair_cost`)
-    .limit(5000)
-  q = applyAssetScope(q, scope)
-  if (text(args.start_date)) q = q.gte('issue_date', text(args.start_date))
-  if (text(args.end_date)) q = q.lte('issue_date', text(args.end_date))
-
-  const { data, error } = await q
-  if (error) return { error: error.message }
+  const { rows: source, error } = await fetchAllPages((from, to) => {
+    let q = supabaseAdmin()
+      .from('workorder_ticket_summary')
+      .select(`${groupBy}, repair_cost, total_repair_cost`)
+      .order('ticket_id', { ascending: true })
+      .range(from, to)
+    q = applyAssetScope(q, scope)
+    if (text(args.start_date)) q = q.gte('issue_date', text(args.start_date))
+    if (text(args.end_date)) q = q.lte('issue_date', text(args.end_date))
+    return q
+  })
+  if (error) return { error }
 
   const buckets = new Map<string, { count: number; repair_cost: number }>()
-  // Cast through unknown: the select list is built at runtime, so supabase-js
-  // can't infer a row shape from it.
-  for (const row of (data ?? []) as unknown as Record<string, unknown>[]) {
+  for (const row of source) {
     const key = String(row[groupBy] ?? 'Unspecified')
     const cost = ticketCost(row)
     const b = buckets.get(key) ?? { count: 0, repair_cost: 0 }
@@ -449,7 +479,9 @@ async function ticketStats(args: Record<string, unknown>, scope: UserScope) {
     .map(([key, v]) => ({ [groupBy]: key, count: v.count, repair_cost: Math.round(v.repair_cost) }))
     .sort((a, b) => b.count - a.count)
 
-  return { group_by: groupBy, groups: rows.length, rows }
+  // No cap — every ticket in range is counted. tickets_counted is reported so
+  // the total is checkable rather than taken on faith.
+  return { group_by: groupBy, groups: rows.length, tickets_counted: source.length, rows }
 }
 
 async function callTool(name: string, args: Record<string, unknown>, scope: UserScope): Promise<unknown> {
