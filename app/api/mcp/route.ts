@@ -122,7 +122,13 @@ const TOOLS = [
         priority: { type: 'string' },
         start_date: { type: 'string', description: 'ISO date, inclusive lower bound on issue_date' },
         end_date: { type: 'string', description: 'ISO date, inclusive upper bound on issue_date' },
-        limit: { type: 'number', description: 'Max rows, default 20, hard cap 50' },
+        limit: {
+          type: 'number',
+          description:
+            'Optional ceiling on rows returned. Omit to get every matching ticket. ' +
+            'Unfiltered searches can return the entire history, so pass a limit ' +
+            'when a sample will do, or narrow with a date range.',
+        },
       },
       additionalProperties: false,
     },
@@ -205,35 +211,9 @@ function ticketCost(row: Record<string, unknown>): number {
 }
 
 async function searchTickets(args: Record<string, unknown>, scope: UserScope) {
-  const limit = Math.min(typeof args.limit === 'number' ? args.limit : 20, 50)
-  // Every column the view exposes, rather than a curated subset — the model
-  // can then answer on area/route/AFE/dates without a follow-up round-trip.
-  let q = supabaseAdmin()
-    .from('workorder_ticket_summary')
-    .select('*')
-    .order('ticket_id', { ascending: false })
-    .limit(limit)
-
-  q = applyAssetScope(q, scope)
-
-  const free = text(args.text)
-  if (free) {
-    const e = escapeLike(free)
-    q = q.or(`issue_description.ilike.%${e}%,repair_details.ilike.%${e}%`)
-  }
-  const pairs: [string, string][] = [
-    ['equipment_name', text(args.equipment)],
-    ['well', text(args.well)],
-    ['facility', text(args.facility)],
-    ['assigned_foreman', text(args.foreman)],
-  ]
-  for (const [col, val] of pairs) {
-    if (val) q = q.ilike(col, `%${escapeLike(val)}%`)
-  }
-  if (text(args.status)) q = q.eq('ticket_status', text(args.status))
-  if (text(args.priority)) q = q.eq('priority_of_issue', text(args.priority))
-  if (text(args.start_date)) q = q.gte('issue_date', text(args.start_date))
-  if (text(args.end_date)) q = q.lte('issue_date', text(args.end_date))
+  // `limit` is an optional ceiling the caller may ask for, not one imposed
+  // here. Omitted, the search pages through every matching ticket.
+  const limit = typeof args.limit === 'number' && args.limit > 0 ? Math.floor(args.limit) : null
 
   // Filtering by vendor cannot use the view: repair_vendor is never populated,
   // so matching on it returned nothing at all. Resolve matching ticket ids from
@@ -241,15 +221,56 @@ async function searchTickets(args: Record<string, unknown>, scope: UserScope) {
   // having no asset column — the ids only narrow a query that is still asset
   // scoped, so this can't widen what the caller sees.
   const vendorTerm = text(args.vendor)
+  let vendorIds: number[] | null = null
   if (vendorTerm) {
-    const ids = await ticketIdsForVendor(vendorTerm)
-    if (ids.length === 0) return { count: 0, tickets: [] }
-    q = q.in('ticket_id', ids)
+    vendorIds = await ticketIdsForVendor(vendorTerm)
+    if (vendorIds.length === 0) return { count: 0, tickets: [] }
   }
 
-  const { data, error } = await q
-  if (error) return { error: error.message }
-  const rows = (data ?? []) as unknown as Record<string, unknown>[]
+  // Every column the view exposes, rather than a curated subset — the model
+  // can then answer on area/route/AFE/dates without a follow-up round-trip.
+  const build = (from: number, to: number) => {
+    let q = supabaseAdmin()
+      .from('workorder_ticket_summary')
+      .select('*')
+      .order('ticket_id', { ascending: false })
+      .range(from, to)
+
+    q = applyAssetScope(q, scope)
+
+    const free = text(args.text)
+    if (free) {
+      const e = escapeLike(free)
+      q = q.or(`issue_description.ilike.%${e}%,repair_details.ilike.%${e}%`)
+    }
+    const pairs: [string, string][] = [
+      ['equipment_name', text(args.equipment)],
+      ['well', text(args.well)],
+      ['facility', text(args.facility)],
+      ['assigned_foreman', text(args.foreman)],
+    ]
+    for (const [col, val] of pairs) {
+      if (val) q = q.ilike(col, `%${escapeLike(val)}%`)
+    }
+    if (text(args.status)) q = q.eq('ticket_status', text(args.status))
+    if (text(args.priority)) q = q.eq('priority_of_issue', text(args.priority))
+    if (text(args.start_date)) q = q.gte('issue_date', text(args.start_date))
+    if (text(args.end_date)) q = q.lte('issue_date', text(args.end_date))
+    if (vendorIds) q = q.in('ticket_id', vendorIds)
+    return q
+  }
+
+  let rows: Record<string, unknown>[]
+  if (limit !== null) {
+    const { data, error } = await build(0, limit - 1)
+    if (error) return { error: error.message }
+    rows = (data ?? []) as unknown as Record<string, unknown>[]
+  } else {
+    const res = await fetchAllPages(build)
+    if (res.error) return { error: res.error }
+    rows = res.rows
+  }
+
   return { count: rows.length, tickets: await attachVendors(trimLongText(rows)) }
 }
 
@@ -279,17 +300,21 @@ async function attachVendors(rows: Record<string, unknown>[]): Promise<Record<st
   const ids = rows.map((r) => Number(r.ticket_id)).filter((v) => Number.isFinite(v))
   if (ids.length === 0) return rows
 
-  const { data, error } = await supabaseAdmin()
-    .from('vendor_payment_details')
-    .select('*')
-    .in('ticket_id', ids)
-
-  // A failure here shouldn't lose the tickets themselves; return them bare.
-  if (error || !data) return rows
-
+  // Chunked because .in() lists travel in the URL — an unlimited search can
+  // return thousands of tickets, and one giant filter would exceed the URL
+  // length long before the query itself became a problem.
   const byTicket = new Map<number, { vendor: string; cost: number | null }[]>()
-  for (const row of data as unknown as Record<string, unknown>[]) {
-    byTicket.set(Number(row.ticket_id), unpivotVendors(row))
+  for (let i = 0; i < ids.length; i += ID_CHUNK) {
+    const { data, error } = await supabaseAdmin()
+      .from('vendor_payment_details')
+      .select('*')
+      .in('ticket_id', ids.slice(i, i + ID_CHUNK))
+
+    // A failure here shouldn't lose the tickets themselves; return them bare.
+    if (error || !data) return rows
+    for (const row of data as unknown as Record<string, unknown>[]) {
+      byTicket.set(Number(row.ticket_id), unpivotVendors(row))
+    }
   }
   return rows.map((r) => ({ ...r, vendors: byTicket.get(Number(r.ticket_id)) ?? [] }))
 }
