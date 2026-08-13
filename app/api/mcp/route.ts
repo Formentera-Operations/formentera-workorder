@@ -98,11 +98,33 @@ const TOOLS = [
     },
   },
   {
+    name: 'vendor_spend',
+    description:
+      'Total spend per vendor across tickets, counting ALL vendors on a ticket ' +
+      'rather than just the primary one on the closeout record. Use this for any ' +
+      '"how much did we spend with X" question — ticket_stats grouped by ' +
+      'repair_vendor misses vendors 2-7 and credits the whole ticket total to the ' +
+      "primary vendor. Restricted to the connected user's assets.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        vendor: { type: 'string', description: 'Optional: only this vendor (substring match, case-insensitive)' },
+        start_date: { type: 'string', description: 'ISO date, inclusive lower bound on ticket issue_date' },
+        end_date: { type: 'string', description: 'ISO date, inclusive upper bound on ticket issue_date' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'ticket_stats',
     description:
       'Aggregate ticket counts and repair cost totals grouped by one dimension ' +
       '(asset, ticket_status, equipment_type, assigned_foreman, repair_vendor, ' +
-      'department, priority_of_issue, work_order_type).',
+      'department, priority_of_issue, work_order_type). ' +
+      'For vendor spend use vendor_spend instead: grouping by repair_vendor here ' +
+      'uses only the primary vendor on the closeout record and attributes the ' +
+      "ticket's entire cost to it, so per-vendor totals will be wrong whenever a " +
+      'ticket had more than one vendor.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -212,6 +234,82 @@ async function vendorBreakdown(ticketId: number) {
   return out
 }
 
+/** Cap on tickets pulled for an aggregate; reported back, never silently applied. */
+const MAX_AGGREGATE_TICKETS = 5000
+/** PostgREST puts filters in the URL, so .in() lists have to stay short. */
+const ID_CHUNK = 300
+
+/**
+ * Vendor spend across many tickets.
+ *
+ * Scoping is two-step and has to stay that way: vendor_payment_details has no
+ * asset column, so we first resolve which ticket_ids the caller may see (via
+ * the scoped view) and then only ever read vendor rows for those ids. There is
+ * no path here that reads the table unfiltered.
+ */
+async function vendorSpend(args: Record<string, unknown>, scope: UserScope) {
+  let tq = supabaseAdmin()
+    .from('workorder_ticket_summary')
+    .select('ticket_id')
+    .limit(MAX_AGGREGATE_TICKETS)
+  tq = applyAssetScope(tq, scope)
+  if (text(args.start_date)) tq = tq.gte('issue_date', text(args.start_date))
+  if (text(args.end_date)) tq = tq.lte('issue_date', text(args.end_date))
+
+  const { data: tickets, error: tErr } = await tq
+  if (tErr) return { error: tErr.message }
+
+  const ids = (tickets ?? [])
+    .map((t) => (t as { ticket_id: number | null }).ticket_id)
+    .filter((v): v is number => typeof v === 'number')
+
+  if (ids.length === 0) return { vendors: [], tickets_considered: 0 }
+
+  const rows: Record<string, unknown>[] = []
+  for (let i = 0; i < ids.length; i += ID_CHUNK) {
+    const { data, error } = await supabaseAdmin()
+      .from('vendor_payment_details')
+      .select('*')
+      .in('ticket_id', ids.slice(i, i + ID_CHUNK))
+    if (error) return { error: error.message }
+    rows.push(...((data ?? []) as unknown as Record<string, unknown>[]))
+  }
+
+  // Unpivot the seven numbered vendor/cost pairs into one row per vendor.
+  const filter = text(args.vendor).toLowerCase()
+  const agg = new Map<string, { vendor: string; spend: number; tickets: Set<number> }>()
+
+  for (const row of rows) {
+    const ticketId = Number(row.ticket_id)
+    for (let i = 1; i <= 7; i++) {
+      const name = row[i === 1 ? 'vendor' : `vendor_${i}`]
+      if (typeof name !== 'string' || !name.trim()) continue
+      const display = name.trim()
+      if (filter && !display.toLowerCase().includes(filter)) continue
+
+      // Group case-insensitively — the same vendor is spelled inconsistently
+      // across tickets, and separate buckets would understate each one.
+      const key = display.toLowerCase()
+      const cost = Number(row[i === 1 ? 'vendor_cost' : `vendor_cost_${i}`]) || 0
+      const bucket = agg.get(key) ?? { vendor: display, spend: 0, tickets: new Set<number>() }
+      bucket.spend += cost
+      if (Number.isFinite(ticketId)) bucket.tickets.add(ticketId)
+      agg.set(key, bucket)
+    }
+  }
+
+  const vendors = [...agg.values()]
+    .map((v) => ({ vendor: v.vendor, spend: Math.round(v.spend), ticket_count: v.tickets.size }))
+    .sort((a, b) => b.spend - a.spend)
+
+  return {
+    vendors,
+    tickets_considered: ids.length,
+    // Surface the cap rather than letting a partial answer look complete.
+    truncated: ids.length >= MAX_AGGREGATE_TICKETS,
+  }
+}
+
 async function ticketStats(args: Record<string, unknown>, scope: UserScope) {
   const groupBy = text(args.group_by)
   if (!GROUPABLE.has(groupBy)) {
@@ -260,6 +358,7 @@ async function callTool(name: string, args: Record<string, unknown>, scope: User
   }
   if (name === 'search_tickets') return await searchTickets(args, scope)
   if (name === 'get_ticket') return await getTicket(args, scope)
+  if (name === 'vendor_spend') return await vendorSpend(args, scope)
   if (name === 'ticket_stats') return await ticketStats(args, scope)
   return { error: `Unknown tool: ${name}` }
 }
