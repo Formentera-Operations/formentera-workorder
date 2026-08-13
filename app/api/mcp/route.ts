@@ -32,9 +32,51 @@ function escapeLike(s: string): string {
  */
 const LONG_TEXT_FIELDS = ['issue_description', 'repair_details', 'troubleshooting_conducted']
 
+/**
+ * View columns withheld from tool output.
+ *
+ * repair_vendor is never populated in this data — real vendors live in
+ * vendor_payment_details and are returned as `vendors`. Emitting an always-null
+ * column invites the model to treat it as the vendor field and report "no
+ * vendor" for tickets that plainly have several.
+ */
+const HIDDEN_COLUMNS = ['repair_vendor']
+
+function stripHidden(row: Record<string, unknown>): Record<string, unknown> {
+  const out = { ...row }
+  for (const c of HIDDEN_COLUMNS) delete out[c]
+  return out
+}
+
+/** The seven numbered vendor/cost column pairs, in order. */
+const VENDOR_SLOTS = Array.from({ length: 7 }, (_, i) => ({
+  vendorKey: i === 0 ? 'vendor' : `vendor_${i + 1}`,
+  costKey: i === 0 ? 'vendor_cost' : `vendor_cost_${i + 1}`,
+}))
+
+/**
+ * Flatten one vendor_payment_details row into a list, dropping unused slots.
+ *
+ * Skips blanks rather than stopping at the first one, so a gap in the middle
+ * (vendor_2 cleared but vendor_3 still set) doesn't truncate the rest.
+ */
+function unpivotVendors(row: Record<string, unknown>): { vendor: string; cost: number | null }[] {
+  const out: { vendor: string; cost: number | null }[] = []
+  for (const { vendorKey, costKey } of VENDOR_SLOTS) {
+    const name = row[vendorKey]
+    if (typeof name !== 'string' || !name.trim()) continue
+    const raw = row[costKey]
+    out.push({
+      vendor: name.trim(),
+      cost: raw === null || raw === undefined || raw === '' ? null : Number(raw),
+    })
+  }
+  return out
+}
+
 function trimLongText(rows: Record<string, unknown>[]): Record<string, unknown>[] {
   return rows.map((row) => {
-    const out = { ...row }
+    const out = stripHidden(row)
     for (const f of LONG_TEXT_FIELDS) {
       const v = out[f]
       if (typeof v === 'string' && v.length > 300) out[f] = `${v.slice(0, 300)}…`
@@ -62,10 +104,11 @@ const TOOLS = [
     description:
       'Search work order tickets. Returns every field on the ticket summary — ' +
       'including area, route, dates, foremen, AFE number, job category, costs and ' +
-      "final status. Results are always restricted to the connected user's assets. " +
-      'Long narrative fields are truncated here; use get_ticket for the full text. ' +
-      'Supports free text, equipment, well, facility, foreman, vendor, status, ' +
-      'priority and date range.',
+      'final status — plus a `vendors` list per ticket, so there is no need to ' +
+      "call get_ticket just to see who worked it. Restricted to the connected " +
+      "user's assets. Long narrative fields are truncated here; use get_ticket " +
+      'for the full text. Supports free text, equipment, well, facility, foreman, ' +
+      'vendor, status, priority and date range.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -100,11 +143,11 @@ const TOOLS = [
   {
     name: 'vendor_spend',
     description:
-      'Total spend per vendor across tickets, counting ALL vendors on a ticket ' +
-      'rather than just the primary one on the closeout record. Use this for any ' +
-      '"how much did we spend with X" question — ticket_stats grouped by ' +
-      'repair_vendor misses vendors 2-7 and credits the whole ticket total to the ' +
-      "primary vendor. Restricted to the connected user's assets.",
+      'Total spend per vendor across many tickets, counting every vendor on each ' +
+      'ticket against its own cost. Use this for any "how much did we spend with ' +
+      'X" question — it is the only correct source for vendor totals, since a ' +
+      'ticket commonly has several vendors and the ticket-level cost is their ' +
+      "combined total. Restricted to the connected user's assets.",
     inputSchema: {
       type: 'object',
       properties: {
@@ -119,12 +162,9 @@ const TOOLS = [
     name: 'ticket_stats',
     description:
       'Aggregate ticket counts and repair cost totals grouped by one dimension ' +
-      '(asset, ticket_status, equipment_type, assigned_foreman, repair_vendor, ' +
-      'department, priority_of_issue, work_order_type). ' +
-      'For vendor spend use vendor_spend instead: grouping by repair_vendor here ' +
-      'uses only the primary vendor on the closeout record and attributes the ' +
-      "ticket's entire cost to it, so per-vendor totals will be wrong whenever a " +
-      'ticket had more than one vendor.',
+      '(asset, ticket_status, equipment_type, assigned_foreman, department, ' +
+      'priority_of_issue, work_order_type). ' +
+      'Vendor is intentionally not a dimension here — use vendor_spend for that.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -138,10 +178,29 @@ const TOOLS = [
   },
 ]
 
+// repair_vendor is deliberately NOT groupable: the underlying closeout column
+// is never populated in this data, so grouping by it yields one big
+// "Unspecified" bucket rather than anything useful. Real vendor data lives in
+// vendor_payment_details, which vendor_spend reads directly.
 const GROUPABLE = new Set([
   'asset', 'ticket_status', 'equipment_type', 'assigned_foreman',
-  'repair_vendor', 'department', 'priority_of_issue', 'work_order_type',
+  'department', 'priority_of_issue', 'work_order_type',
 ])
+
+/**
+ * Per-ticket cost, tolerant of which column the view actually carries it in.
+ *
+ * The schema in git maps vendor_payment_details.total_cost to `repair_cost`
+ * and keeps the closeout's `total_repair_cost` separate, but the live view is
+ * reported to put the vendor total in `total_repair_cost`. Reading whichever
+ * is populated avoids silently reporting zero if the file has drifted.
+ */
+function ticketCost(row: Record<string, unknown>): number {
+  const primary = Number(row.repair_cost)
+  if (Number.isFinite(primary) && primary !== 0) return primary
+  const fallback = Number(row.total_repair_cost)
+  return Number.isFinite(fallback) ? fallback : 0
+}
 
 async function searchTickets(args: Record<string, unknown>, scope: UserScope) {
   const limit = Math.min(typeof args.limit === 'number' ? args.limit : 20, 50)
@@ -165,7 +224,6 @@ async function searchTickets(args: Record<string, unknown>, scope: UserScope) {
     ['well', text(args.well)],
     ['facility', text(args.facility)],
     ['assigned_foreman', text(args.foreman)],
-    ['repair_vendor', text(args.vendor)],
   ]
   for (const [col, val] of pairs) {
     if (val) q = q.ilike(col, `%${escapeLike(val)}%`)
@@ -175,10 +233,62 @@ async function searchTickets(args: Record<string, unknown>, scope: UserScope) {
   if (text(args.start_date)) q = q.gte('issue_date', text(args.start_date))
   if (text(args.end_date)) q = q.lte('issue_date', text(args.end_date))
 
+  // Filtering by vendor cannot use the view: repair_vendor is never populated,
+  // so matching on it returned nothing at all. Resolve matching ticket ids from
+  // vendor_payment_details instead and intersect. Safe despite that table
+  // having no asset column — the ids only narrow a query that is still asset
+  // scoped, so this can't widen what the caller sees.
+  const vendorTerm = text(args.vendor)
+  if (vendorTerm) {
+    const ids = await ticketIdsForVendor(vendorTerm)
+    if (ids.length === 0) return { count: 0, tickets: [] }
+    q = q.in('ticket_id', ids)
+  }
+
   const { data, error } = await q
   if (error) return { error: error.message }
   const rows = (data ?? []) as unknown as Record<string, unknown>[]
-  return { count: rows.length, tickets: trimLongText(rows) }
+  return { count: rows.length, tickets: await attachVendors(trimLongText(rows)) }
+}
+
+/** Ticket ids whose payment row names a vendor matching `term`, any slot. */
+async function ticketIdsForVendor(term: string): Promise<number[]> {
+  const e = escapeLike(term)
+  const { data, error } = await supabaseAdmin()
+    .from('vendor_payment_details')
+    .select('ticket_id')
+    .or(VENDOR_SLOTS.map((s) => `${s.vendorKey}.ilike.%${e}%`).join(','))
+    .limit(MAX_AGGREGATE_TICKETS)
+
+  if (error || !data) return []
+  return (data as { ticket_id: number | null }[])
+    .map((r) => r.ticket_id)
+    .filter((v): v is number => typeof v === 'number')
+}
+
+/**
+ * Attach each ticket's vendor list to search results.
+ *
+ * One extra query for the whole page, not one per ticket — otherwise the model
+ * has to call get_ticket in a loop to answer "who worked these tickets".
+ */
+async function attachVendors(rows: Record<string, unknown>[]): Promise<Record<string, unknown>[]> {
+  const ids = rows.map((r) => Number(r.ticket_id)).filter((v) => Number.isFinite(v))
+  if (ids.length === 0) return rows
+
+  const { data, error } = await supabaseAdmin()
+    .from('vendor_payment_details')
+    .select('*')
+    .in('ticket_id', ids)
+
+  // A failure here shouldn't lose the tickets themselves; return them bare.
+  if (error || !data) return rows
+
+  const byTicket = new Map<number, { vendor: string; cost: number | null }[]>()
+  for (const row of data as unknown as Record<string, unknown>[]) {
+    byTicket.set(Number(row.ticket_id), unpivotVendors(row))
+  }
+  return rows.map((r) => ({ ...r, vendors: byTicket.get(Number(r.ticket_id)) ?? [] }))
 }
 
 async function getTicket(args: Record<string, unknown>, scope: UserScope) {
@@ -198,7 +308,7 @@ async function getTicket(args: Record<string, unknown>, scope: UserScope) {
   // you can't see it" would leak which tickets belong to other assets.
   if (!data) return { error: `Ticket #${id} not found in your assets.` }
 
-  return { ...(data as Record<string, unknown>), vendors: await vendorBreakdown(id) }
+  return { ...stripHidden(data as Record<string, unknown>), vendors: await vendorBreakdown(id) }
 }
 
 /**
@@ -213,6 +323,8 @@ async function getTicket(args: Record<string, unknown>, scope: UserScope) {
  * list and drops the unused slots.
  */
 async function vendorBreakdown(ticketId: number) {
+  // One row per ticket, guaranteed by a UNIQUE(ticket_id) constraint; edits
+  // upsert onto it rather than appending. maybeSingle() is therefore exact.
   const { data, error } = await supabaseAdmin()
     .from('vendor_payment_details')
     .select('*')
@@ -220,18 +332,7 @@ async function vendorBreakdown(ticketId: number) {
     .maybeSingle()
 
   if (error || !data) return []
-
-  const row = data as Record<string, unknown>
-  const out: { vendor: string; cost: number | null }[] = []
-  for (let i = 1; i <= 7; i++) {
-    const vendorKey = i === 1 ? 'vendor' : `vendor_${i}`
-    const costKey = i === 1 ? 'vendor_cost' : `vendor_cost_${i}`
-    const vendor = row[vendorKey]
-    if (typeof vendor !== 'string' || !vendor.trim()) continue
-    const raw = row[costKey]
-    out.push({ vendor: vendor.trim(), cost: raw === null || raw === undefined ? null : Number(raw) })
-  }
-  return out
+  return unpivotVendors(data as Record<string, unknown>)
 }
 
 /** Cap on tickets pulled for an aggregate; reported back, never silently applied. */
@@ -281,18 +382,14 @@ async function vendorSpend(args: Record<string, unknown>, scope: UserScope) {
 
   for (const row of rows) {
     const ticketId = Number(row.ticket_id)
-    for (let i = 1; i <= 7; i++) {
-      const name = row[i === 1 ? 'vendor' : `vendor_${i}`]
-      if (typeof name !== 'string' || !name.trim()) continue
-      const display = name.trim()
-      if (filter && !display.toLowerCase().includes(filter)) continue
+    for (const { vendor, cost } of unpivotVendors(row)) {
+      if (filter && !vendor.toLowerCase().includes(filter)) continue
 
       // Group case-insensitively — the same vendor is spelled inconsistently
       // across tickets, and separate buckets would understate each one.
-      const key = display.toLowerCase()
-      const cost = Number(row[i === 1 ? 'vendor_cost' : `vendor_cost_${i}`]) || 0
-      const bucket = agg.get(key) ?? { vendor: display, spend: 0, tickets: new Set<number>() }
-      bucket.spend += cost
+      const key = vendor.toLowerCase()
+      const bucket = agg.get(key) ?? { vendor, spend: 0, tickets: new Set<number>() }
+      bucket.spend += cost ?? 0
       if (Number.isFinite(ticketId)) bucket.tickets.add(ticketId)
       agg.set(key, bucket)
     }
@@ -312,13 +409,22 @@ async function vendorSpend(args: Record<string, unknown>, scope: UserScope) {
 
 async function ticketStats(args: Record<string, unknown>, scope: UserScope) {
   const groupBy = text(args.group_by)
+  if (groupBy === 'repair_vendor' || groupBy === 'vendor') {
+    return {
+      error:
+        'Vendor is not a dimension here: the repair_vendor column on the ticket ' +
+        'summary is not populated in this data. Vendors live in ' +
+        'vendor_payment_details, where a ticket can have several — use the ' +
+        'vendor_spend tool.',
+    }
+  }
   if (!GROUPABLE.has(groupBy)) {
     return { error: `group_by must be one of: ${[...GROUPABLE].join(', ')}` }
   }
 
   let q = supabaseAdmin()
     .from('workorder_ticket_summary')
-    .select(`${groupBy}, repair_cost`)
+    .select(`${groupBy}, repair_cost, total_repair_cost`)
     .limit(5000)
   q = applyAssetScope(q, scope)
   if (text(args.start_date)) q = q.gte('issue_date', text(args.start_date))
@@ -332,7 +438,7 @@ async function ticketStats(args: Record<string, unknown>, scope: UserScope) {
   // can't infer a row shape from it.
   for (const row of (data ?? []) as unknown as Record<string, unknown>[]) {
     const key = String(row[groupBy] ?? 'Unspecified')
-    const cost = Number(row.repair_cost) || 0
+    const cost = ticketCost(row)
     const b = buckets.get(key) ?? { count: 0, repair_cost: 0 }
     b.count += 1
     b.repair_cost += cost
