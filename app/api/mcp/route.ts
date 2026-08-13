@@ -20,14 +20,27 @@ export const dynamic = 'force-dynamic'
  * Every query goes through applyAssetScope().
  */
 
-const TICKET_COLUMNS =
-  'ticket_id, asset, field, well, facility, equipment_name, equipment_type, department, ' +
-  'ticket_status, priority_of_issue, assigned_foreman, work_order_type, issue_date, ' +
-  'issue_description, repair_vendor, repair_cost, "Estimate_Cost", final_status'
-
 /** Escape PostgREST LIKE wildcards so user text can't broaden a match. */
 function escapeLike(s: string): string {
   return s.replace(/[%_\\]/g, (c) => `\\${c}`)
+}
+
+/**
+ * Free-text fields that can run to paragraphs. Returned in full by get_ticket,
+ * but trimmed in list results — 50 rows × three long narratives is mostly
+ * padding, and it crowds out the rows themselves.
+ */
+const LONG_TEXT_FIELDS = ['issue_description', 'repair_details', 'troubleshooting_conducted']
+
+function trimLongText(rows: Record<string, unknown>[]): Record<string, unknown>[] {
+  return rows.map((row) => {
+    const out = { ...row }
+    for (const f of LONG_TEXT_FIELDS) {
+      const v = out[f]
+      if (typeof v === 'string' && v.length > 300) out[f] = `${v.slice(0, 300)}…`
+    }
+    return out
+  })
 }
 
 function text(input: unknown): string {
@@ -47,9 +60,12 @@ const TOOLS = [
   {
     name: 'search_tickets',
     description:
-      'Search work order tickets. Results are always restricted to the connected ' +
-      "user's assets. Supports free text, equipment, well, facility, foreman, " +
-      'vendor, status, priority and date range.',
+      'Search work order tickets. Returns every field on the ticket summary — ' +
+      'including area, route, dates, foremen, AFE number, job category, costs and ' +
+      "final status. Results are always restricted to the connected user's assets. " +
+      'Long narrative fields are truncated here; use get_ticket for the full text. ' +
+      'Supports free text, equipment, well, facility, foreman, vendor, status, ' +
+      'priority and date range.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -70,7 +86,9 @@ const TOOLS = [
   },
   {
     name: 'get_ticket',
-    description: "Fetch one ticket by its ticket_id. Returns an error if it is outside the user's assets.",
+    description:
+      'Fetch one ticket by its ticket_id, with every field and full untruncated ' +
+      "narrative text. Returns an error if it is outside the user's assets.",
     inputSchema: {
       type: 'object',
       properties: { ticket_id: { type: 'number' } },
@@ -104,9 +122,11 @@ const GROUPABLE = new Set([
 
 async function searchTickets(args: Record<string, unknown>, scope: UserScope) {
   const limit = Math.min(typeof args.limit === 'number' ? args.limit : 20, 50)
+  // Every column the view exposes, rather than a curated subset — the model
+  // can then answer on area/route/AFE/dates without a follow-up round-trip.
   let q = supabaseAdmin()
     .from('workorder_ticket_summary')
-    .select(TICKET_COLUMNS)
+    .select('*')
     .order('ticket_id', { ascending: false })
     .limit(limit)
 
@@ -134,16 +154,18 @@ async function searchTickets(args: Record<string, unknown>, scope: UserScope) {
 
   const { data, error } = await q
   if (error) return { error: error.message }
-  return { count: data?.length ?? 0, tickets: data ?? [] }
+  const rows = (data ?? []) as unknown as Record<string, unknown>[]
+  return { count: rows.length, tickets: trimLongText(rows) }
 }
 
 async function getTicket(args: Record<string, unknown>, scope: UserScope) {
   const id = typeof args.ticket_id === 'number' ? args.ticket_id : Number(args.ticket_id)
   if (!Number.isFinite(id)) return { error: 'ticket_id must be a number' }
 
+  // Full row, narrative fields untruncated — this is the drill-down tool.
   let q = supabaseAdmin()
     .from('workorder_ticket_summary')
-    .select(TICKET_COLUMNS)
+    .select('*')
     .eq('ticket_id', id)
   q = applyAssetScope(q, scope)
 
