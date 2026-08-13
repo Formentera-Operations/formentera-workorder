@@ -87,8 +87,9 @@ const TOOLS = [
   {
     name: 'get_ticket',
     description:
-      'Fetch one ticket by its ticket_id, with every field and full untruncated ' +
-      "narrative text. Returns an error if it is outside the user's assets.",
+      'Fetch one ticket by its ticket_id, with every field, full untruncated ' +
+      'narrative text, and a per-vendor cost breakdown (a ticket can have up to ' +
+      "seven vendors). Returns an error if it is outside the user's assets.",
     inputSchema: {
       type: 'object',
       properties: { ticket_id: { type: 'number' } },
@@ -174,7 +175,41 @@ async function getTicket(args: Record<string, unknown>, scope: UserScope) {
   // Deliberately indistinguishable from "does not exist" — saying "exists but
   // you can't see it" would leak which tickets belong to other assets.
   if (!data) return { error: `Ticket #${id} not found in your assets.` }
-  return data
+
+  return { ...(data as Record<string, unknown>), vendors: await vendorBreakdown(id) }
+}
+
+/**
+ * Per-vendor costs for one ticket.
+ *
+ * ONLY call this after the ticket itself has passed applyAssetScope —
+ * vendor_payment_details has no asset column, so it carries no scoping of its
+ * own and would happily return any ticket's costs.
+ *
+ * The table stores up to seven vendors as numbered column pairs
+ * (vendor/vendor_cost, vendor_2/vendor_cost_2, …); this flattens that into a
+ * list and drops the unused slots.
+ */
+async function vendorBreakdown(ticketId: number) {
+  const { data, error } = await supabaseAdmin()
+    .from('vendor_payment_details')
+    .select('*')
+    .eq('ticket_id', ticketId)
+    .maybeSingle()
+
+  if (error || !data) return []
+
+  const row = data as Record<string, unknown>
+  const out: { vendor: string; cost: number | null }[] = []
+  for (let i = 1; i <= 7; i++) {
+    const vendorKey = i === 1 ? 'vendor' : `vendor_${i}`
+    const costKey = i === 1 ? 'vendor_cost' : `vendor_cost_${i}`
+    const vendor = row[vendorKey]
+    if (typeof vendor !== 'string' || !vendor.trim()) continue
+    const raw = row[costKey]
+    out.push({ vendor: vendor.trim(), cost: raw === null || raw === undefined ? null : Number(raw) })
+  }
+  return out
 }
 
 async function ticketStats(args: Record<string, unknown>, scope: UserScope) {
