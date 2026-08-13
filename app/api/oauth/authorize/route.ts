@@ -115,7 +115,9 @@ export async function GET(req: Request) {
         <input type="hidden" name="code_challenge_method" value="${escapeHtml(p.method)}">
         <button type="submit">Allow access</button>
       </form>
-      <p class="muted">Access expires after 1 hour and must be renewed.</p>
+      <p class="muted">This connection stays active for 30 days, renewing itself
+         in the background. Your asset list is re-checked on every request, so
+         changes to your assignments apply immediately.</p>
     `),
     { headers: { 'content-type': 'text/html; charset=utf-8' } }
   )

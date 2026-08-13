@@ -16,7 +16,7 @@ export async function GET(req: Request) {
     token_endpoint: `${origin}/api/oauth/token`,
     registration_endpoint: `${origin}/api/oauth/register`,
     response_types_supported: ['code'],
-    grant_types_supported: ['authorization_code'],
+    grant_types_supported: ['authorization_code', 'refresh_token'],
     code_challenge_methods_supported: ['S256'],
     // Public clients only: MCP clients can't hold a secret, so PKCE is the
     // protection rather than client authentication.

@@ -1,10 +1,30 @@
 import { NextResponse } from 'next/server'
-import { accessTokenTtl, issueAccessToken, verifyPkce, verifyToken } from '@/lib/mcp-oauth'
+import {
+  accessTokenTtl,
+  issueAccessToken,
+  issueRefreshToken,
+  verifyPkce,
+  verifyToken,
+} from '@/lib/mcp-oauth'
+import { scopeForEmail } from '@/lib/user-scope'
 
 export const dynamic = 'force-dynamic'
 
 function bad(error: string, description?: string, status = 400) {
   return NextResponse.json({ error, error_description: description }, { status })
+}
+
+function tokenResponse(email: string) {
+  return NextResponse.json(
+    {
+      access_token: issueAccessToken(email),
+      refresh_token: issueRefreshToken(email),
+      token_type: 'Bearer',
+      expires_in: accessTokenTtl,
+      scope: 'workorders:read',
+    },
+    { headers: { 'cache-control': 'no-store' } }
+  )
 }
 
 /**
@@ -25,7 +45,23 @@ export async function POST(req: Request) {
     return bad('invalid_request', 'Expected application/x-www-form-urlencoded')
   }
 
-  if (String(form.get('grant_type') || '') !== 'authorization_code') {
+  const grantType = String(form.get('grant_type') || '')
+
+  // Silent renewal. Re-checking the employees row here is the one revocation
+  // lever stateless tokens allow: remove someone's row and their next refresh
+  // fails, rather than them holding access for the rest of the 30 days.
+  if (grantType === 'refresh_token') {
+    const payload = verifyToken(String(form.get('refresh_token') || ''), 'refresh')
+    if (!payload) return bad('invalid_grant', 'Refresh token is invalid or expired')
+
+    const email = String(payload.email || '')
+    const scope = await scopeForEmail(email)
+    if (!scope) return bad('invalid_grant', 'No employee record for this account')
+
+    return tokenResponse(scope.email)
+  }
+
+  if (grantType !== 'authorization_code') {
     return bad('unsupported_grant_type')
   }
 
@@ -48,13 +84,5 @@ export async function POST(req: Request) {
   const email = String(payload.email || '')
   if (!email) return bad('invalid_grant', 'Code carries no subject')
 
-  return NextResponse.json(
-    {
-      access_token: issueAccessToken(email),
-      token_type: 'Bearer',
-      expires_in: accessTokenTtl,
-      scope: 'workorders:read',
-    },
-    { headers: { 'cache-control': 'no-store' } }
-  )
+  return tokenResponse(email)
 }

@@ -12,7 +12,8 @@ import crypto from 'crypto'
  * is the only revocation lever available today.
  */
 
-const ACCESS_TOKEN_TTL_SEC = 60 * 60 // 1 hour
+const ACCESS_TOKEN_TTL_SEC = 60 * 60 * 8 // 8 hours — one working day
+const REFRESH_TOKEN_TTL_SEC = 60 * 60 * 24 * 30 // 30 days
 const CODE_TTL_SEC = 60 // authorization codes are single-use and short-lived
 
 function secret(): string {
@@ -32,7 +33,7 @@ function hmac(data: string): string {
   return crypto.createHmac('sha256', secret()).update(data).digest('base64url')
 }
 
-export type TokenType = 'client' | 'code' | 'access'
+export type TokenType = 'client' | 'code' | 'access' | 'refresh'
 
 type Payload = Record<string, unknown> & { typ: TokenType; exp: number }
 
@@ -99,7 +100,22 @@ export function issueAccessToken(email: string): string {
   return signToken('access', { email }, ACCESS_TOKEN_TTL_SEC)
 }
 
+/**
+ * Refresh tokens let the client renew silently instead of sending the operator
+ * back through Microsoft SSO every few hours.
+ *
+ * The security tradeoff is real and worth naming: a 30-day refresh token that
+ * cannot be revoked is a much bigger liability than a short access token. Two
+ * things limit it — the token endpoint re-checks the employees row on every
+ * refresh (so deleting someone's row cuts them off), and rotating
+ * MCP_TOKEN_SECRET still invalidates everything at once.
+ */
+export function issueRefreshToken(email: string): string {
+  return signToken('refresh', { email }, REFRESH_TOKEN_TTL_SEC)
+}
+
 export const accessTokenTtl = ACCESS_TOKEN_TTL_SEC
+export const refreshTokenTtl = REFRESH_TOKEN_TTL_SEC
 
 /** PKCE S256 only — the plain method is not accepted. */
 export function verifyPkce(codeVerifier: string, challenge: string): boolean {
