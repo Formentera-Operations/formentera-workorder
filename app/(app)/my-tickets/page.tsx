@@ -83,6 +83,7 @@ function MyTicketsPageContent() {
   const [assetFilter, setAssetFilter] = useState('All')
   const [deptFilter, setDeptFilter] = useState('All')
   const [locationTypeFilter, setLocationTypeFilter] = useState('All')
+  const [fieldFilter, setFieldFilter] = useState('All')
   const [equipFilter, setEquipFilter] = useState('All')
   const [statusFilter, setStatusFilter] = useState<TicketStatus | 'All'>('All')
 
@@ -95,6 +96,7 @@ function MyTicketsPageContent() {
     if (!userEmail && !userName) return
     const params = new URLSearchParams({
       mode: 'mine',
+      v: '5',
       userEmail,
       userName,
     })
@@ -104,20 +106,21 @@ function MyTicketsPageContent() {
     if (endDate) params.set('endDate', endDate)
     cachedFetch<{ rows?: OptionRow[] }>(
       `/api/tickets/options?${params}`,
-      { cacheKey: `my-tickets:options:v4:${userEmail || userName}:${userAssets.join(',')}:${statusFilter}:${startDate}:${endDate}` }
+      { cacheKey: `my-tickets:options:v5:${userEmail || userName}:${userAssets.join(',')}:${statusFilter}:${startDate}:${endDate}` }
     )
       .then(({ data }) => setOptionRows(data.rows || []))
       .catch(() => {})
   }, [userEmail, userName, userAssets, statusFilter, startDate, endDate])
 
-  const { assets, departments, locationTypes, equipments } = useMemo(
+  const { assets, departments, locationTypes, fields, equipments } = useMemo(
     () => deriveCascadingOptions(optionRows, {
       asset: assetFilter,
       department: deptFilter,
       locationType: locationTypeFilter,
+      field: fieldFilter,
       equipment: equipFilter,
     }),
-    [optionRows, assetFilter, deptFilter, locationTypeFilter, equipFilter],
+    [optionRows, assetFilter, deptFilter, locationTypeFilter, fieldFilter, equipFilter],
   )
 
   // Pre-warm the new-ticket form's reference data so it works offline the
@@ -143,7 +146,7 @@ function MyTicketsPageContent() {
       userName,
       search, startDate, endDate,
       asset: assetFilter, department: deptFilter,
-      locationType: locationTypeFilter,
+      locationType: locationTypeFilter, field: fieldFilter,
       equipment: equipFilter, status: statusFilter,
       page: String(page),
       pageSize: String(PAGE_SIZE),
@@ -153,7 +156,7 @@ function MyTicketsPageContent() {
     // covers the unfiltered "my tickets" view so it's available offline.
     // When online, we still fetch with the current filters; on offline cache
     // hit, the user sees their last-seen list.
-    const cacheKey = `my-tickets:list:${userEmail || userName}:${userAssets.join(',')}:${page}:${ticketId}:${search}:${startDate}:${endDate}:${assetFilter}:${deptFilter}:${locationTypeFilter}:${equipFilter}:${statusFilter}`
+    const cacheKey = `my-tickets:list:${userEmail || userName}:${userAssets.join(',')}:${page}:${ticketId}:${search}:${startDate}:${endDate}:${assetFilter}:${deptFilter}:${locationTypeFilter}:${fieldFilter}:${equipFilter}:${statusFilter}`
     cachedFetch<{ data?: Record<string, unknown>[]; count?: number }>(
       `/api/tickets?${params}`,
       { cacheKey }
@@ -181,7 +184,7 @@ function MyTicketsPageContent() {
       .catch(() => {})
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [page, ticketId, search, startDate, endDate, assetFilter, deptFilter, locationTypeFilter, equipFilter, statusFilter, userEmail, userName, userAssets, refreshNonce])
+  }, [page, ticketId, search, startDate, endDate, assetFilter, deptFilter, locationTypeFilter, fieldFilter, equipFilter, statusFilter, userEmail, userName, userAssets, refreshNonce])
 
   // Reset to the first page when a filter changes — but NOT on the initial
   // mount, which would clobber a page restored from the URL (?page=N) when
@@ -190,11 +193,11 @@ function MyTicketsPageContent() {
   useEffect(() => {
     if (!filtersInitedRef.current) { filtersInitedRef.current = true; return }
     setPage(0)
-  }, [ticketId, search, startDate, endDate, assetFilter, deptFilter, locationTypeFilter, equipFilter, statusFilter])
+  }, [ticketId, search, startDate, endDate, assetFilter, deptFilter, locationTypeFilter, fieldFilter, equipFilter, statusFilter])
 
   function resetFilters() {
     setTicketId(''); setSearch(''); setStartDate(''); setEndDate('')
-    setAssetFilter('All'); setDeptFilter('All'); setLocationTypeFilter('All'); setEquipFilter('All'); setStatusFilter('All')
+    setAssetFilter('All'); setDeptFilter('All'); setLocationTypeFilter('All'); setFieldFilter('All'); setEquipFilter('All'); setStatusFilter('All')
     setPage(0)
   }
 
@@ -296,6 +299,7 @@ function MyTicketsPageContent() {
                 )}
                 <FilterSelect label="Department" value={deptFilter} onChange={setDeptFilter} options={departments} />
                 <FilterSelect label="Location Type" value={locationTypeFilter} onChange={setLocationTypeFilter} options={locationTypes} />
+                <FilterSelect label="Field" value={fieldFilter} onChange={setFieldFilter} options={fields} />
                 <FilterSelect label="Equipment" value={equipFilter} onChange={setEquipFilter} options={equipments} />
               </div>
             </div>
