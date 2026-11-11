@@ -15,6 +15,7 @@ export async function GET(req: NextRequest) {
   const asset = searchParams.get('asset') || ''
   const department = searchParams.get('department') || ''
   const locationType = searchParams.get('locationType') || ''
+  const field = searchParams.get('field') || ''
   const equipment = searchParams.get('equipment') || ''
   const status = searchParams.get('status') || ''
   const foreman = searchParams.get('foreman') || ''
@@ -77,6 +78,7 @@ export async function GET(req: NextRequest) {
     if (asset && asset !== 'All') query = query.ilike('Asset', asset)
     if (department && department !== 'All') query = query.eq('Department', department)
     if (locationType && locationType !== 'All') query = query.eq('Location_Type', locationType)
+    if (field && field !== 'All') query = query.eq('Field', field)
     if (equipment && equipment !== 'All') query = query.eq('Equipment', equipment)
     if (status && status !== 'All') {
       // 'Active' is a UI shortcut used by the weekly-reminder email button:
