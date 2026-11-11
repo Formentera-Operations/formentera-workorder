@@ -96,6 +96,7 @@ function MyTicketsPageContent() {
     if (!userEmail && !userName) return
     const params = new URLSearchParams({
       mode: 'mine',
+      v: '5',
       userEmail,
       userName,
     })

@@ -88,7 +88,7 @@ function MaintenancePageContent() {
   // immediately re-fire with the real asset list.
   useEffect(() => {
     if (authLoading) return
-    const params = new URLSearchParams({ mode: 'all' })
+    const params = new URLSearchParams({ mode: 'all', v: '5' })
     if (userAssets.length > 0) params.set('userAssets', userAssets.join(','))
     if (statusFilter !== 'All') params.set('status', statusFilter)
     if (startDate) params.set('startDate', startDate)
